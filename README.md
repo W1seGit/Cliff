@@ -8,7 +8,7 @@ A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. N
 
 [![CI Build](https://img.shields.io/github/actions/workflow/status/W1seGit/Cliff/build.yml?branch=main&style=for-the-badge&logo=github&logoColor=white)](https://github.com/W1seGit/Cliff/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/W1seGit/Cliff?include_prereleases&style=for-the-badge&color=orange)](https://github.com/W1seGit/Cliff/releases)
-[![License](https://img.shields.io/github/license/W1seGit/Cliff?style=for-the-badge&color=blue)](https://github.com/W1seGit/Cliff/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](https://github.com/W1seGit/Cliff/blob/main/LICENSE)
 [![Last Commit](https://img.shields.io/github/last-commit/W1seGit/Cliff/main?style=for-the-badge&color=purple)](https://github.com/W1seGit/Cliff/commits/main)
 [![Platforms](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey?style=for-the-badge)](#supported-platforms)
 
@@ -57,7 +57,7 @@ A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. N
 
 | 📖 Documentation | 💬 Discord |
 | :---: | :---: |
-| [![Visit Docs](https://img.shields.io/badge/Visit_Docs-4A90E2?style=for-the-badge)](https://docs.cliff.gg) | [![Join Discord](https://img.shields.io/badge/Join_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.cliff.gg) |
+| [![Visit Docs](https://img.shields.io/badge/Visit_Docs-4A90E2?style=for-the-badge)](https://getcliff.dev/docs) | [![Join Discord](https://img.shields.io/badge/Join_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/CJ8fvv9jg6) |
 | Installation guides, configuration tutorials, and API reference | Get help from the community and development team |
 
 ---
@@ -89,15 +89,23 @@ curl -fsSL getcliff.dev/install.sh | sh -s -- -p 8081
 
 Download a `cliff-<version>-<platform>-<arch>.zip` from [releases](https://github.com/W1seGit/Cliff/releases), extract it, and run:
 
-**Windows:**
-```powershell
-powershell -ExecutionPolicy Bypass -File .\run.ps1
+```bash
+cliff start
 ```
 
-**macOS / Linux:**
-```bash
-sh ./run.sh
-```
+### CLI usage
+
+After installing, `cliff` is available in your terminal:
+
+| Command | Description |
+|---------|-------------|
+| `cliff start` | Start the daemon in the background |
+| `cliff stop` | Stop a running daemon |
+| `cliff status` | Show daemon status (URL, uptime, PID) |
+| `cliff update` | Check for and apply updates |
+| `cliff uninstall` | Remove Cliff from this machine |
+| `cliff version` | Print version information |
+| `cliff help` | Show all commands and flags |
 
 ### ⚡ After installing
 
@@ -165,10 +173,18 @@ This project is licensed under the [GNU General Public License v3](LICENSE).
 
 ---
 
+## 💼 Want to use Cliff for your app?
+
+If you're building a hosting platform, a server panel, or anything else that could benefit from embedding Cliff, we'd love to talk. Reach out and let's figure it out together.
+
+[hello@getcliff.dev](mailto:hello@getcliff.dev)
+
+---
+
 <div align="center">
 
 **Made with ❤️ by the Cliff Team**
 
-[Releases](https://github.com/W1seGit/Cliff/releases) • [Issues](https://github.com/W1seGit/Cliff/issues) • [Stargazers](https://github.com/W1seGit/Cliff/stargazers)
+[Releases](https://github.com/W1seGit/Cliff/releases) • [Issues](https://github.com/W1seGit/Cliff/issues) • [Stargazers](https://github.com/W1seGit/Cliff/stargazers) • [Discord](https://discord.gg/CJ8fvv9jg6)
 
 </div>
