@@ -48,7 +48,7 @@ A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. N
 - **Backups** — automatic snapshots before risky actions, manual snapshots, restore, and retention cleanup
 - **File browser** — upload, download, edit configs/JSON/YAML/TOML
 - **Responsive UI** — dark theme that works on desktop and mobile
-- **Public access** — optional playit.gg and Minekube integrations
+- **Public access** — optional playit.gg integration
 - **Zero dependencies** — no Docker, no Node runtime in production, no external database. Single ~13 MB binary.
 
 ---
