@@ -325,3 +325,24 @@ export type UnsavedChangesRegistration = {
   onSave?: () => void | Promise<void>;
 };
 export type CommandPreset = { id: string; command: string; createdAt: string };
+
+export type UpdateCheckResult = {
+  currentVersion: string;
+  currentCommit: string;
+  latestVersion: string;
+  latestCommit: string;
+  updateAvailable: boolean;
+  releaseUrl?: string;
+  archiveName?: string;
+  archiveSize?: number;
+  builtAt?: string;
+  checkedAt: string;
+  error?: string;
+};
+
+export type UpdateApplyResult = {
+  success: boolean;
+  message: string;
+  newVersion?: string;
+  restarting: boolean;
+};

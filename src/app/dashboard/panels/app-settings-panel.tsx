@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Download, Copy } from "lucide-react";
+import { Eye, EyeOff, Download, Copy, RefreshCw } from "lucide-react";
 import { browserOrigin, externalApiBase, formatBytes, serverTypeNeedsLoader } from "../lib/utils";
-import { daemonLogsUrl, fetchDaemonLogs, fetchDaemonLogsFull, fetchJavaRuntimes, fetchTypeVersions, installJavaRuntime, uninstallJavaRuntime, saveAccount as saveAccountProfile, saveSettings } from "../lib/runtime-client";
-import type { ConfirmRequest, JavaRuntimeInfo, MinecraftMetadata, ServerType, Settings, UnsavedChangesRegistration, User } from "../lib/types";
+import { daemonLogsUrl, fetchDaemonLogs, fetchDaemonLogsFull, fetchJavaRuntimes, fetchTypeVersions, installJavaRuntime, uninstallJavaRuntime, saveAccount as saveAccountProfile, saveSettings, checkForUpdates, applyUpdate } from "../lib/runtime-client";
+import type { ConfirmRequest, JavaRuntimeInfo, MinecraftMetadata, ServerType, Settings, UnsavedChangesRegistration, UpdateCheckResult, User } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
 import { Input } from "../components/ui/input";
@@ -14,7 +14,7 @@ import { StatRow } from "../components/ui/stat-row";
 import { Tabs } from "../components/ui/tabs";
 import { ConsoleView } from "../components/ui/console-view";
 
-type SettingsTab = "general" | "java" | "network" | "logs";
+type SettingsTab = "general" | "java" | "network" | "logs" | "updates";
 
 export function AppSettingsPanel({
   mode = "settings",
@@ -23,6 +23,7 @@ export function AppSettingsPanel({
   metadata,
   metadataError,
   metadataBusy,
+  updateCheck,
   onRefreshVersions,
   onAccountSaved,
   onSaved,
@@ -36,6 +37,7 @@ export function AppSettingsPanel({
   metadata: MinecraftMetadata | null;
   metadataError: string;
   metadataBusy: boolean;
+  updateCheck?: UpdateCheckResult | null;
   onRefreshVersions: () => void;
   onAccountSaved: (user: User) => void;
   onSaved: () => void;
@@ -56,7 +58,7 @@ export function AppSettingsPanel({
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     if (typeof window === "undefined") return "general";
     const hash = window.location.hash.replace("#", "");
-    const valid = ["general", "java", "network", "logs"];
+    const valid = ["general", "java", "network", "logs", "updates"];
     return (valid as string[]).includes(hash) ? hash as SettingsTab : "general";
   });
   const [daemonLogLines, setDaemonLogLines] = useState<string[]>([]);
@@ -67,6 +69,9 @@ export function AppSettingsPanel({
   const [typeVersionCounts, setTypeVersionCounts] = useState<Record<string, number>>({});
   const [typeExpVersionCounts, setTypeExpVersionCounts] = useState<Record<string, number>>({});
   const [typeVersionsBusy, setTypeVersionsBusy] = useState(false);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [localUpdateCheck, setLocalUpdateCheck] = useState<UpdateCheckResult | null>(updateCheck ?? null);
   const accountChanged = username.trim() !== user.username || Boolean(newPassword);
   const canSaveAccount = Boolean(username.trim().length >= 3 && (!newPassword || (newPassword.length >= 10 && currentPassword)) && !accountBusy);
   const settingsChanged = curseForgeApiKey !== settings.curseForgeApiKey;
@@ -111,7 +116,7 @@ export function AppSettingsPanel({
     if (mode === "account") return;
     const onHashChange = () => {
       const hash = window.location.hash.replace("#", "");
-      const valid = ["general", "java", "network", "logs"];
+      const valid = ["general", "java", "network", "logs", "updates"];
       const next = (valid as string[]).includes(hash) ? hash as SettingsTab : "general";
       setActiveTab((prev) => prev !== next ? next : prev);
     };
@@ -264,6 +269,41 @@ export function AppSettingsPanel({
     }
   }
 
+  async function checkForUpdatesNow() {
+    setUpdateChecking(true);
+    try {
+      const result = await checkForUpdates(true);
+      setLocalUpdateCheck(result);
+      if (result.error) {
+        onMessage(`Update check failed: ${result.error}`);
+      } else if (result.updateAvailable) {
+        onMessage(`Update available: v${result.latestVersion}`);
+      } else {
+        onMessage("Cliff is up to date");
+      }
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Update check failed");
+    } finally {
+      setUpdateChecking(false);
+    }
+  }
+
+  async function installUpdate() {
+    setUpdateBusy(true);
+    try {
+      const result = await applyUpdate();
+      if (result.success) {
+        onMessage(result.message);
+      } else {
+        onMessage(result.message || "Update failed");
+      }
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Update failed");
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
+
   if (mode === "account") {
     return (
       <section className="settings-layout account-only">
@@ -296,6 +336,7 @@ export function AppSettingsPanel({
           { id: "java", label: "Java" },
           { id: "network", label: "Network & Storage" },
           { id: "logs", label: "Logs" },
+          { id: "updates", label: "Updates" },
         ]}
         activeId={activeTab}
         onChange={(id) => {
@@ -470,6 +511,71 @@ export function AppSettingsPanel({
                 lines={daemonLogLines}
                 emptyMessage={!daemonLogsLoaded ? "Loading logs..." : "No daemon logs recorded yet."}
               />
+            </div>
+          </Panel>
+        </>
+      )}
+
+      {activeTab === "updates" && (
+        <>
+          <div className="app-settings-actions">
+            <Button disabled={updateChecking} onClick={checkForUpdatesNow}>
+              {updateChecking ? "Checking..." : "Check for updates"}
+            </Button>
+          </div>
+          <Panel className="form-grid compact-form settings-panel">
+            <div className="settings-section">
+              <h2 className="settings-section-header">Cliff updates</h2>
+              {(() => {
+                const check = localUpdateCheck ?? updateCheck;
+                if (!check) {
+                  return <Hint>Click "Check for updates" to see if a new version is available.</Hint>;
+                }
+                if (check.error) {
+                  return <Hint warn>Update check failed: {check.error}</Hint>;
+                }
+                return (
+                  <>
+                    <div className="property-list">
+                      <div className="property-row">
+                        <span className="muted">Current version</span>
+                        <strong>v{check.currentVersion}</strong>
+                      </div>
+                      <div className="property-row">
+                        <span className="muted">Latest version</span>
+                        <strong>v{check.latestVersion}</strong>
+                      </div>
+                      {check.builtAt && (
+                        <div className="property-row">
+                          <span className="muted">Released</span>
+                          <strong>{new Date(check.builtAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</strong>
+                        </div>
+                      )}
+                      {check.archiveSize ? (
+                        <div className="property-row">
+                          <span className="muted">Download size</span>
+                          <strong>{formatBytes(check.archiveSize)}</strong>
+                        </div>
+                      ) : null}
+                    </div>
+                    {check.updateAvailable ? (
+                      <>
+                        <Hint>A new version is available. Click "Install update" to download and apply it. The daemon will restart automatically.</Hint>
+                        <Button variant="primary" disabled={updateBusy} onClick={installUpdate} loading={updateBusy} loadingText="Updating...">
+                          {updateBusy ? "Updating..." : "Install update"}
+                        </Button>
+                      </>
+                    ) : (
+                      <Hint>Cliff is up to date.</Hint>
+                    )}
+                    {check.releaseUrl && (
+                      <p className="muted">
+                        <a href={check.releaseUrl} target="_blank" rel="noopener noreferrer">View release notes on GitHub</a>
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           </Panel>
         </>

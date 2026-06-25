@@ -1,4 +1,4 @@
-import type { Backup, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, User, WorldsPayload } from "./types";
+import type { Backup, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -357,4 +357,13 @@ export function subscribeRuntime(serverId: string, handlers: RuntimeSubscription
 
 function emptyRuntime(): RuntimeStatus {
   return { runningServerId: null, lifecycle: "stopped", pid: null, startedAt: null, uptimeSeconds: 0, command: "", launchTarget: "" };
+}
+
+export async function checkForUpdates(force = false): Promise<UpdateCheckResult> {
+  const path = force ? "/api/updates/check?force=1" : "/api/updates/check";
+  return daemonApi<UpdateCheckResult>(path);
+}
+
+export async function applyUpdate(): Promise<UpdateApplyResult> {
+  return daemonApi<UpdateApplyResult>("/api/updates/apply", { method: "POST" });
 }

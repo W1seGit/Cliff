@@ -5,11 +5,12 @@ import dynamic from "next/dynamic";
 import toast, { Toaster } from "react-hot-toast";
 import { AlertCircle, ArrowLeft, CheckCircle2, Info, Menu, TriangleAlert } from "lucide-react";
 import { serverTypeSupportsContent, validPort } from "./dashboard/lib/utils";
-import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile } from "./dashboard/lib/runtime-client";
-import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration } from "./dashboard/lib/types";
+import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates } from "./dashboard/lib/runtime-client";
+import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
 import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
 import { EulaModal } from "./dashboard/components/eula-modal";
+import { UpdateModal } from "./dashboard/components/update-modal";
 import { Sidebar } from "./dashboard/components/sidebar";
 import { ServerHeader } from "./dashboard/components/server-header";
 import { OverviewPanel } from "./dashboard/panels/overview-panel";
@@ -115,6 +116,9 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [eulaModalOpen, setEulaModalOpen] = useState(false);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [updateDismissed, setUpdateDismissed] = useState(false);
   const [unsavedChange, setUnsavedChange] = useState<UnsavedChangesRegistration | null>(null);
   const [serverActionMenu, setServerActionMenu] = useState("");
   const [quickBusyAction, setQuickBusyAction] = useState("");
@@ -538,6 +542,32 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-check for updates on mount and periodically.
+  useEffect(() => {
+    let alive = true;
+    const doCheck = () => {
+      checkForUpdates()
+        .then((result) => {
+          if (!alive) return;
+          setUpdateCheck(result);
+          if (result.updateAvailable && !updateDismissed) {
+            setUpdateModalOpen(true);
+          }
+        })
+        .catch(() => {
+          // Silently ignore update check errors on the frontend.
+        });
+    };
+    const checkTimer = window.setTimeout(doCheck, 3000);
+    const interval = window.setInterval(doCheck, 6 * 60 * 60 * 1000);
+    return () => {
+      alive = false;
+      window.clearTimeout(checkTimer);
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateDismissed]);
   useEffect(() => {
     const updateVisibility = () => setDocumentVisible(!document.hidden);
     updateVisibility();
@@ -770,7 +800,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         {!initialLoading && tab === "public-access" && !selected && <EmptyPanel title="No public access setup" action="Import server" onAction={() => setTab("import")} />}
         {!initialLoading && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
         {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
+        {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
         {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
         {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
         {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
@@ -778,6 +808,15 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} containerStyle={{ zIndex: 9999 }} />
       <ConfirmDialog request={confirmRequest} onClose={() => setConfirmRequest(null)} />
       {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onMessage={setMessage} onSaved={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true })} />}
+      {updateCheck && updateCheck.updateAvailable && (
+        <UpdateModal
+          update={updateCheck}
+          isOpen={updateModalOpen}
+          onClose={() => { setUpdateModalOpen(false); setUpdateDismissed(true); }}
+          onMessage={setMessage}
+          onApplied={() => { setUpdateCheck(null); setUpdateModalOpen(false); }}
+        />
+      )}
     </main>
   );
 }

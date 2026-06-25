@@ -22,6 +22,7 @@ import (
 	"github.com/W1seGit/Cliff/daemon/internal/logbuf"
 	"github.com/W1seGit/Cliff/daemon/internal/process"
 	"github.com/W1seGit/Cliff/daemon/internal/store"
+	"github.com/W1seGit/Cliff/daemon/internal/updater"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -97,6 +98,12 @@ func main() {
 	manager := process.NewManager(cfg.DataDir)
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
+
+	// Initialize the auto-updater.
+	binaryPath, _ := os.Executable()
+	updateManager := updater.NewManager(binaryPath, cfg.WebDir, cfg.DataDir)
+	updateManager.StartBackgroundChecker(daemonCtx)
+
 	handler := httpserver.New(httpserver.Options{
 		Config:           cfg,
 		Store:            db,
@@ -104,6 +111,7 @@ func main() {
 		StartedAt:        startedAt,
 		SchedulerContext: daemonCtx,
 		LogBuffer:        logBuffer,
+		Updater:          updateManager,
 	})
 
 	server := &http.Server{

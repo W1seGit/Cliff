@@ -27,6 +27,7 @@ import (
 	"github.com/W1seGit/Cliff/daemon/internal/logbuf"
 	"github.com/W1seGit/Cliff/daemon/internal/process"
 	"github.com/W1seGit/Cliff/daemon/internal/store"
+	"github.com/W1seGit/Cliff/daemon/internal/updater"
 )
 
 type Options struct {
@@ -36,6 +37,7 @@ type Options struct {
 	StartedAt        time.Time
 	SchedulerContext context.Context
 	LogBuffer        *logbuf.Buffer
+	Updater          *updater.Manager
 }
 
 func New(options Options) http.Handler {
@@ -59,6 +61,7 @@ func New(options Options) http.Handler {
 		healthCache:   &serverHealthCache{},
 		playit:        newPlayitAgentManager(),
 		logBuffer:     options.LogBuffer,
+		updater:       options.Updater,
 	}
 	if options.SchedulerContext != nil {
 		go api.runScheduler(options.SchedulerContext)
@@ -103,6 +106,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/servers/{id}/mods", api.requireUser(api.mods))
 	mux.HandleFunc("POST /api/servers/{id}/mods", api.requireUser(api.modAction))
 	mux.HandleFunc("GET /api/runtime", api.requireUser(api.runtime))
+	mux.HandleFunc("GET /api/updates/check", api.requireUser(api.updatesCheck))
+	mux.HandleFunc("POST /api/updates/apply", api.requireUser(api.updatesApply))
 	mux.HandleFunc("GET /api/servers/{id}/usage", api.requireUser(api.serverUsage))
 	mux.HandleFunc("POST /api/servers/{id}/start", api.requireUser(api.start))
 	mux.HandleFunc("POST /api/servers/{id}/stop", api.requireUser(api.stop))
@@ -129,6 +134,7 @@ type apiHandler struct {
 	healthCache   *serverHealthCache
 	playit        *playitAgentManager
 	logBuffer     *logbuf.Buffer
+	updater       *updater.Manager
 }
 
 type storageUsageCache struct {
