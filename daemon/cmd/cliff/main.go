@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -103,13 +102,7 @@ func runRestartChild(args []string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			CreationFlags: 0x00000008 | 0x00000200, // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-		}
-	} else {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	}
+	setDetachFlags(cmd)
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintln(os.Stderr, "restart helper could not start daemon:", err)
 		os.Exit(1)
