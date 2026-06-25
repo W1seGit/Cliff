@@ -42,6 +42,9 @@ func installRoot() string {
 		cwd, _ := os.Getwd()
 		return cwd
 	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil && resolved != "" {
+		exe = resolved
+	}
 	return filepath.Dir(exe)
 }
 
