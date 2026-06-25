@@ -289,7 +289,11 @@ export function ImportPanel({
             onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!busy) setDragActive(true); }}
             onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
             onDrop={handleDrop}
-            onClick={() => { if (!source && !busy) zipInputRef.current?.click(); }}
+            onClick={(event) => {
+              const target = event.target as HTMLElement;
+              if (target.closest("button,input")) return;
+              if (!source && !busy) zipInputRef.current?.click();
+            }}
           >
             <Input ref={zipInputRef} type="file" accept=".zip,application/zip" disabled={busy} onChange={(event) => chooseZip(event.target.files?.[0] ?? null)} />
             <Input ref={folderInputRef} type="file" multiple disabled={busy} {...{ webkitdirectory: "", directory: "" }} onChange={(event) => chooseFolder(event.target.files)} />
