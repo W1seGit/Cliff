@@ -28,36 +28,48 @@ import (
 
 func main() {
 	// Subcommand dispatch: if the first arg is a known subcommand, handle it.
-	// Otherwise, fall through to running the daemon directly (backward compatible
-	// with `cliff --port 8080` style invocation).
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "start":
-			runStart(os.Args[2:])
+	// `cliff daemon` runs the foreground daemon; bare `cliff` and unknown
+	// commands should not accidentally try to bind the dashboard port.
+	if len(os.Args) == 1 {
+		fmt.Fprintln(os.Stderr, "No command provided. Run 'cliff help' for help.")
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "start":
+		runStart(os.Args[2:])
+		return
+	case "stop":
+		runStop(os.Args[2:])
+		return
+	case "status":
+		runStatus(os.Args[2:])
+		return
+	case "logs":
+		runLogs(os.Args[2:])
+		return
+	case "update":
+		runUpdate(os.Args[2:])
+		return
+	case "uninstall":
+		runUninstall(os.Args[2:])
+		return
+	case "version":
+		printVersion()
+		return
+	case "help", "--help", "-h":
+		printHelp()
+		return
+	case "daemon":
+		// Strip the subcommand and fall through with the remaining args.
+		os.Args = append(os.Args[:1], os.Args[2:]...)
+	default:
+		if strings.HasPrefix(os.Args[1], "-") {
+			runDaemon()
 			return
-		case "stop":
-			runStop(os.Args[2:])
-			return
-		case "status":
-			runStatus(os.Args[2:])
-			return
-		case "update":
-			runUpdate(os.Args[2:])
-			return
-		case "uninstall":
-			runUninstall(os.Args[2:])
-			return
-		case "version":
-			printVersion()
-			return
-		case "help", "--help", "-h":
-			printHelp()
-			return
-		case "daemon":
-			// `cliff daemon` runs the daemon in the foreground (used by `cliff start`).
-			// Strip the subcommand and fall through with the remaining args.
-			os.Args = append(os.Args[:1], os.Args[2:]...)
 		}
+		fmt.Fprintf(os.Stderr, "%q is not a valid command. Run 'cliff help' for help.\n", os.Args[1])
+		os.Exit(1)
 	}
 
 	runDaemon()
@@ -193,6 +205,7 @@ Usage:
   cliff start [flags]    Start the daemon in the background
   cliff stop             Stop a running daemon
   cliff status           Show daemon status (URL, uptime, PID)
+  cliff logs [flags]     Print the current daemon log
   cliff update           Check for and apply updates
   cliff uninstall        Remove Cliff from this machine
   cliff version          Print version information
@@ -210,6 +223,7 @@ Examples:
   cliff start
   cliff start -p 3000
   cliff status
+  cliff logs
   cliff stop
 
 `, buildinfo.Current().Version)

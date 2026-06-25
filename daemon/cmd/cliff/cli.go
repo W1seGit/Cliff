@@ -187,12 +187,15 @@ func runStart(args []string) {
 	}
 
 	fmt.Printf("Cliff started (PID %d)\n", pid)
-	fmt.Printf("Local:   %s\n", state.LocalURL)
+	fmt.Printf("  Local:   %s\n", state.LocalURL)
 	for _, url := range lanURLs {
-		fmt.Printf("Network: %s\n", url)
+		fmt.Printf("  Network: %s\n", url)
 	}
-	fmt.Printf("Logs:    %s\n", logFile)
-	fmt.Printf("\nRun 'cliff status' to check status, 'cliff stop' to stop.\n")
+	fmt.Printf("  Logs:    %s\n", logFile)
+	fmt.Printf("\nNext steps:\n")
+	fmt.Printf("  cliff status   Check status\n")
+	fmt.Printf("  cliff logs     View daemon logs\n")
+	fmt.Printf("  cliff stop     Stop Cliff\n")
 }
 
 // ---- cliff stop ----
@@ -299,6 +302,50 @@ func runStatus(args []string) {
 	fmt.Printf("  Data dir:    %s\n", state.DataDir)
 	fmt.Printf("  Server root: %s\n", state.ServerRoot)
 	fmt.Printf("  Log file:    %s\n", state.LogFile)
+}
+
+// ---- cliff logs ----
+
+func runLogs(args []string) {
+	fs := flag.NewFlagSet("logs", flag.ExitOnError)
+	var dataDir string
+	var tail int
+	fs.StringVar(&dataDir, "data-dir", "", "panel data directory (default: <install-dir>/data)")
+	fs.IntVar(&tail, "tail", 80, "number of recent log lines to print")
+	fs.IntVar(&tail, "n", 80, "number of recent log lines to print (shorthand)")
+	fs.Parse(args)
+
+	state := readState(dataDir)
+	logFile := ""
+	if state != nil && state.LogFile != "" {
+		logFile = state.LogFile
+	} else {
+		resolvedDataDir := dataDir
+		if resolvedDataDir == "" {
+			resolvedDataDir = defaultDataDir()
+		}
+		logFile = filepath.Join(resolvedDataDir, "logs", "cliff.log")
+	}
+
+	data, err := os.ReadFile(logFile)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "No daemon logs found at %s.\n", logFile)
+		fmt.Fprintln(os.Stderr, "Run 'cliff start' to start Cliff, then try 'cliff logs' again.")
+		os.Exit(1)
+	}
+
+	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if tail > 0 && len(lines) > tail {
+		lines = lines[len(lines)-tail:]
+	}
+
+	fmt.Printf("Cliff daemon logs: %s\n\n", logFile)
+	for _, line := range lines {
+		fmt.Println(line)
+	}
 }
 
 // ---- cliff update ----

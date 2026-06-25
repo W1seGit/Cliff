@@ -266,7 +266,10 @@ setup_path_symlink || true
 
 if [ "$START" = "1" ]; then
   "$INSTALL_DIR/cliff" start -p "$PORT"
+  echo
+  echo "Open a new terminal to use the 'cliff' command from PATH."
 else
   echo "Cliff installed to $INSTALL_DIR"
-  echo "Open a new terminal and run: cliff start"
+  echo "Open a new terminal to use the 'cliff' command from PATH."
+  echo "Then run: cliff start"
 fi

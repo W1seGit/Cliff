@@ -221,9 +221,12 @@ try {
 
   if ($Start) {
     & $CliffExe start -p $Port
+    Write-Host ""
+    Write-Host "Open a new terminal to use the 'cliff' command from PATH."
   } else {
     Write-Host "Cliff installed to $InstallDir"
-    Write-Host "Open a new terminal and run: cliff start"
+    Write-Host "Open a new terminal to use the 'cliff' command from PATH."
+    Write-Host "Then run: cliff start"
   }
 }
 finally {
