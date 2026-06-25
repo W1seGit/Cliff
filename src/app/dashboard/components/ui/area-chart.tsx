@@ -57,23 +57,6 @@ function buildPaths(values: number[], times: number[], timeStart: number, timeEn
   const segments = computeSegments(times, gapMs, breakPoints);
   const safeMax = max > 0 ? max : 1;
 
-  // Build smooth curve commands for a contiguous segment using Catmull-Rom → Bezier
-  function smoothSegment(pts: readonly (readonly [number, number])[]): string {
-    const parts: string[] = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] ?? pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2] ?? pts[i + 1];
-      const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
-      const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
-      const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
-      const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
-      parts.push(`C${cp1x.toFixed(2)} ${cp1y.toFixed(2)} ${cp2x.toFixed(2)} ${cp2y.toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`);
-    }
-    return parts.join(" ");
-  }
-
   const lineParts: string[] = [];
   const areaParts: string[] = [];
 
@@ -89,9 +72,9 @@ function buildPaths(values: number[], times: number[], timeStart: number, timeEn
     if (segPts.length === 1) {
       lineParts.push(`M${first[0].toFixed(2)} ${first[1].toFixed(2)}`);
     } else {
-      const curve = smoothSegment(segPts);
-      lineParts.push(`M${first[0].toFixed(2)} ${first[1].toFixed(2)} ${curve}`);
-      areaParts.push(`M${first[0].toFixed(2)} ${first[1].toFixed(2)} ${curve} L${last[0].toFixed(2)} ${VB_H} L${first[0].toFixed(2)} ${VB_H} Z`);
+      const line = segPts.slice(1).map((point) => `L${point[0].toFixed(2)} ${point[1].toFixed(2)}`).join(" ");
+      lineParts.push(`M${first[0].toFixed(2)} ${first[1].toFixed(2)} ${line}`);
+      areaParts.push(`M${first[0].toFixed(2)} ${first[1].toFixed(2)} ${line} L${last[0].toFixed(2)} ${VB_H} L${first[0].toFixed(2)} ${VB_H} Z`);
     }
   }
 
