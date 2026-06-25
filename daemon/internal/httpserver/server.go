@@ -60,6 +60,7 @@ func New(options Options) http.Handler {
 		sizeCache:     &directorySizeCache{},
 		healthCache:   &serverHealthCache{},
 		playit:        newPlayitAgentManager(),
+		playitBuild:   newPlayitBuildManager(),
 		logBuffer:     options.LogBuffer,
 		updater:       options.Updater,
 	}
@@ -79,6 +80,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("DELETE /api/java/runtimes", api.requireUser(api.uninstallJavaRuntime))
 	mux.HandleFunc("GET /api/public-access/playit/agent", api.requireUser(api.playitAgentStatus))
 	mux.HandleFunc("POST /api/public-access/playit/agent/install", api.requireUser(api.installPlayitAgent))
+	mux.HandleFunc("POST /api/public-access/playit/agent/check-deps", api.requireUser(api.checkPlayitDeps))
+	mux.HandleFunc("POST /api/public-access/playit/agent/install-deps", api.requireUser(api.installPlayitDeps))
 	mux.HandleFunc("POST /api/public-access/playit/agent/start", api.requireUser(api.startPlayitAgent))
 	mux.HandleFunc("POST /api/public-access/playit/agent/stop", api.requireUser(api.stopPlayitAgent))
 	mux.HandleFunc("POST /api/public-access/playit/agent/uninstall", api.requireUser(api.uninstallPlayitAgent))
@@ -133,6 +136,7 @@ type apiHandler struct {
 	sizeCache     *directorySizeCache
 	healthCache   *serverHealthCache
 	playit        *playitAgentManager
+	playitBuild   *playitBuildManager
 	logBuffer     *logbuf.Buffer
 	updater       *updater.Manager
 }

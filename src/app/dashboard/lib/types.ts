@@ -47,6 +47,26 @@ export type PlayitAgentInfo = {
   logs: string[];
   error: string;
   tunnels?: PlayitTunnelInfo[];
+  platform?: string;
+  deps?: PlayitDepStatus[];
+  depsChecked?: boolean;
+  depsInstall?: PlayitJobState | null;
+  build?: PlayitJobState | null;
+};
+export type PlayitDepStatus = {
+  name: string;
+  label: string;
+  installed: boolean;
+  checking: boolean;
+  installPath: string;
+  installCommand: string;
+};
+export type PlayitJobState = {
+  running: boolean;
+  done: boolean;
+  step: string;
+  logs: string[];
+  error: string;
 };
 export type PlayitTunnelInfo = {
   name: string;

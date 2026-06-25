@@ -27,18 +27,23 @@ const (
 )
 
 type playitStatus struct {
-	Installed bool                 `json:"installed"`
-	Path      string               `json:"path"`
-	Version   string               `json:"version"`
-	Asset     string               `json:"asset"`
-	Running   bool                 `json:"running"`
-	PID       int                  `json:"pid"`
-	ClaimURL  string               `json:"claimUrl"`
-	StartedAt string               `json:"startedAt"`
-	Logs      []string             `json:"logs"`
-	Error     string               `json:"error"`
-	Claiming  bool                 `json:"claiming"`
-	Tunnels   []playitTunnelStatus `json:"tunnels"`
+	Installed   bool                 `json:"installed"`
+	Path        string               `json:"path"`
+	Version     string               `json:"version"`
+	Asset       string               `json:"asset"`
+	Running     bool                 `json:"running"`
+	PID         int                  `json:"pid"`
+	ClaimURL    string               `json:"claimUrl"`
+	StartedAt   string               `json:"startedAt"`
+	Logs        []string             `json:"logs"`
+	Error       string               `json:"error"`
+	Claiming    bool                 `json:"claiming"`
+	Tunnels     []playitTunnelStatus `json:"tunnels"`
+	Platform    string               `json:"platform"`
+	Deps        []playitDepStatus    `json:"deps"`
+	DepsChecked bool                 `json:"depsChecked"`
+	DepsInstall *playitJobState      `json:"depsInstall"`
+	Build       *playitJobState      `json:"build"`
 }
 
 type playitTunnelStatus struct {
@@ -151,12 +156,73 @@ func (h apiHandler) installPlayitAgent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, h.enrichPlayitStatus(r, status))
 		return
 	}
+	// On macOS there is no prebuilt binary release, so we build from source.
+	// The build is async (cargo compile takes minutes); kick it off and
+	// return the current status immediately so the dashboard can poll.
+	if isMacOSPlayitBuildSupported() {
+		if h.playitBuild == nil {
+			writeError(w, http.StatusInternalServerError, "Playit build manager is unavailable")
+			return
+		}
+		agentPath := h.playitAgentPath()
+		metadataPath := h.playitMetadataPath()
+		onComplete := func(success bool) {
+			if !success {
+				return
+			}
+			if _, err := os.Stat(agentPath); err != nil {
+				return
+			}
+			status := playitStatus{
+				Installed: true,
+				Path:      agentPath,
+				Version:   "built",
+				Asset:     "built-from-source",
+			}
+			_ = writeJSONFile(metadataPath, status)
+		}
+		if err := h.playitBuild.startBuild(h.playitBuildScriptDir(), filepath.Dir(agentPath), onComplete); err != nil {
+			writeError(w, http.StatusBadGateway, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, h.currentPlayitStatus(r))
+		return
+	}
 	installed, err := h.ensurePlayitAgent(r)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, h.enrichPlayitStatus(r, installed))
+}
+
+func (h apiHandler) checkPlayitDeps(w http.ResponseWriter, r *http.Request) {
+	if !isMacOSPlayitBuildSupported() {
+		writeError(w, http.StatusBadRequest, "Dependency checks are only available on macOS")
+		return
+	}
+	if h.playitBuild == nil {
+		writeError(w, http.StatusInternalServerError, "Playit build manager is unavailable")
+		return
+	}
+	h.playitBuild.checkPlayitDeps()
+	writeJSON(w, http.StatusOK, h.currentPlayitStatus(r))
+}
+
+func (h apiHandler) installPlayitDeps(w http.ResponseWriter, r *http.Request) {
+	if !isMacOSPlayitBuildSupported() {
+		writeError(w, http.StatusBadRequest, "Dependency install is only available on macOS")
+		return
+	}
+	if h.playitBuild == nil {
+		writeError(w, http.StatusInternalServerError, "Playit build manager is unavailable")
+		return
+	}
+	if err := h.playitBuild.startDepsInstall(h.playitBuildScriptDir()); err != nil {
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, h.currentPlayitStatus(r))
 }
 
 func (h apiHandler) startPlayitAgent(w http.ResponseWriter, r *http.Request) {
@@ -241,6 +307,9 @@ func (h apiHandler) currentPlayitStatus(r *http.Request) playitStatus {
 	if h.playit != nil {
 		status = h.playit.mergeStatus(status)
 	}
+	if h.playitBuild != nil {
+		status = h.playitBuild.mergeDepsState(status)
+	}
 	return h.enrichPlayitStatus(r, status)
 }
 
@@ -318,7 +387,7 @@ func (h apiHandler) useSystemPlayitAgent() (playitStatus, error) {
 		return status, nil
 	}
 	if runtime.GOOS == "darwin" {
-		return playitStatus{}, errors.New("Playit does not currently publish a macOS binary release. Install or build playit so the 'playit' command is on PATH, then try again")
+		return playitStatus{}, errors.New("Playit does not publish a macOS binary release. Use the Install Playit Agent button to build it from source, or install the 'playit' command on PATH manually")
 	}
 	return playitStatus{}, errors.New("No compatible Playit agent binary was found for this platform")
 }

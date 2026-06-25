@@ -3,20 +3,22 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import {
-  CheckCircle2, Clipboard, RadioTower,
+  CheckCircle2, Clipboard, Loader2, RadioTower, XCircle,
 } from "lucide-react";
 import {
+  checkPlayitDeps as checkPlayitDepsAction,
   deletePublicAccessConfig,
   fetchPlayitAgent,
   fetchPublicAccessConfig,
   installPlayitAgent as installManagedPlayitAgent,
+  installPlayitDeps as installPlayitDepsAction,
   uninstallPlayitAgent as uninstallManagedPlayitAgent,
   resetPlayitAgent as resetManagedPlayitAgent,
   savePublicAccessConfig,
   startPlayitAgent as startManagedPlayitAgent,
   stopPlayitAgent as stopManagedPlayitAgent,
 } from "../lib/runtime-client";
-import type { PlayitAgentInfo, PublicAccessRecord, ServerRecord } from "../lib/types";
+import type { PlayitAgentInfo, PlayitDepStatus, PlayitJobState, PublicAccessRecord, ServerRecord } from "../lib/types";
 import { publicAccessStorageKey } from "../lib/utils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -31,6 +33,7 @@ import { ConsoleView } from "../components/ui/console-view";
 type InstallState = "not-installed" | "installing" | "installed" | "failed";
 type ClaimState = "starting-agent" | "waiting-for-claim-link" | "claim-link-ready" | "waiting-for-user-to-claim" | "claimed" | "failed";
 type TunnelState = "no-tunnel-found" | "waiting-for-tunnel" | "tunnel-detected" | "tunnel-ready" | "failed";
+type MacBuildPhase = "idle" | "checking-deps" | "review-deps" | "installing-deps" | "building" | "done" | "failed";
 type PublicAccessConfig = {
   installed: boolean;
   claimed: boolean;
@@ -185,6 +188,135 @@ function formatPlayitLog(line: string): { time: string; text: string; level: "er
   return { time: "--:--:--", text: line.replace(/\s+/g, " ").trim(), level: agentLogLevel(line) };
 }
 
+function MacBuildFlow({
+  phase,
+  deps,
+  depsJob,
+  buildJob,
+  onInstallDeps,
+  onRetry,
+  onCancel,
+}: {
+  phase: MacBuildPhase;
+  deps: PlayitDepStatus[];
+  depsJob: PlayitJobState | null;
+  buildJob: PlayitJobState | null;
+  onInstallDeps: () => void;
+  onRetry: () => void;
+  onCancel: () => void;
+}) {
+  const missingDeps = deps.filter((dep) => !dep.installed);
+
+  if (phase === "checking-deps") {
+    return (
+      <div className="public-access-mac-build-flow">
+        <div className="public-access-mac-build-header">
+          <Loader2 size={28} className="spin" />
+          <h2>Checking dependencies</h2>
+        </div>
+        <div className="public-access-dep-list">
+          {deps.length === 0 ? (
+            <div className="public-access-dep-row"><Loader2 size={20} className="spin" /><span>Checking...</span></div>
+          ) : deps.map((dep) => (
+            <div key={dep.name} className="public-access-dep-row">
+              {dep.installed ? <CheckCircle2 size={20} className="dep-ok" /> : <XCircle size={20} className="dep-missing" />}
+              <span className="dep-label">{dep.label}</span>
+              {dep.installed ? <span className="dep-status ok">Found</span> : <span className="dep-status missing">Not found</span>}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "review-deps") {
+    return (
+      <div className="public-access-mac-build-flow">
+        <div className="public-access-mac-build-header">
+          <h2>Missing build dependencies</h2>
+        </div>
+        <p className="public-access-mac-build-copy">
+          The following tools are needed to build the Playit agent from source on macOS.
+          Would you like Cliff to install them for you?
+        </p>
+        <div className="public-access-dep-review-list">
+          {missingDeps.map((dep) => (
+            <div key={dep.name} className="public-access-dep-review-row">
+              <div className="dep-review-header">
+                <XCircle size={18} className="dep-missing" />
+                <strong>{dep.label}</strong>
+              </div>
+              <div className="dep-review-detail">
+                <span className="dep-review-command">{dep.installCommand}</span>
+                <span className="dep-review-path">Installs to: <code>{dep.installPath}</code></span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="public-access-flow-actions public-access-install-flow-actions">
+          <Button variant="primary" className="public-access-install-button" onClick={onInstallDeps}>Yes, install</Button>
+          <Button className="public-access-install-button" onClick={onCancel}>No, cancel</Button>
+        </div>
+        <Hint warn>Xcode Command Line Tools may show a system popup dialog — click Install when it appears.</Hint>
+      </div>
+    );
+  }
+
+  if (phase === "installing-deps") {
+    return (
+      <div className="public-access-mac-build-flow">
+        <div className="public-access-mac-build-header">
+          <Loader2 size={28} className="spin" />
+          <h2>Installing dependencies</h2>
+        </div>
+        <ConsoleView
+          lines={depsJob?.logs ?? []}
+          emptyMessage="Starting dependency install..."
+          className="public-access-console"
+        />
+        {depsJob?.error ? <Hint warn>{depsJob.error}</Hint> : null}
+      </div>
+    );
+  }
+
+  if (phase === "building") {
+    return (
+      <div className="public-access-mac-build-flow">
+        <div className="public-access-mac-build-header">
+          <Loader2 size={28} className="spin" />
+          <h2>Building Playit from source</h2>
+        </div>
+        {buildJob?.step ? <p className="public-access-build-step">{buildJob.step}</p> : null}
+        <ConsoleView
+          lines={buildJob?.logs ?? []}
+          emptyMessage="Starting cargo build..."
+          className="public-access-console"
+        />
+        {buildJob?.error ? <Hint warn>{buildJob.error}</Hint> : null}
+      </div>
+    );
+  }
+
+  if (phase === "failed") {
+    const errorMsg = buildJob?.error || depsJob?.error;
+    return (
+      <div className="public-access-mac-build-flow">
+        <div className="public-access-mac-build-header">
+          <XCircle size={28} className="dep-missing" />
+          <h2>Build failed</h2>
+        </div>
+        <p className="public-access-mac-build-copy">{errorMsg || "The Playit agent could not be built. Check the logs above for details."}</p>
+        <div className="public-access-flow-actions public-access-install-flow-actions">
+          <Button variant="primary" className="public-access-install-button" onClick={onRetry}>Try again</Button>
+          <Button className="public-access-install-button" onClick={onCancel}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 export function PublicAccessPanel({
   mode = "dashboard",
   server,
@@ -209,6 +341,11 @@ export function PublicAccessPanel({
   const [agentRunning, setAgentRunning] = useState(false);
   const [agentLogs, setAgentLogs] = useState<string[]>([]);
   const [tunnelReady, setTunnelReady] = useState(false);
+  const [agentPlatform, setAgentPlatform] = useState<string>("");
+  const [macBuildPhase, setMacBuildPhase] = useState<MacBuildPhase>("idle");
+  const [macDeps, setMacDeps] = useState<PlayitDepStatus[]>([]);
+  const [macDepsJob, setMacDepsJob] = useState<PlayitJobState | null>(null);
+  const [macBuildJob, setMacBuildJob] = useState<PlayitJobState | null>(null);
   
   const [resetBusy, setResetBusy] = useState(false);
   const [uninstallBusy, setUninstallBusy] = useState(false);
@@ -326,6 +463,24 @@ export function PublicAccessPanel({
     };
   }, [configured]);
 
+  // Poll agent status during macOS build phases (dep install + cargo build)
+  // to stream live logs and detect phase transitions.
+  useEffect(() => {
+    if (macBuildPhase !== "installing-deps" && macBuildPhase !== "building") return;
+    let alive = true;
+    const poll = () => {
+      fetchPlayitAgent()
+        .then((agent) => { if (alive) applyAgent(agent); })
+        .catch(() => undefined);
+    };
+    const timer = window.setInterval(poll, AGENT_POLL_INTERVAL_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [macBuildPhase]);
+
   function persistLocal(next: PublicAccessConfig) {
     setConfig(next);
     window.localStorage.setItem(publicAccessStorageKey(server.id), JSON.stringify(next));
@@ -351,7 +506,36 @@ export function PublicAccessPanel({
     setInstallState(agent.installed ? "installed" : "not-installed");
     setAgentError(agent.error ?? "");
     setAgentRunning(Boolean(agent.running));
+    setAgentPlatform(agent.platform ?? "");
+    if (agent.deps) setMacDeps(agent.deps);
+    if (agent.depsInstall !== undefined) setMacDepsJob(agent.depsInstall);
+    if (agent.build !== undefined) setMacBuildJob(agent.build);
+    // Track macOS build phase transitions from the polled job state.
+    if (agent.platform === "darwin" && !agent.installed) {
+      if (agent.build?.running) {
+        setMacBuildPhase("building");
+      } else if (agent.build?.done && agent.build.error) {
+        setMacBuildPhase("failed");
+      } else if (agent.depsInstall?.running) {
+        setMacBuildPhase("installing-deps");
+      } else if (agent.depsInstall?.done && !agent.depsInstall.error && macBuildPhase === "installing-deps") {
+        // Deps install finished successfully — start the build.
+        void startMacBuild();
+      } else if (agent.depsChecked && macBuildPhase === "checking-deps") {
+        const missing = (agent.deps ?? []).filter((dep) => !dep.installed);
+        if (missing.length === 0) {
+          // All deps present — start the build directly.
+          void startMacBuild();
+        } else {
+          setMacBuildPhase("review-deps");
+        }
+      }
+    }
     if (!agent.installed) return;
+    // Build completed successfully — reset mac build phase.
+    if (agent.platform === "darwin" && macBuildPhase !== "idle") {
+      setMacBuildPhase("done");
+    }
     const claimUrl = agent.claimUrl || (agent.running || agent.claiming ? "" : baseConfig.claimUrl);
     let nextConfig = { ...baseConfig, installed: true, agentPath: agent.path, claimUrl, updatedAt: new Date().toISOString() };
     const approvedByManager = agent.running && (agent.logs ?? []).some((line) =>
@@ -390,6 +574,11 @@ export function PublicAccessPanel({
   }
 
   async function installAgent() {
+    // On macOS, start with a dependency check before building from source.
+    if (agentPlatform === "darwin") {
+      await startMacDepCheck();
+      return;
+    }
     setInstallState("installing");
     try {
       const agent = await installManagedPlayitAgent();
@@ -399,6 +588,44 @@ export function PublicAccessPanel({
     } catch (error) {
       setInstallState("failed");
       onMessage(error instanceof Error ? error.message : "Playit agent install failed");
+    }
+  }
+
+  async function startMacDepCheck() {
+    setMacBuildPhase("checking-deps");
+    setInstallState("installing");
+    try {
+      const agent = await checkPlayitDepsAction();
+      applyAgent(agent);
+    } catch (error) {
+      setMacBuildPhase("failed");
+      setInstallState("failed");
+      onMessage(error instanceof Error ? error.message : "Playit dependency check failed");
+    }
+  }
+
+  async function startMacDepInstall() {
+    setMacBuildPhase("installing-deps");
+    try {
+      const agent = await installPlayitDepsAction();
+      applyAgent(agent);
+      onMessage("Installing build dependencies...");
+    } catch (error) {
+      setMacBuildPhase("failed");
+      onMessage(error instanceof Error ? error.message : "Playit dependency install failed");
+    }
+  }
+
+  async function startMacBuild() {
+    setMacBuildPhase("building");
+    try {
+      const agent = await installManagedPlayitAgent();
+      applyAgent(agent);
+      onMessage("Building Playit agent from source...");
+    } catch (error) {
+      setMacBuildPhase("failed");
+      setInstallState("failed");
+      onMessage(error instanceof Error ? error.message : "Playit build failed");
     }
   }
 
@@ -414,6 +641,10 @@ export function PublicAccessPanel({
       setClaimState("waiting-for-claim-link");
       setTunnelState("no-tunnel-found");
       setAgentError(agent.error ?? "");
+      setMacBuildPhase("idle");
+      setMacDeps([]);
+      setMacDepsJob(null);
+      setMacBuildJob(null);
       goToSetupStep(agent.installed ? 1 : 0);
       onMessage(agent.installed ? "Playit agent is still installed" : "Playit agent uninstalled");
     } catch (error) {
@@ -569,6 +800,10 @@ export function PublicAccessPanel({
       setInstallState(agent.installed ? "installed" : "not-installed");
       setTunnelState("no-tunnel-found");
       setAgentError(agent.error ?? "");
+      setMacBuildPhase("idle");
+      setMacDeps([]);
+      setMacDepsJob(null);
+      setMacBuildJob(null);
       goToSetupStep(agent.installed ? 1 : 0);
       setSetupOpen(true);
       if (agent.installed) {
@@ -599,30 +834,42 @@ export function PublicAccessPanel({
 
         {setupStep === 0 && (
           <div className="form-section">
-              {!agentInstalled ? (
-                <div className="public-access-flow-hero public-access-install-hero">
-                  <Image src="/assets/logos/playit.png" alt="Playit" width={256} height={256} priority />
-                  <div className="public-access-install-copy">
-                    <p>Let your friends join New Fabric Server without router setup or port forwarding. Install the Playit agent once, then generate your public address in the next steps. This runs a background process that creates and manages your Playit tunnel. You can start, stop, and uninstall it whenever you want.</p>
-                  </div>
-                </div>
-              ) : null}
               {agentInstalled ? (
                 <div className="public-access-complete-block">
                   <CheckCircle2 size={72} />
                   <h2>Installation complete</h2>
                   <p>The Playit agent is installed on this machine and ready to connect to your account.</p>
                 </div>
-              ) : null}
+              ) : agentPlatform === "darwin" && macBuildPhase !== "idle" ? (
+                <MacBuildFlow
+                  phase={macBuildPhase}
+                  deps={macDeps}
+                  depsJob={macDepsJob}
+                  buildJob={macBuildJob}
+                  onInstallDeps={startMacDepInstall}
+                  onRetry={() => { setMacBuildPhase("idle"); setInstallState("not-installed"); }}
+                  onCancel={() => { setMacBuildPhase("idle"); setInstallState("not-installed"); }}
+                />
+              ) : (
+                <div className="public-access-flow-hero public-access-install-hero">
+                  <Image src="/assets/logos/playit.png" alt="Playit" width={256} height={256} priority />
+                  <div className="public-access-install-copy">
+                    <p>Let your friends join {server.name} without router setup or port forwarding. Install the Playit agent once, then generate your public address in the next steps. This runs a background process that creates and manages your Playit tunnel. You can start, stop, and uninstall it whenever you want.</p>
+                    {agentPlatform === "darwin" ? (
+                      <p className="public-access-mac-note">On macOS, the Playit agent is built from source. The first install checks for build tools (Git, Xcode CLT, Rust) and asks before installing any missing ones.</p>
+                    ) : null}
+                  </div>
+                </div>
+              )}
               <div className="public-access-flow-actions public-access-install-flow-actions">
                 {agentInstalled ? (
                   <>
                     <Button className="public-access-install-button" disabled={uninstallBusy} onClick={uninstallAgent} loading={uninstallBusy} loadingText="Uninstalling...">Uninstall Agent</Button>
                     <Button variant="primary" className="public-access-install-button" onClick={() => goToSetupStep(1)}>Next</Button>
                   </>
-                ) : (
+                ) : macBuildPhase === "idle" ? (
                   <Button variant="primary" className="public-access-install-button" disabled={installState === "installing"} onClick={installAgent} loading={installState === "installing"} loadingText="Installing...">Install Playit Agent</Button>
-                )}
+                ) : null}
               </div>
           </div>
         )}

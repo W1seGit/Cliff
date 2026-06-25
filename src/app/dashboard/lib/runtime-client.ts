@@ -94,6 +94,14 @@ export async function installPlayitAgent() {
   return daemonApi<PlayitAgentInfo>("/api/public-access/playit/agent/install", { method: "POST", body: JSON.stringify({}) });
 }
 
+export async function checkPlayitDeps() {
+  return daemonApi<PlayitAgentInfo>("/api/public-access/playit/agent/check-deps", { method: "POST", body: JSON.stringify({}) });
+}
+
+export async function installPlayitDeps() {
+  return daemonApi<PlayitAgentInfo>("/api/public-access/playit/agent/install-deps", { method: "POST", body: JSON.stringify({}) });
+}
+
 export async function startPlayitAgent() {
   return daemonApi<PlayitAgentInfo>("/api/public-access/playit/agent/start", { method: "POST", body: JSON.stringify({}) });
 }
