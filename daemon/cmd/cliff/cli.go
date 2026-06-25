@@ -475,11 +475,15 @@ func detectLANURLs(port int) []string {
 	urls := []string{}
 	for _, addr := range addresses {
 		ipNet, ok := addr.(*net.IPNet)
-		if !ok || ipNet.IP == nil || ipNet.IP.IsLoopback() {
+		if !ok || ipNet.IP == nil || ipNet.IP.IsLoopback() || ipNet.IP.IsLinkLocalUnicast() {
 			continue
 		}
 		ip := ipNet.IP.To4()
-		if ip == nil || ip.IsLinkLocalUnicast() {
+		if ip == nil {
+			continue
+		}
+		// Skip 169.254.x.x (APIPA/link-local)
+		if ip[0] == 169 && ip[1] == 254 {
 			continue
 		}
 		urls = append(urls, fmt.Sprintf("http://%s:%d", ip.String(), port))

@@ -191,16 +191,13 @@ print_lan_urls() {
   if command -v hostname >/dev/null 2>&1; then
     for address in $(hostname -I 2>/dev/null || true); do
       case "$address" in
-        127.*|""|*:*|*.*.*.*.*) ;;
+        127.*|169.254.*|""|*:*|*.*.*.*.*) ;;
         *.*.*.*)
-          echo "Same network: http://$address:$PORT"
+          echo "  http://$address:$PORT"
           found=1
           ;;
       esac
     done
-  fi
-  if [ "$found" = "0" ]; then
-    echo "Same network: no LAN IPv4 address detected"
   fi
 }
 
@@ -269,15 +266,9 @@ setup_path_symlink() {
 
 setup_path_symlink || true
 
-echo "Cliff installed."
-echo "Path: $INSTALL_DIR"
-echo "Local: http://localhost:$PORT"
-print_lan_urls
-echo ""
-echo "Run: cliff start -p $PORT"
-echo "Status: cliff status"
-echo "Stop: cliff stop"
-
 if [ "$START" = "1" ]; then
   "$INSTALL_DIR/cliff" start -p "$PORT"
+else
+  echo "Cliff installed to $INSTALL_DIR"
+  echo "Open a new terminal and run: cliff start"
 fi

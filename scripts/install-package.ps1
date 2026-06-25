@@ -153,8 +153,13 @@ function Get-LanUrls {
   param([int]$DashboardPort)
 
   return [System.Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() |
+    Where-Object { $_.OperationalStatus -eq [System.Net.NetworkInformation.OperationalStatus]::Up } |
     ForEach-Object { $_.GetIPProperties().UnicastAddresses } |
-    Where-Object { $_.Address.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork -and -not [System.Net.IPAddress]::IsLoopback($_.Address) } |
+    Where-Object {
+      $_.Address.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork -and
+      -not [System.Net.IPAddress]::IsLoopback($_.Address) -and
+      -not $_.Address.ToString().StartsWith("169.254.")
+    } |
     ForEach-Object { "http://$($_.Address):$DashboardPort" }
 }
 
@@ -217,26 +222,13 @@ try {
   $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
   if ($UserPath -notlike "*$InstallDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
-    Write-Host "Added $InstallDir to user PATH (restart terminal to apply)."
   }
-
-  Write-Host "Cliff installed."
-  Write-Host "Path: $InstallDir"
-  Write-Host "Local: http://localhost:$Port"
-  $LanUrls = @(Get-LanUrls $Port)
-  foreach ($Url in $LanUrls) {
-    Write-Host "Same network: $Url"
-  }
-  if (-not $LanUrls) {
-    Write-Host "Same network: no LAN IPv4 address detected"
-  }
-  Write-Host ""
-  Write-Host "Run: cliff start -p $Port"
-  Write-Host "Status: cliff status"
-  Write-Host "Stop: cliff stop"
 
   if ($Start) {
     & $CliffExe start -p $Port
+  } else {
+    Write-Host "Cliff installed to $InstallDir"
+    Write-Host "Open a new terminal and run: cliff start"
   }
 }
 finally {
