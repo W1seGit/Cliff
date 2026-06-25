@@ -621,6 +621,15 @@
   padding: 12px 0;
 }
 
+/* Console + build step should span full width and be left-aligned so
+   log lines read naturally instead of being centered. */
+.public-access-mac-build-flow .public-access-console,
+.public-access-mac-build-flow .public-access-build-step {
+  justify-self: stretch;
+  text-align: left;
+  width: 100%;
+}
+
 .public-access-mac-build-header {
   display: flex;
   align-items: center;

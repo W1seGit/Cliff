@@ -57,9 +57,18 @@ cargo build --release
 # --- Step 3: install the binary -------------------------------------------
 current_step="installing binary"
 log_step "$current_step"
-BUILT_BIN="$SRC_DIR/target/release/playit"
-if [ ! -f "$BUILT_BIN" ]; then
-  log_error "expected built binary not found at $BUILT_BIN"
+# The playit-agent workspace builds the CLI crate as "playit-cli" (see
+# packages/agent_cli/Cargo.toml [[bin]] name). Older or custom builds may
+# produce "playit" instead — accept either.
+BUILT_BIN=""
+for candidate in "$SRC_DIR/target/release/playit-cli" "$SRC_DIR/target/release/playit"; do
+  if [ -f "$candidate" ]; then
+    BUILT_BIN="$candidate"
+    break
+  fi
+done
+if [ -z "$BUILT_BIN" ]; then
+  log_error "built binary not found (looked for playit-cli and playit in $SRC_DIR/target/release)"
   exit 1
 fi
 mkdir -p "$DEST_DIR"
