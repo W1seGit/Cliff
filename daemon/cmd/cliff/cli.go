@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,13 @@ type cliffState struct {
 	StartedAt  string   `json:"startedAt"`
 	LocalURL   string   `json:"localUrl"`
 	LANURLs    []string `json:"lanUrls"`
+}
+
+type daemonHealth struct {
+	Daemon string `json:"daemon"`
+	Self   struct {
+		PID int `json:"pid"`
+	} `json:"self"`
 }
 
 // installRoot returns the directory containing the cliff binary.
@@ -160,10 +168,6 @@ func runStart(args []string) {
 	// Release the process so it doesn't become a zombie.
 	_ = cmd.Process.Release()
 
-	// Write PID file (for shell script compatibility).
-	_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", pid)), 0o644)
-
-	// Write state file.
 	startedAt := time.Now().UTC()
 	lanURLs := detectLANURLs(port)
 	state := cliffState{
@@ -178,20 +182,40 @@ func runStart(args []string) {
 		LocalURL:   fmt.Sprintf("http://localhost:%d", port),
 		LANURLs:    lanURLs,
 	}
-	writeState(dataDir, state)
 
-	// Wait briefly to see if the process exits immediately (e.g. port in use).
-	time.Sleep(1 * time.Second)
-	if !processAlive(pid) {
-		fmt.Fprintf(os.Stderr, "Cliff failed to start. Check %s for details.\n", errorLogFile)
-		os.Remove(stateFilePath(dataDir))
-		os.Remove(pidFilePath(dataDir))
-		os.Exit(1)
+	// Wait until this exact process answers health checks before writing state.
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if !processAlive(pid) {
+			fmt.Fprintf(os.Stderr, "Cliff failed to start. Check %s for details.\n", errorLogFile)
+			os.Exit(1)
+		}
+		if health := readDaemonHealth(port); health != nil {
+			if health.Self.PID == pid {
+				_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", pid)), 0o644)
+				writeState(dataDir, state)
+				printStarted(state, pid, logFile)
+				return
+			}
+			if health.Self.PID > 0 {
+				_ = killProcess(pid)
+				fmt.Fprintf(os.Stderr, "Cliff is already running on port %d (PID %d).\n", port, health.Self.PID)
+				fmt.Fprintln(os.Stderr, "Run 'cliff stop' first, or choose another port with 'cliff start -p <port>'.")
+				os.Exit(1)
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
 	}
 
+	_ = killProcess(pid)
+	fmt.Fprintf(os.Stderr, "Cliff did not become ready before timeout. Check %s for details.\n", errorLogFile)
+	os.Exit(1)
+}
+
+func printStarted(state cliffState, pid int, logFile string) {
 	fmt.Printf("Cliff started (PID %d)\n", pid)
 	fmt.Printf("  Local:   %s\n", state.LocalURL)
-	for _, url := range lanURLs {
+	for _, url := range state.LANURLs {
 		fmt.Printf("  Network: %s\n", url)
 	}
 	fmt.Printf("  Logs:    %s\n", logFile)
@@ -525,6 +549,26 @@ func writeState(dataDir string, state cliffState) {
 	path := stateFilePath(dataDir)
 	data, _ := json.MarshalIndent(state, "", "  ")
 	_ = os.WriteFile(path, data, 0o644)
+}
+
+func readDaemonHealth(port int) *daemonHealth {
+	client := &http.Client{Timeout: 800 * time.Millisecond}
+	response, err := client.Get(fmt.Sprintf("http://localhost:%d/api/health", port))
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil
+	}
+	var health daemonHealth
+	if err := json.NewDecoder(response.Body).Decode(&health); err != nil {
+		return nil
+	}
+	if health.Daemon != "cliff" {
+		return nil
+	}
+	return &health
 }
 
 func processAlive(pid int) bool {

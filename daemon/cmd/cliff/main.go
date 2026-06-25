@@ -204,9 +204,15 @@ func runDaemon() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	listener, err := net.Listen("tcp", server.Addr)
+	if err != nil {
+		slog.Error("daemon stopped unexpectedly", "error", err)
+		os.Exit(1)
+	}
+
 	go func() {
 		slog.Info("cliff daemon listening", "local", cfg.LocalURL(), "lan", cfg.LANURLs())
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("daemon stopped unexpectedly", "error", err)
 			os.Exit(1)
 		}
