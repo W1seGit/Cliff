@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,6 +33,17 @@ type cliffState struct {
 	StartedAt  string   `json:"startedAt"`
 	LocalURL   string   `json:"localUrl"`
 	LANURLs    []string `json:"lanUrls"`
+}
+
+type daemonHealth struct {
+	Daemon        string   `json:"daemon"`
+	StartedAt     string   `json:"startedAt"`
+	LocalURL      string   `json:"localUrl"`
+	LANURLs       []string `json:"lanUrls"`
+	UptimeSeconds int64    `json:"uptimeSeconds"`
+	Self          struct {
+		PID int `json:"pid"`
+	} `json:"self"`
 }
 
 // installRoot returns the directory containing the cliff binary.
@@ -106,6 +118,12 @@ func runStart(args []string) {
 	if state := readState(dataDir); state != nil && processAlive(state.PID) {
 		fmt.Fprintf(os.Stderr, "Cliff is already running (PID %d) on port %d.\n", state.PID, state.Port)
 		fmt.Fprintf(os.Stderr, "Run 'cliff stop' first, or use 'cliff status' to check.\n")
+		os.Exit(1)
+	} else if state := recoverStateFromHealth(port, host, dataDir, serverRoot, webDir); state != nil {
+		writeState(dataDir, *state)
+		_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", state.PID)), 0o644)
+		fmt.Fprintf(os.Stderr, "Cliff is already running (PID %d) on port %d.\n", state.PID, state.Port)
+		fmt.Fprintf(os.Stderr, "Run 'cliff status' to check status, or 'cliff stop' to stop.\n")
 		os.Exit(1)
 	}
 
@@ -214,17 +232,29 @@ func runStop(args []string) {
 		// Also try reading the PID file (shell script compat).
 		pidStr, err := os.ReadFile(pidFilePath(dataDir))
 		if err != nil {
-			fmt.Println("Cliff is not running.")
-			return
+			state = recoverStateFromHealth(getenvInt("CLIFF_PORT", 8080), getenv("CLIFF_HOST", "0.0.0.0"), dataDir, "", "")
+			if state == nil {
+				fmt.Println("Cliff is not running.")
+				return
+			}
+			writeState(dataDir, *state)
+			_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", state.PID)), 0o644)
+		} else {
+			var pid int
+			fmt.Sscanf(string(pidStr), "%d", &pid)
+			if pid == 0 || !processAlive(pid) {
+				os.Remove(pidFilePath(dataDir))
+				state = recoverStateFromHealth(getenvInt("CLIFF_PORT", 8080), getenv("CLIFF_HOST", "0.0.0.0"), dataDir, "", "")
+				if state == nil {
+					fmt.Println("Cliff is not running.")
+					return
+				}
+				writeState(dataDir, *state)
+				_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", state.PID)), 0o644)
+			} else {
+				state = &cliffState{PID: pid}
+			}
 		}
-		var pid int
-		fmt.Sscanf(string(pidStr), "%d", &pid)
-		if pid == 0 || !processAlive(pid) {
-			os.Remove(pidFilePath(dataDir))
-			fmt.Println("Cliff is not running.")
-			return
-		}
-		state = &cliffState{PID: pid}
 	}
 
 	if !processAlive(state.PID) {
@@ -271,16 +301,26 @@ func runStatus(args []string) {
 
 	state := readState(dataDir)
 	if state == nil {
-		fmt.Println("Cliff is not running.")
-		fmt.Println("Run 'cliff start' to start the daemon.")
-		return
+		state = recoverStateFromHealth(getenvInt("CLIFF_PORT", 8080), getenv("CLIFF_HOST", "0.0.0.0"), dataDir, "", "")
+		if state == nil {
+			fmt.Println("Cliff is not running.")
+			fmt.Println("Run 'cliff start' to start the daemon.")
+			return
+		}
+		writeState(dataDir, *state)
+		_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", state.PID)), 0o644)
 	}
 
 	if !processAlive(state.PID) {
 		os.Remove(stateFilePath(dataDir))
 		os.Remove(pidFilePath(dataDir))
-		fmt.Println("Cliff is not running (stale state file removed).")
-		return
+		state = recoverStateFromHealth(state.Port, state.Host, dataDir, state.ServerRoot, state.WebDir)
+		if state == nil {
+			fmt.Println("Cliff is not running (stale state file removed).")
+			return
+		}
+		writeState(dataDir, *state)
+		_ = os.WriteFile(pidFilePath(dataDir), []byte(fmt.Sprintf("%d\n", state.PID)), 0o644)
 	}
 
 	info := buildinfo.Current()
@@ -525,6 +565,62 @@ func writeState(dataDir string, state cliffState) {
 	path := stateFilePath(dataDir)
 	data, _ := json.MarshalIndent(state, "", "  ")
 	_ = os.WriteFile(path, data, 0o644)
+}
+
+func recoverStateFromHealth(port int, host string, dataDir string, serverRoot string, webDir string) *cliffState {
+	if port <= 0 {
+		port = 8080
+	}
+	if host == "" {
+		host = "0.0.0.0"
+	}
+	root := installRoot()
+	if dataDir == "" {
+		dataDir = filepath.Join(root, "data")
+	}
+	if serverRoot == "" {
+		serverRoot = filepath.Join(root, "servers")
+	}
+	if webDir == "" {
+		webDir = filepath.Join(root, "web")
+	}
+
+	client := &http.Client{Timeout: 800 * time.Millisecond}
+	response, err := client.Get(fmt.Sprintf("http://localhost:%d/api/health", port))
+	if err != nil {
+		return nil
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil
+	}
+	var health daemonHealth
+	if err := json.NewDecoder(response.Body).Decode(&health); err != nil {
+		return nil
+	}
+	if health.Daemon != "cliff" || health.Self.PID <= 0 || !processAlive(health.Self.PID) {
+		return nil
+	}
+	startedAt := health.StartedAt
+	if startedAt == "" && health.UptimeSeconds > 0 {
+		startedAt = time.Now().Add(-time.Duration(health.UptimeSeconds) * time.Second).UTC().Format(time.RFC3339)
+	}
+	localURL := health.LocalURL
+	if localURL == "" {
+		localURL = fmt.Sprintf("http://localhost:%d", port)
+	}
+	return &cliffState{
+		PID:        health.Self.PID,
+		Port:       port,
+		Host:       host,
+		DataDir:    dataDir,
+		ServerRoot: serverRoot,
+		WebDir:     webDir,
+		LogFile:    filepath.Join(dataDir, "logs", "cliff.log"),
+		StartedAt:  startedAt,
+		LocalURL:   localURL,
+		LANURLs:    health.LANURLs,
+	}
 }
 
 func processAlive(pid int) bool {
