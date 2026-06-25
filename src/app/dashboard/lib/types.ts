@@ -120,6 +120,7 @@ export type ImportDetection = {
   alreadyRegistered: boolean;
   mods: number;
   disabledMods: number;
+  warnings?: string[];
 };
 export type RuntimeUsageSample = {
   at: string;

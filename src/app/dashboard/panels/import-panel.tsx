@@ -326,6 +326,7 @@ export function ImportPanel({
             <span>{detection.loaderVersion || "no loader"}</span>
             <span>{detection.mods} mods{detection.disabledMods ? `, ${detection.disabledMods} disabled` : ""}</span>
           </div>
+          {detection.warnings?.map((warning) => <Hint key={warning} warn>{warning}</Hint>)}
           <Input label="Display name" value={name} onChange={(event) => setName(event.target.value)} />
           <ServerTypePresets value={type} onChange={(nextType) => { setType(nextType); setLoaderVersion(serverTypeNeedsLoader(nextType) ? loaderVersion : ""); }} />
           <label>Minecraft<VersionSelect value={effectiveMinecraftVersion} serverType={type} metadata={metadata} metadataError={metadataError} onChange={(value) => { setMinecraftVersion(value); setLoaderVersion(""); }} /></label>

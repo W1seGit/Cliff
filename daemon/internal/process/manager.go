@@ -67,12 +67,12 @@ type PlayerSample struct {
 }
 
 type Usage struct {
-	CPUPercent       *float64      `json:"cpuPercent"`
-	MemoryBytes      *int64        `json:"memoryBytes"`
-	MemoryLimitBytes *int64        `json:"memoryLimitBytes"`
-	Samples          []UsageSample `json:"samples"`
+	CPUPercent       *float64       `json:"cpuPercent"`
+	MemoryBytes      *int64         `json:"memoryBytes"`
+	MemoryLimitBytes *int64         `json:"memoryLimitBytes"`
+	Samples          []UsageSample  `json:"samples"`
 	PlayerSamples    []PlayerSample `json:"playerSamples,omitempty"`
-	LastSampleAt     string        `json:"lastSampleAt,omitempty"`
+	LastSampleAt     string         `json:"lastSampleAt,omitempty"`
 }
 
 type Event struct {
@@ -83,12 +83,12 @@ type Event struct {
 }
 
 type Manager struct {
-	mu              sync.Mutex
-	running         map[string]*managedProcess
-	history         map[string][]string
-	usageHistory    map[string]*serverUsageHistory
-	subscribers     map[chan Event]subscriber
-	dataDir         string
+	mu           sync.Mutex
+	running      map[string]*managedProcess
+	history      map[string][]string
+	usageHistory map[string]*serverUsageHistory
+	subscribers  map[chan Event]subscriber
+	dataDir      string
 }
 
 type serverUsageHistory struct {
@@ -1189,6 +1189,12 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 	}
 
 	lower := strings.ToLower(server.LaunchJar)
+	if isInstallerLaunchJar(lower) {
+		if replacement := detectBetterLaunchTarget(server.Path); replacement != "" {
+			return nil, nil, "", fmt.Errorf("launch target %s is an installer jar, not a server launcher. Set the launch target to %s instead", server.LaunchJar, replacement)
+		}
+		return nil, nil, "", fmt.Errorf("launch target %s is an installer jar, not a server launcher. Run the installer first or choose the generated server launch target", server.LaunchJar)
+	}
 	var command string
 	var args []string
 	switch {
@@ -1210,11 +1216,7 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 			server.LaunchJar,
 		}
 		args = append(args, splitArgs(server.ExtraArgs)...)
-		// nogui is a Minecraft server flag — installer jars (Forge/NeoForge/
-		// Fabric installers) don't understand it and will error out.
-		if !isInstallerLaunchJar(lower) {
-			args = append(args, "nogui")
-		}
+		args = append(args, "nogui")
 	}
 
 	cmd := exec.Command(command, args...)
@@ -1226,6 +1228,47 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 // accept the nogui flag.
 func isInstallerLaunchJar(lower string) bool {
 	return strings.Contains(lower, "installer")
+}
+
+func detectBetterLaunchTarget(serverPath string) string {
+	scripts := []string{"run.sh", "start.sh", "start.command", "server.sh", "run.bat", "start.bat", "server.bat"}
+	for _, script := range scripts {
+		if fileExists(filepath.Join(serverPath, script)) {
+			return script
+		}
+	}
+	entries, err := os.ReadDir(serverPath)
+	if err != nil {
+		return ""
+	}
+	jars := []string{}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
+			jars = append(jars, entry.Name())
+		}
+	}
+	for _, jar := range jars {
+		if strings.EqualFold(jar, "fabric-server-launch.jar") {
+			return jar
+		}
+	}
+	for _, jar := range jars {
+		lower := strings.ToLower(jar)
+		if !isInstallerLaunchJar(lower) && strings.Contains(lower, "server") {
+			return jar
+		}
+	}
+	for _, jar := range jars {
+		if !isInstallerLaunchJar(strings.ToLower(jar)) {
+			return jar
+		}
+	}
+	return ""
+}
+
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 func splitArgs(input string) []string {

@@ -421,7 +421,7 @@ func TestLaunchCommandPreservesQuotedExtraArgs(t *testing.T) {
 	}
 }
 
-func TestLaunchCommandOmitsNoguiForInstallerJars(t *testing.T) {
+func TestLaunchCommandRejectsInstallerJars(t *testing.T) {
 	installerJars := []string{
 		"fabric-installer-1.1.1.jar",
 		"forge-1.20.1-47.2.0-installer.jar",
@@ -433,7 +433,7 @@ func TestLaunchCommandOmitsNoguiForInstallerJars(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, jar), []byte("placeholder"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			_, args, _, err := launchCommand(store.Server{
+			_, _, _, err := launchCommand(store.Server{
 				Name:        "Installer Test",
 				Path:        dir,
 				JavaPath:    "java",
@@ -441,15 +441,32 @@ func TestLaunchCommandOmitsNoguiForInstallerJars(t *testing.T) {
 				MaxMemoryMB: 1024,
 				LaunchJar:   jar,
 			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, arg := range args {
-				if arg == "nogui" {
-					t.Fatalf("nogui should not be appended for installer jar %s, got args %#v", jar, args)
-				}
+			if err == nil || !strings.Contains(err.Error(), "installer jar") {
+				t.Fatalf("expected installer jar error for %s, got %v", jar, err)
 			}
 		})
+	}
+}
+
+func TestLaunchCommandSuggestsBetterTargetForInstallerJar(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "fabric-installer-1.1.1.jar"), []byte("placeholder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "fabric-server-launch.jar"), []byte("placeholder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err := launchCommand(store.Server{
+		Name:        "Installer Test",
+		Path:        dir,
+		JavaPath:    "java",
+		MinMemoryMB: 512,
+		MaxMemoryMB: 1024,
+		LaunchJar:   "fabric-installer-1.1.1.jar",
+	})
+	if err == nil || !strings.Contains(err.Error(), "fabric-server-launch.jar") {
+		t.Fatalf("expected better launch target suggestion, got %v", err)
 	}
 }
 

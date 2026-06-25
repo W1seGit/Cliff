@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -37,18 +38,19 @@ type serverCreateInput struct {
 }
 
 type importDetection struct {
-	Token             string `json:"token,omitempty"`
-	Name              string `json:"name"`
-	Path              string `json:"path"`
-	Type              string `json:"type"`
-	MinecraftVersion  string `json:"minecraftVersion"`
-	LoaderVersion     string `json:"loaderVersion"`
-	Port              int    `json:"port"`
-	ActiveWorld       string `json:"activeWorld"`
-	LaunchJar         string `json:"launchJar"`
-	AlreadyRegistered bool   `json:"alreadyRegistered"`
-	Mods              int    `json:"mods"`
-	DisabledMods      int    `json:"disabledMods"`
+	Token             string   `json:"token,omitempty"`
+	Name              string   `json:"name"`
+	Path              string   `json:"path"`
+	Type              string   `json:"type"`
+	MinecraftVersion  string   `json:"minecraftVersion"`
+	LoaderVersion     string   `json:"loaderVersion"`
+	Port              int      `json:"port"`
+	ActiveWorld       string   `json:"activeWorld"`
+	LaunchJar         string   `json:"launchJar"`
+	AlreadyRegistered bool     `json:"alreadyRegistered"`
+	Mods              int      `json:"mods"`
+	DisabledMods      int      `json:"disabledMods"`
+	Warnings          []string `json:"warnings,omitempty"`
 }
 
 type versionDetails struct {
@@ -637,11 +639,15 @@ func (u *stagedImportUpload) Write(zipMode bool, targetRoot string) error {
 }
 
 func (h apiHandler) inspectServerFolder(r *http.Request, serverPath string, fallbackName string, token string) (importDetection, error) {
-	serverType := detectServerTypeFromPath(serverPath)
-	minecraftVersion, loaderVersion := detectMinecraftProfileFromPath(serverPath, serverType)
+	scan := scanImportedServer(serverPath)
+	serverType := scan.ServerType
+	minecraftVersion, loaderVersion := scan.MinecraftVersion, scan.LoaderVersion
 	if minecraftVersion == "" {
 		if metadata, err := h.getMinecraftMetadata(r, false); err == nil {
 			minecraftVersion = metadata.Latest.Release
+			if serverTypeNeedsLoader(serverType) {
+				scan.Warnings = append(scan.Warnings, "Minecraft version could not be read from the imported server. Review the selected version before importing.")
+			}
 		}
 	}
 	raw := readPropertiesRaw(filepath.Join(serverPath, "server.properties"))
@@ -667,10 +673,11 @@ func (h apiHandler) inspectServerFolder(r *http.Request, serverPath string, fall
 		LoaderVersion:     loaderVersion,
 		Port:              port,
 		ActiveWorld:       activeWorld,
-		LaunchJar:         detectLaunchJar(serverPath, serverType),
+		LaunchJar:         scan.LaunchTarget,
 		AlreadyRegistered: registered,
 		Mods:              mods,
 		DisabledMods:      disabledMods,
+		Warnings:          scan.Warnings,
 	}, nil
 }
 
@@ -1097,87 +1104,489 @@ func formPaths(form *multipart.Form) ([]string, error) {
 	return paths, nil
 }
 
+type importedServerScan struct {
+	ServerType       string
+	MinecraftVersion string
+	LoaderVersion    string
+	LaunchTarget     string
+	Warnings         []string
+}
+
+type importJarCandidate struct {
+	Name             string
+	Lower            string
+	MainClass        string
+	ServerType       string
+	MinecraftVersion string
+	LoaderVersion    string
+	Score            int
+	Installer        bool
+}
+
 func detectServerTypeFromPath(serverPath string) string {
-	entries, err := os.ReadDir(serverPath)
-	if err != nil {
-		return "vanilla"
-	}
-	names := []string{}
-	for _, entry := range entries {
-		names = append(names, strings.ToLower(entry.Name()))
-	}
-	for _, name := range names {
-		if strings.Contains(name, "fabric") {
-			return "fabric"
-		}
-	}
-	for _, name := range names {
-		if strings.Contains(name, "paper") {
-			return "paper"
-		}
-	}
-	for _, name := range names {
-		if strings.Contains(name, "neoforge") {
-			return "neoforge"
-		}
-	}
-	for _, name := range names {
-		if strings.Contains(name, "forge") {
-			return "forge"
-		}
-	}
-	return "vanilla"
+	return scanImportedServer(serverPath).ServerType
 }
 
 func detectMinecraftProfileFromPath(serverPath string, serverType string) (string, string) {
-	entries, err := os.ReadDir(serverPath)
-	if err != nil {
+	scan := scanImportedServer(serverPath)
+	if scan.ServerType != serverType {
 		return "", ""
 	}
-	lowerFiles := []string{}
+	return scan.MinecraftVersion, scan.LoaderVersion
+}
+
+func detectLaunchJar(serverPath string, serverType string) string {
+	scan := scanImportedServer(serverPath)
+	if scan.ServerType != serverType && serverType != "" {
+		if scan.ServerType == "vanilla" {
+			return ""
+		}
+	}
+	return scan.LaunchTarget
+}
+
+func scanImportedServer(serverPath string) importedServerScan {
+	scan := importedServerScan{ServerType: "vanilla"}
+	evidence := map[string]int{"vanilla": 1}
+	topJars, _ := topLevelJars(serverPath)
+
+	scriptTarget, scriptJar, scriptArgFile := detectLaunchScript(serverPath)
+	if scriptTarget != "" {
+		scan.LaunchTarget = scriptTarget
+	}
+	if scriptJar != "" {
+		evidenceFromName(filepath.Base(scriptJar), evidence, &scan)
+	}
+	if scriptArgFile != "" {
+		evidenceFromArgFilePath(scriptArgFile, evidence, &scan)
+	}
+
+	if mc, loader := detectForgeProfileFromLibraries(serverPath); mc != "" || loader != "" {
+		evidence["forge"] += 90
+		scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, mc)
+		scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, loader)
+	}
+	if mc, loader := detectNeoForgeProfileFromLibraries(serverPath); mc != "" || loader != "" {
+		evidence["neoforge"] += 95
+		scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, mc)
+		scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, loader)
+	}
+	if mc, loader := detectFabricProfileFromLibraries(serverPath); mc != "" || loader != "" {
+		evidence["fabric"] += 95
+		scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, mc)
+		scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, loader)
+	}
+
+	candidates := []importJarCandidate{}
+	for _, jar := range topJars {
+		candidate := inspectImportJar(serverPath, jar)
+		candidates = append(candidates, candidate)
+		evidenceFromJar(candidate, evidence, &scan)
+	}
+
+	scan.ServerType = strongestServerType(evidence)
+	if scan.MinecraftVersion == "" || (serverTypeNeedsLoader(scan.ServerType) && scan.LoaderVersion == "") {
+		if mc, loader := detectMinecraftProfileFromJars(candidates, scan.ServerType); mc != "" || loader != "" {
+			scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, mc)
+			scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, loader)
+		}
+	}
+
+	if scan.LaunchTarget == "" {
+		if target, warning := bestJarLaunchTarget(candidates, scan.ServerType); target != "" || warning != "" {
+			scan.LaunchTarget = target
+			if warning != "" {
+				scan.Warnings = append(scan.Warnings, warning)
+			}
+		}
+	}
+	if scan.LaunchTarget == "" && serverTypeNeedsLoader(scan.ServerType) {
+		scan.Warnings = append(scan.Warnings, "No launchable server jar or start script was detected. Choose the launch target before importing.")
+	}
+	return scan
+}
+
+func topLevelJars(serverPath string) ([]string, error) {
+	entries, err := os.ReadDir(serverPath)
+	if err != nil {
+		return nil, err
+	}
+	jars := []string{}
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
-			lowerFiles = append(lowerFiles, strings.ToLower(entry.Name()))
+			jars = append(jars, entry.Name())
 		}
 	}
-	if serverType == "fabric" {
-		pattern := regexp.MustCompile(`(?:mc|minecraft)[-_.]?(\d+\.\d+(?:\.\d+)?)[-_.].*loader[-_.]?([0-9][a-z0-9.+-]*)`)
-		for _, file := range lowerFiles {
-			if strings.Contains(file, "fabric") {
-				if match := pattern.FindStringSubmatch(file); len(match) == 3 {
-					return match[1], strings.TrimSuffix(strings.TrimSuffix(regexp.MustCompile(`[-_.]?launcher.*$`).ReplaceAllString(match[2], ""), ".jar"), "-installer")
-				}
+	sort.Strings(jars)
+	return jars, nil
+}
+
+func detectLaunchScript(serverPath string) (string, string, string) {
+	names := []string{"run.sh", "start.sh", "start.command", "server.sh", "run.bat", "start.bat", "server.bat"}
+	for _, name := range names {
+		path := filepath.Join(serverPath, name)
+		if !fileExists(path) {
+			continue
+		}
+		text := readSmallText(path, 64*1024)
+		jar := extractJarFromLaunchText(text)
+		argFile := extractArgFileFromLaunchText(text)
+		return name, jar, argFile
+	}
+	return "", "", ""
+}
+
+func readSmallText(path string, limit int64) string {
+	file, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer file.Close()
+	data, _ := io.ReadAll(io.LimitReader(file, limit))
+	return string(data)
+}
+
+func extractJarFromLaunchText(text string) string {
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`(?i)-jar\s+"([^"]+\.jar)"`),
+		regexp.MustCompile(`(?i)-jar\s+'([^']+\.jar)'`),
+		regexp.MustCompile(`(?i)-jar\s+([^\s]+\.jar)`),
+	}
+	for _, pattern := range patterns {
+		if match := pattern.FindStringSubmatch(text); len(match) == 2 {
+			return strings.Trim(match[1], `"'`)
+		}
+	}
+	return ""
+}
+
+func extractArgFileFromLaunchText(text string) string {
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`@"([^"]+\.txt)"`),
+		regexp.MustCompile(`@'([^']+\.txt)'`),
+		regexp.MustCompile(`@([^\s]+\.txt)`),
+	}
+	for _, pattern := range patterns {
+		if match := pattern.FindStringSubmatch(text); len(match) == 2 {
+			return strings.Trim(match[1], `"'`)
+		}
+	}
+	return ""
+}
+
+func evidenceFromName(name string, evidence map[string]int, scan *importedServerScan) {
+	lower := strings.ToLower(filepath.ToSlash(name))
+	switch {
+	case strings.Contains(lower, "neoforge"):
+		evidence["neoforge"] += 40
+	case strings.Contains(lower, "forge"):
+		evidence["forge"] += 35
+	case strings.Contains(lower, "fabric"):
+		evidence["fabric"] += 40
+	case strings.Contains(lower, "paper"):
+		evidence["paper"] += 35
+	case strings.Contains(lower, "purpur"):
+		evidence["purpur"] += 35
+	case strings.Contains(lower, "folia"):
+		evidence["folia"] += 35
+	}
+	if scan.MinecraftVersion == "" {
+		if match := regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`).FindStringSubmatch(lower); len(match) == 2 {
+			scan.MinecraftVersion = match[1]
+		}
+	}
+}
+
+func evidenceFromArgFilePath(path string, evidence map[string]int, scan *importedServerScan) {
+	normalized := strings.ToLower(filepath.ToSlash(path))
+	if match := regexp.MustCompile(`net/minecraftforge/forge/(\d+\.\d+(?:\.\d+)?)-([0-9][a-z0-9.+-]*)/`).FindStringSubmatch(normalized); len(match) == 3 {
+		evidence["forge"] += 90
+		scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, match[1])
+		scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, match[2])
+	}
+	if match := regexp.MustCompile(`net/neoforged/neoforge/([0-9][a-z0-9.+-]*)/`).FindStringSubmatch(normalized); len(match) == 2 {
+		evidence["neoforge"] += 90
+		loader := match[1]
+		scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, loader)
+		scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, minecraftVersionFromNeoForgeLoader(loader))
+	}
+}
+
+func detectForgeProfileFromLibraries(serverPath string) (string, string) {
+	return detectProfileFromArgFiles(serverPath, regexp.MustCompile(`(?i)libraries/net/minecraftforge/forge/(\d+\.\d+(?:\.\d+)?)-([0-9][a-z0-9.+-]*)/(?:unix|win)_args\.txt$`))
+}
+
+func detectNeoForgeProfileFromLibraries(serverPath string) (string, string) {
+	mc, loader := detectProfileFromArgFiles(serverPath, regexp.MustCompile(`(?i)libraries/net/neoforged/neoforge/([0-9][a-z0-9.+-]*)/(?:unix|win)_args\.txt$`))
+	if loader == "" && mc != "" {
+		loader = mc
+		mc = minecraftVersionFromNeoForgeLoader(loader)
+	}
+	return mc, loader
+}
+
+func detectProfileFromArgFiles(serverPath string, pattern *regexp.Regexp) (string, string) {
+	minecraftVersion, loaderVersion := "", ""
+	_ = filepath.WalkDir(filepath.Join(serverPath, "libraries"), func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(serverPath, path)
+		if relErr != nil {
+			return nil
+		}
+		normalized := filepath.ToSlash(rel)
+		match := pattern.FindStringSubmatch(normalized)
+		if len(match) == 3 {
+			minecraftVersion, loaderVersion = match[1], match[2]
+			return filepath.SkipAll
+		}
+		if len(match) == 2 {
+			minecraftVersion = match[1]
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return minecraftVersion, loaderVersion
+}
+
+func detectFabricProfileFromLibraries(serverPath string) (string, string) {
+	minecraftVersion, loaderVersion := "", ""
+	_ = filepath.WalkDir(filepath.Join(serverPath, "libraries"), func(path string, entry os.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return nil
+		}
+		rel, relErr := filepath.Rel(serverPath, path)
+		if relErr != nil {
+			return nil
+		}
+		normalized := strings.ToLower(filepath.ToSlash(rel))
+		if loaderVersion == "" {
+			if match := regexp.MustCompile(`libraries/net/fabricmc/fabric-loader/([0-9][a-z0-9.+-]*)/`).FindStringSubmatch(normalized); len(match) == 2 {
+				loaderVersion = match[1]
+			}
+		}
+		if minecraftVersion == "" {
+			if match := regexp.MustCompile(`libraries/net/minecraft/server/(\d+\.\d+(?:\.\d+)?)/`).FindStringSubmatch(normalized); len(match) == 2 {
+				minecraftVersion = match[1]
+			}
+		}
+		if minecraftVersion != "" && loaderVersion != "" {
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	if minecraftVersion == "" {
+		minecraftVersion = detectMinecraftVersionFromVersionDirs(serverPath)
+	}
+	return minecraftVersion, loaderVersion
+}
+
+func detectMinecraftVersionFromVersionDirs(serverPath string) string {
+	entries, err := os.ReadDir(filepath.Join(serverPath, "versions"))
+	if err != nil {
+		return ""
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			name := entry.Name()
+			if regexp.MustCompile(`^\d+\.\d+(?:\.\d+)?$`).MatchString(name) {
+				return name
 			}
 		}
 	}
-	if serverType == "forge" {
-		pattern := regexp.MustCompile(`forge-(\d+\.\d+(?:\.\d+)?)-([0-9][a-z0-9.+-]*)`)
-		for _, file := range lowerFiles {
-			if strings.Contains(file, "forge") {
-				if match := pattern.FindStringSubmatch(file); len(match) == 3 {
-					return match[1], cleanJarVersion(match[2])
-				}
+	return ""
+}
+
+func inspectImportJar(serverPath string, name string) importJarCandidate {
+	candidate := importJarCandidate{Name: name, Lower: strings.ToLower(name)}
+	candidate.Installer = isInstallerJar(candidate.Lower)
+	candidate.MainClass = readJarMainClass(filepath.Join(serverPath, name))
+	lowerMain := strings.ToLower(candidate.MainClass)
+	evidenceFromJarName(&candidate)
+	if strings.Contains(lowerMain, "installer") {
+		candidate.Installer = true
+		candidate.Score -= 120
+	}
+	switch {
+	case strings.Contains(lowerMain, "fabric") && strings.Contains(lowerMain, "server"):
+		candidate.ServerType = "fabric"
+		candidate.Score += 110
+	case strings.Contains(lowerMain, "net.minecraft.server"):
+		candidate.Score += 90
+	case strings.Contains(lowerMain, "paper"):
+		candidate.ServerType = "paper"
+		candidate.Score += 80
+	case strings.Contains(lowerMain, "purpur"):
+		candidate.ServerType = "purpur"
+		candidate.Score += 80
+	case strings.Contains(lowerMain, "folia"):
+		candidate.ServerType = "folia"
+		candidate.Score += 80
+	}
+	return candidate
+}
+
+func evidenceFromJarName(candidate *importJarCandidate) {
+	lower := candidate.Lower
+	if lower == "fabric-server-launch.jar" {
+		candidate.ServerType = "fabric"
+		candidate.Score += 150
+	}
+	switch {
+	case strings.Contains(lower, "neoforge"):
+		candidate.ServerType = "neoforge"
+		candidate.Score += 35
+	case strings.Contains(lower, "forge"):
+		candidate.ServerType = "forge"
+		candidate.Score += 35
+	case strings.Contains(lower, "fabric"):
+		candidate.ServerType = "fabric"
+		candidate.Score += 40
+	case strings.Contains(lower, "paper"):
+		candidate.ServerType = "paper"
+		candidate.Score += 45
+	case strings.Contains(lower, "purpur"):
+		candidate.ServerType = "purpur"
+		candidate.Score += 45
+	case strings.Contains(lower, "folia"):
+		candidate.ServerType = "folia"
+		candidate.Score += 45
+	case strings.Contains(lower, "server"):
+		candidate.Score += 25
+	}
+	if candidate.Installer {
+		candidate.Score -= 120
+	}
+}
+
+func readJarMainClass(path string) string {
+	reader, err := zip.OpenReader(path)
+	if err != nil {
+		return ""
+	}
+	defer reader.Close()
+	for _, file := range reader.File {
+		if strings.EqualFold(file.Name, "META-INF/MANIFEST.MF") {
+			if file.UncompressedSize64 > 128*1024 {
+				return ""
 			}
+			rc, err := file.Open()
+			if err != nil {
+				return ""
+			}
+			data, _ := io.ReadAll(io.LimitReader(rc, 128*1024))
+			_ = rc.Close()
+			return manifestValue(string(data), "Main-Class")
 		}
 	}
-	if serverType == "neoforge" {
-		pattern := regexp.MustCompile(`neoforge-([0-9][a-z0-9.+-]*)`)
-		for _, file := range lowerFiles {
-			if strings.Contains(file, "neoforge") {
-				if match := pattern.FindStringSubmatch(file); len(match) == 2 {
-					loader := cleanJarVersion(match[1])
-					return minecraftVersionFromNeoForgeLoader(loader), loader
+	return ""
+}
+
+func manifestValue(manifest string, key string) string {
+	lines := strings.Split(strings.ReplaceAll(manifest, "\r\n", "\n"), "\n")
+	prefix := strings.ToLower(key) + ":"
+	for index, line := range lines {
+		if strings.HasPrefix(strings.ToLower(line), prefix) {
+			value := strings.TrimSpace(line[len(prefix):])
+			for next := index + 1; next < len(lines); next++ {
+				if !strings.HasPrefix(lines[next], " ") {
+					break
 				}
+				value += strings.TrimSpace(lines[next])
+			}
+			return value
+		}
+	}
+	return ""
+}
+
+func evidenceFromJar(candidate importJarCandidate, evidence map[string]int, scan *importedServerScan) {
+	if candidate.ServerType != "" {
+		evidence[candidate.ServerType] += maxInt(candidate.Score, 1)
+	}
+	evidenceFromName(candidate.Name, evidence, scan)
+	if candidate.MinecraftVersion != "" {
+		scan.MinecraftVersion = firstNonEmpty(scan.MinecraftVersion, candidate.MinecraftVersion)
+	}
+	if candidate.LoaderVersion != "" {
+		scan.LoaderVersion = firstNonEmpty(scan.LoaderVersion, candidate.LoaderVersion)
+	}
+}
+
+func strongestServerType(evidence map[string]int) string {
+	bestType, bestScore := "vanilla", evidence["vanilla"]
+	preference := map[string]int{"fabric": 6, "neoforge": 5, "forge": 4, "paper": 3, "purpur": 2, "folia": 1, "vanilla": 0}
+	for serverType, score := range evidence {
+		if score > bestScore || (score == bestScore && preference[serverType] > preference[bestType]) {
+			bestType, bestScore = serverType, score
+		}
+	}
+	return bestType
+}
+
+func detectMinecraftProfileFromJars(candidates []importJarCandidate, serverType string) (string, string) {
+	for _, candidate := range candidates {
+		lower := candidate.Lower
+		if serverType == "fabric" && strings.Contains(lower, "fabric") {
+			pattern := regexp.MustCompile(`(?:mc|minecraft)[-_.]?(\d+\.\d+(?:\.\d+)?)[-_.].*loader[-_.]?([0-9][a-z0-9.+-]*)`)
+			if match := pattern.FindStringSubmatch(lower); len(match) == 3 {
+				return match[1], strings.TrimSuffix(strings.TrimSuffix(regexp.MustCompile(`[-_.]?launcher.*$`).ReplaceAllString(match[2], ""), ".jar"), "-installer")
+			}
+		}
+		if serverType == "forge" && strings.Contains(lower, "forge") {
+			pattern := regexp.MustCompile(`forge-(\d+\.\d+(?:\.\d+)?)-([0-9][a-z0-9.+-]*)`)
+			if match := pattern.FindStringSubmatch(lower); len(match) == 3 {
+				return match[1], cleanJarVersion(match[2])
+			}
+		}
+		if serverType == "neoforge" && strings.Contains(lower, "neoforge") {
+			pattern := regexp.MustCompile(`neoforge-([0-9][a-z0-9.+-]*)`)
+			if match := pattern.FindStringSubmatch(lower); len(match) == 2 {
+				loader := cleanJarVersion(match[1])
+				return minecraftVersionFromNeoForgeLoader(loader), loader
 			}
 		}
 	}
 	versionPattern := regexp.MustCompile(`(\d+\.\d+(?:\.\d+)?)`)
-	for _, file := range lowerFiles {
-		if regexp.MustCompile(`(?:minecraft[_-]?server|server)[_.-]\d+\.\d+`).MatchString(file) {
-			if match := versionPattern.FindStringSubmatch(file); len(match) == 2 {
+	for _, candidate := range candidates {
+		if regexp.MustCompile(`(?:minecraft[_-]?server|server)[_.-]\d+\.\d+`).MatchString(candidate.Lower) {
+			if match := versionPattern.FindStringSubmatch(candidate.Lower); len(match) == 2 {
 				return match[1], ""
 			}
 		}
+	}
+	return "", ""
+}
+
+func bestJarLaunchTarget(candidates []importJarCandidate, serverType string) (string, string) {
+	if len(candidates) == 0 {
+		return "", ""
+	}
+	best := importJarCandidate{Score: -1000}
+	installerCount := 0
+	for _, candidate := range candidates {
+		if candidate.Installer {
+			installerCount++
+			continue
+		}
+		score := candidate.Score
+		if candidate.ServerType == serverType {
+			score += 30
+		}
+		if strings.Contains(candidate.Lower, "server") {
+			score += 20
+		}
+		if score > best.Score {
+			best = candidate
+			best.Score = score
+		}
+	}
+	if best.Name != "" && best.Score >= 20 {
+		return best.Name, ""
+	}
+	if installerCount > 0 {
+		return "", "Installer jar found but not launchable. Choose a start script or generated server launcher before importing."
 	}
 	return "", ""
 }
@@ -1186,6 +1595,13 @@ func cleanJarVersion(value string) string {
 	value = strings.TrimSuffix(value, "-installer.jar")
 	value = strings.TrimSuffix(value, ".jar")
 	return value
+}
+
+func maxInt(a int, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func minecraftVersionFromNeoForgeLoader(loaderVersion string) string {
@@ -1560,53 +1976,6 @@ func copyDirectory(source string, target string) error {
 		_, err = io.Copy(output, input)
 		return err
 	})
-}
-
-func detectLaunchJar(serverPath string, serverType string) string {
-	script := "run.sh"
-	if os.PathSeparator == '\\' {
-		script = "run.bat"
-	}
-	if fileExists(filepath.Join(serverPath, script)) {
-		return script
-	}
-	entries, err := os.ReadDir(serverPath)
-	if err != nil {
-		return ""
-	}
-	jars := []string{}
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
-			jars = append(jars, entry.Name())
-		}
-	}
-	// Fabric: prefer the dedicated server launcher if present.
-	for _, jar := range jars {
-		if strings.ToLower(jar) == "fabric-server-launch.jar" {
-			return jar
-		}
-	}
-	for _, jar := range jars {
-		lower := strings.ToLower(jar)
-		if strings.Contains(lower, serverType) && !isInstallerJar(lower) {
-			return jar
-		}
-	}
-	for _, jar := range jars {
-		lower := strings.ToLower(jar)
-		if strings.Contains(lower, "server") && !isInstallerJar(lower) {
-			return jar
-		}
-	}
-	// Fallback: pick the first non-installer jar. Installer jars are not
-	// launchable as servers (they don't accept nogui, don't start a server
-	// process, etc.) so they must never be selected as the launch target.
-	for _, jar := range jars {
-		if !isInstallerJar(strings.ToLower(jar)) {
-			return jar
-		}
-	}
-	return ""
 }
 
 // isInstallerJar reports whether a jar filename (lowercased) looks like a
