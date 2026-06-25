@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -421,14 +422,38 @@ func runUninstall(args []string) {
 	// Remove the symlink from PATH.
 	removeSymlink()
 
-	// Remove the install directory.
-	if err := os.RemoveAll(root); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to remove install directory: %s\n", err)
-		fmt.Fprintf(os.Stderr, "You may need to remove it manually: %s\n", root)
+	// Remove the install directory. On Windows, the running cliff.exe can't
+	// delete itself, so we remove everything except the binary and tell the
+	// user to delete the remaining folder.
+	self, _ := os.Executable()
+	removedAll := true
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read install directory: %s\n", err)
 		os.Exit(1)
 	}
+	for _, entry := range entries {
+		entryPath := filepath.Join(root, entry.Name())
+		// Skip the binary itself — it's locked because we're running from it.
+		if runtime.GOOS == "windows" && strings.EqualFold(entryPath, self) {
+			continue
+		}
+		if err := os.RemoveAll(entryPath); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to remove %s: %s\n", entryPath, err)
+			removedAll = false
+		}
+	}
 
-	fmt.Println("Cliff has been uninstalled.");
+	if runtime.GOOS == "windows" && removedAll {
+		// Try to remove the now-empty directory (will fail if binary is still there).
+		_ = os.Remove(root)
+		fmt.Printf("Cliff uninstalled. Delete the remaining folder: %s\n", root)
+	} else if removedAll {
+		os.Remove(root)
+		fmt.Println("Cliff has been uninstalled.")
+	} else {
+		fmt.Fprintf(os.Stderr, "Some files could not be removed. Delete manually: %s\n", root)
+	}
 }
 
 // ---- helpers ----
