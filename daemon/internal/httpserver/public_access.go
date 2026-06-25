@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	playitLatestReleaseURL     = "https://api.github.com/repos/playit-cloud/playit-agent/releases/latest"
-	playitWindowsCLIReleaseURL = "https://api.github.com/repos/playit-cloud/playit-agent/releases/tags/v0.17.1"
-	maxPlayitDownloadBytes     = 64 * 1024 * 1024
+	playitCLIReleaseURL    = "https://api.github.com/repos/playit-cloud/playit-agent/releases/tags/v0.17.1"
+	playitCLIVersion       = "0.17.1"
+	maxPlayitDownloadBytes = 64 * 1024 * 1024
 )
 
 type playitStatus struct {
@@ -324,17 +324,14 @@ func (h apiHandler) useSystemPlayitAgent() (playitStatus, error) {
 }
 
 func playitReleaseURL() string {
-	if runtime.GOOS == "windows" {
-		return playitWindowsCLIReleaseURL
-	}
-	return playitLatestReleaseURL
+	return playitCLIReleaseURL
 }
 
 func playitInstallNeedsReplacement(status playitStatus) bool {
-	if runtime.GOOS == "windows" {
-		return status.Version != "0.17.1"
+	if status.Version == "system" {
+		return false
 	}
-	return strings.HasPrefix(status.Asset, "playit-linux-")
+	return status.Version != playitCLIVersion
 }
 
 func fetchPlayitRelease(r *http.Request, releaseURL string) (githubRelease, error) {
@@ -377,16 +374,21 @@ func playitAssetTargets(goos string, goarch string) ([]string, error) {
 	case "linux":
 		switch goarch {
 		case "amd64":
-			return []string{"playit-cli-linux-amd64", "playit-linux-amd64"}, nil
+			return []string{"playit-linux-amd64"}, nil
 		case "arm64":
-			return []string{"playit-cli-linux-aarch64", "playit-linux-aarch64"}, nil
+			return []string{"playit-linux-aarch64"}, nil
 		case "arm":
-			return []string{"playit-cli-linux-armv7", "playit-linux-armv7"}, nil
+			return []string{"playit-linux-armv7"}, nil
 		case "386":
-			return []string{"playit-cli-linux-i686", "playit-linux-i686"}, nil
+			return []string{"playit-linux-i686"}, nil
 		}
 	case "darwin":
-		return nil, errors.New("Playit does not currently publish macOS release binaries. Install or build playit so the 'playit' command is on PATH")
+		switch goarch {
+		case "amd64":
+			return []string{"playit-darwin-amd64", "playit-macos-amd64", "playit-macos-x86_64"}, nil
+		case "arm64":
+			return []string{"playit-darwin-aarch64", "playit-darwin-arm64", "playit-macos-aarch64", "playit-macos-arm64"}, nil
+		}
 	}
 	return nil, fmt.Errorf("Playit managed install is not supported on %s/%s yet", goos, goarch)
 }

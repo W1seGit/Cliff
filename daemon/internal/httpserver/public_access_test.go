@@ -6,7 +6,6 @@ func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
 	assets := []githubAssetRecord{
 		{Name: "playit_amd64.deb", BrowserDownloadURL: "https://example.invalid/deb"},
 		{Name: "playit-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux"},
-		{Name: "playit-cli-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux-cli"},
 		{Name: "playit-windows-x86_64-signed.exe", BrowserDownloadURL: "https://example.invalid/windows"},
 	}
 
@@ -14,8 +13,8 @@ func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected linux asset, got error %v", err)
 	}
-	if asset.Name != "playit-cli-linux-amd64" {
-		t.Fatalf("expected linux CLI binary, got %q", asset.Name)
+	if asset.Name != "playit-linux-amd64" {
+		t.Fatalf("expected linux binary, got %q", asset.Name)
 	}
 
 	asset, err = selectPlayitAsset(assets, "windows", "amd64")
@@ -27,24 +26,24 @@ func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
 	}
 }
 
-func TestSelectPlayitAssetFallsBackToLegacyLinuxBinary(t *testing.T) {
+func TestSelectPlayitAssetSupportsMacOS(t *testing.T) {
 	assets := []githubAssetRecord{
-		{Name: "playit-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux"},
+		{Name: "playit-darwin-aarch64", BrowserDownloadURL: "https://example.invalid/darwin"},
 	}
 
-	asset, err := selectPlayitAsset(assets, "linux", "amd64")
+	asset, err := selectPlayitAsset(assets, "darwin", "arm64")
 	if err != nil {
-		t.Fatalf("expected linux asset, got error %v", err)
+		t.Fatalf("expected macOS asset, got error %v", err)
 	}
-	if asset.Name != "playit-linux-amd64" {
-		t.Fatalf("expected legacy linux binary fallback, got %q", asset.Name)
+	if asset.Name != "playit-darwin-aarch64" {
+		t.Fatalf("expected macOS binary, got %q", asset.Name)
 	}
 }
 
-func TestSelectPlayitAssetRequiresSystemBinaryForMacOS(t *testing.T) {
-	_, err := selectPlayitAsset(nil, "darwin", "arm64")
+func TestSelectPlayitAssetRejectsUnsupportedPlatform(t *testing.T) {
+	_, err := selectPlayitAsset(nil, "freebsd", "arm64")
 	if err == nil {
-		t.Fatal("expected macOS system binary error")
+		t.Fatal("expected unsupported platform error")
 	}
 }
 
