@@ -19,6 +19,7 @@ import {
   stopPlayitAgent as stopManagedPlayitAgent,
 } from "../lib/runtime-client";
 import type { PlayitAgentInfo, PlayitDepStatus, PlayitJobState, PublicAccessRecord, ServerRecord } from "../lib/types";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { publicAccessStorageKey } from "../lib/utils";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -572,7 +573,7 @@ export function PublicAccessPanel({
 
   async function copy(value: string, label: string) {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyTextToClipboard(value);
       onMessage(`${label} copied`);
     } catch {
       onMessage("Clipboard copy failed");

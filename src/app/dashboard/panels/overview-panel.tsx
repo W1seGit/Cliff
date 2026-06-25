@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RuntimeStatus, RuntimeUsage, ServerHealth, ServerRecord } from "../lib/types";
 import { formatBytes, joinAddressFor, isPublicAddressActive } from "../lib/utils";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { Button } from "../components/ui/button";
 import { Pill } from "../components/ui/pill";
 import { AreaChart } from "../components/ui/area-chart";
@@ -126,7 +127,7 @@ export function OverviewPanel({
 
   async function copyAddress(value = joinAddress) {
     try {
-      await navigator.clipboard.writeText(value);
+      await copyTextToClipboard(value);
       onMessage("Join address copied");
     } catch {
       onMessage("Clipboard copy failed");

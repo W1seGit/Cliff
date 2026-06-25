@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Menu, MoreHorizontal, Play, RefreshCw, RotateCw, Square, Zap } from "lucide-react";
 import type { ServerRecord } from "../lib/types";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { joinAddressFor } from "../lib/utils";
 import { ServerAvatar } from "./server-avatar";
 
@@ -39,12 +40,13 @@ export function ServerHeader({
   const runningActionDisabled = !selected || !isRunning || Boolean(busyAction) || transitioning;
 
   const joinAddress = joinAddressFor(selected);
-  function copyAddress() {
-    if (typeof navigator === "undefined" || !navigator.clipboard) return;
-    navigator.clipboard.writeText(joinAddress).then(
-      () => onMessage("Join address copied"),
-      () => onMessage("Clipboard copy failed"),
-    );
+  async function copyAddress() {
+    try {
+      await copyTextToClipboard(joinAddress);
+      onMessage("Join address copied");
+    } catch {
+      onMessage("Clipboard copy failed");
+    }
   }
 
   function toggleMore(button: HTMLButtonElement) {

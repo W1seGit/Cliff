@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Eye, EyeOff, Download, Copy } from "lucide-react";
 import { browserOrigin, externalApiBase, formatBytes, serverTypeNeedsLoader } from "../lib/utils";
+import { copyTextToClipboard } from "../lib/clipboard";
 import { daemonLogsUrl, fetchDaemonLogs, fetchDaemonLogsFull, fetchJavaRuntimes, fetchTypeVersions, installJavaRuntime, uninstallJavaRuntime, saveAccount as saveAccountProfile, saveSettings, checkForUpdates, applyUpdate, reloadAfterDaemonRestart } from "../lib/runtime-client";
 import type { ConfirmRequest, JavaRuntimeInfo, MinecraftMetadata, ServerType, Settings, UnsavedChangesRegistration, UpdateCheckResult, User } from "../lib/types";
 import { Button } from "../components/ui/button";
@@ -269,6 +270,15 @@ export function AppSettingsPanel({
     }
   }
 
+  async function copyDaemonLogs() {
+    try {
+      await copyTextToClipboard(daemonLogLines.join("\n"));
+      onMessage("Logs copied");
+    } catch {
+      onMessage("Copy failed");
+    }
+  }
+
   async function checkForUpdatesNow() {
     setUpdateChecking(true);
     try {
@@ -501,7 +511,7 @@ export function AppSettingsPanel({
               <option value="live">Live buffer</option>
               <option value="full">Full log file</option>
             </Select>
-            <Button disabled={daemonLogsBusy || daemonLogLines.length === 0} onClick={() => navigator.clipboard.writeText(daemonLogLines.join("\n")).then(() => onMessage("Logs copied")).catch(() => onMessage("Copy failed"))}><Copy size={14} />Copy</Button>
+            <Button disabled={daemonLogsBusy || daemonLogLines.length === 0} onClick={copyDaemonLogs}><Copy size={14} />Copy</Button>
             <Button disabled={daemonLogsBusy} onClick={refreshDaemonLogs}>{daemonLogsBusy ? "Loading..." : "Refresh"}</Button>
             <Button disabled={daemonLogLines.length === 0} onClick={() => window.open(daemonLogsUrl(logMode === "full" ? "?full=1&download=1" : "?download=1"), "_blank")}><Download size={14} />Download</Button>
           </div>
