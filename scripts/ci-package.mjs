@@ -329,13 +329,24 @@ async function packageTarget(target) {
   // Generate runner scripts
   await generateRunnerScripts(target, packageDir);
 
-  // Write build.json
+  // Write build.json and package-manifest.json
   const metadata = {
     version: packageJson.version || "dev",
     commit: process.env.GITHUB_SHA?.slice(0, 12) || "unknown",
     builtAt: new Date().toISOString(),
   };
   await writeFile(path.join(packageDir, "build.json"), `${JSON.stringify(metadata, null, 2)}\n`);
+
+  // Write package-manifest.json (expected by install scripts)
+  const binaryPath = path.join(packageDir, binary);
+  const packageManifest = {
+    ...metadata,
+    binary,
+    binarySizeBytes: (await stat(binaryPath)).size,
+    binarySHA256: await fileSHA256(binaryPath),
+    generatedAt: new Date().toISOString(),
+  };
+  await writeFile(path.join(packageDir, "package-manifest.json"), `${JSON.stringify(packageManifest, null, 2)}\n`);
 
   // Write README.txt
   const isWindows = goos === "windows";
