@@ -1210,11 +1210,22 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 			server.LaunchJar,
 		}
 		args = append(args, splitArgs(server.ExtraArgs)...)
-		args = append(args, "nogui")
+		// nogui is a Minecraft server flag — installer jars (Forge/NeoForge/
+		// Fabric installers) don't understand it and will error out.
+		if !isInstallerLaunchJar(lower) {
+			args = append(args, "nogui")
+		}
 	}
 
 	cmd := exec.Command(command, args...)
 	return cmd, args, strings.Join(append([]string{command}, args...), " "), nil
+}
+
+// isInstallerLaunchJar reports whether the launch jar is a mod-loader
+// installer rather than a Minecraft server jar. Installer jars don't
+// accept the nogui flag.
+func isInstallerLaunchJar(lower string) bool {
+	return strings.Contains(lower, "installer")
 }
 
 func splitArgs(input string) []string {

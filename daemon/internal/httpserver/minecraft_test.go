@@ -142,3 +142,41 @@ func TestDetectServerTypeFromPathFindsPaperJar(t *testing.T) {
 		t.Fatalf("expected paper server type, got %q", got)
 	}
 }
+
+func TestDetectLaunchJarSkipsInstallerOnlyFabric(t *testing.T) {
+	serverDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(serverDir, "fabric-installer-1.1.1.jar"), []byte("jar"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Only an installer jar is present — detectLaunchJar should return ""
+	// rather than picking the installer as the launch target.
+	if got := detectLaunchJar(serverDir, "fabric"); got != "" {
+		t.Fatalf("detectLaunchJar should return empty when only installer jar present, got %q", got)
+	}
+}
+
+func TestDetectLaunchJarPrefersFabricServerLaunch(t *testing.T) {
+	serverDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(serverDir, "fabric-installer-1.1.1.jar"), []byte("jar"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serverDir, "fabric-server-launch.jar"), []byte("jar"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := detectLaunchJar(serverDir, "fabric"); got != "fabric-server-launch.jar" {
+		t.Fatalf("detectLaunchJar should prefer fabric-server-launch.jar, got %q", got)
+	}
+}
+
+func TestDetectLaunchJarSkipsForgeInstaller(t *testing.T) {
+	serverDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(serverDir, "forge-1.20.1-47.2.0-installer.jar"), []byte("jar"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serverDir, "minecraft_server.1.20.1.jar"), []byte("jar"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := detectLaunchJar(serverDir, "forge"); got != "minecraft_server.1.20.1.jar" {
+		t.Fatalf("detectLaunchJar should skip forge installer and pick server jar, got %q", got)
+	}
+}

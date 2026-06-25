@@ -1580,22 +1580,40 @@ func detectLaunchJar(serverPath string, serverType string) string {
 			jars = append(jars, entry.Name())
 		}
 	}
+	// Fabric: prefer the dedicated server launcher if present.
 	for _, jar := range jars {
-		lower := strings.ToLower(jar)
-		if strings.Contains(lower, serverType) && !strings.HasSuffix(lower, "-installer.jar") {
+		if strings.ToLower(jar) == "fabric-server-launch.jar" {
 			return jar
 		}
 	}
 	for _, jar := range jars {
 		lower := strings.ToLower(jar)
-		if strings.Contains(lower, "server") && !strings.HasSuffix(lower, "-installer.jar") {
+		if strings.Contains(lower, serverType) && !isInstallerJar(lower) {
 			return jar
 		}
 	}
-	if len(jars) > 0 {
-		return jars[0]
+	for _, jar := range jars {
+		lower := strings.ToLower(jar)
+		if strings.Contains(lower, "server") && !isInstallerJar(lower) {
+			return jar
+		}
+	}
+	// Fallback: pick the first non-installer jar. Installer jars are not
+	// launchable as servers (they don't accept nogui, don't start a server
+	// process, etc.) so they must never be selected as the launch target.
+	for _, jar := range jars {
+		if !isInstallerJar(strings.ToLower(jar)) {
+			return jar
+		}
 	}
 	return ""
+}
+
+// isInstallerJar reports whether a jar filename (lowercased) looks like a
+// mod-loader installer rather than a server jar. These should not be used
+// as launch targets with nogui.
+func isInstallerJar(lower string) bool {
+	return strings.Contains(lower, "installer") || strings.Contains(lower, "installer.jar")
 }
 
 func metadataHasMinecraftVersion(metadata minecraftMetadata, minecraftVersion string) bool {

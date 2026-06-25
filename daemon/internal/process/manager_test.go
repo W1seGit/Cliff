@@ -421,6 +421,38 @@ func TestLaunchCommandPreservesQuotedExtraArgs(t *testing.T) {
 	}
 }
 
+func TestLaunchCommandOmitsNoguiForInstallerJars(t *testing.T) {
+	installerJars := []string{
+		"fabric-installer-1.1.1.jar",
+		"forge-1.20.1-47.2.0-installer.jar",
+		"neoforge-47.1.0-installer.jar",
+	}
+	for _, jar := range installerJars {
+		t.Run(jar, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, jar), []byte("placeholder"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, args, _, err := launchCommand(store.Server{
+				Name:        "Installer Test",
+				Path:        dir,
+				JavaPath:    "java",
+				MinMemoryMB: 512,
+				MaxMemoryMB: 1024,
+				LaunchJar:   jar,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, arg := range args {
+				if arg == "nogui" {
+					t.Fatalf("nogui should not be appended for installer jar %s, got args %#v", jar, args)
+				}
+			}
+		})
+	}
+}
+
 func TestCollectUsageFromRowsIncludesProcessTree(t *testing.T) {
 	usage := collectUsageFromRows(10, []processUsageRow{
 		{pid: 1, parentPID: 0, rssKB: 500, cpuPercent: 99},
