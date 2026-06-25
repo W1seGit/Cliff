@@ -204,6 +204,31 @@ print_lan_urls() {
   fi
 }
 
+# Create a symlink in PATH so `cliff` is available system-wide.
+setup_path_symlink() {
+  binary="$INSTALL_DIR/cliff"
+  # Try the user-writable path first, then the system path.
+  for target in "$HOME/.local/bin" /usr/local/bin; do
+    if [ -d "$target" ] || mkdir -p "$target" 2>/dev/null; then
+      if ln -sf "$binary" "$target/cliff" 2>/dev/null; then
+        echo "Symlinked: $target/cliff -> $binary"
+        if [ "$target" = "$HOME/.local/bin" ]; then
+          # Ensure ~/.local/bin is in PATH for common shells.
+          for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+            if [ -f "$rc" ] && ! grep -q '\.local/bin' "$rc" 2>/dev/null; then
+              echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
+              echo "Added ~/.local/bin to PATH in $(basename "$rc")"
+            fi
+          done
+        fi
+        return 0
+      fi
+    fi
+  done
+  echo "Could not create symlink. Use $INSTALL_DIR/cliff directly." >&2
+  return 1
+}
+
 require_extracted_file() {
   relative="$1"
   if [ ! -e "$TEMP_ROOT/cliff/$relative" ]; then
@@ -231,7 +256,13 @@ if [ -x "$INSTALL_DIR/cliff" ]; then
 fi
 
 if [ -e "$INSTALL_DIR" ] && [ "$FORCE" != "1" ]; then
-  echo "Install directory already exists: $INSTALL_DIR. Re-run with --force to replace it." >&2
+  if [ -x "$INSTALL_DIR/cliff" ]; then
+    setup_path_symlink || true
+    echo "Cliff is already installed at $INSTALL_DIR"
+    echo "Run: cliff start"
+    exit 0
+  fi
+  echo "Install directory already exists: $INSTALL_DIR, but $INSTALL_DIR/cliff was not found. Re-run with --force to replace it." >&2
   exit 1
 fi
 
@@ -241,31 +272,6 @@ mv "$TEMP_ROOT/cliff" "$INSTALL_DIR"
 
 # Make the binary executable.
 chmod +x "$INSTALL_DIR/cliff" 2>/dev/null || true
-
-# Create a symlink in PATH so `cliff` is available system-wide.
-setup_path_symlink() {
-  binary="$INSTALL_DIR/cliff"
-  # Try /usr/local/bin first (common on Linux/macOS).
-  for target in /usr/local/bin "$HOME/.local/bin"; do
-    if [ -d "$target" ] || mkdir -p "$target" 2>/dev/null; then
-      if ln -sf "$binary" "$target/cliff" 2>/dev/null; then
-        echo "Symlinked: $target/cliff -> $binary"
-        if [ "$target" = "$HOME/.local/bin" ]; then
-          # Ensure ~/.local/bin is in PATH for common shells.
-          for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
-            if [ -f "$rc" ] && ! grep -q '\.local/bin' "$rc" 2>/dev/null; then
-              echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
-              echo "Added ~/.local/bin to PATH in $(basename "$rc")"
-            fi
-          done
-        fi
-        return 0
-      fi
-    fi
-  done
-  echo "Could not create symlink. Use $INSTALL_DIR/cliff directly." >&2
-  return 1
-}
 
 setup_path_symlink || true
 
