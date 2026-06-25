@@ -85,7 +85,7 @@ type purpurVersionInfo struct {
 var serverSlugPattern = regexp.MustCompile(`[^a-zA-Z0-9_-]+`)
 var importTokenPattern = regexp.MustCompile(`^imp_[a-f0-9]{16}$`)
 
-const maxImportMultipartMemoryBytes int64 = 8 << 20
+const maxImportFieldBytes int64 = 16 << 20
 
 func (h apiHandler) createServer(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.Header.Get("Content-Type"), "multipart/form-data") {
@@ -125,11 +125,14 @@ func (h apiHandler) createServerFromInput(r *http.Request, input serverCreateInp
 }
 
 func (h apiHandler) uploadServerImport(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(maxImportMultipartMemoryBytes); err != nil {
-		writeError(w, http.StatusBadRequest, "Server upload could not be read")
+	upload, err := readServerImportUpload(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	mode := strings.TrimSpace(r.FormValue("mode"))
+	defer upload.RemoveAll()
+
+	mode := strings.TrimSpace(upload.Value("mode"))
 	if mode != "detect-zip" && mode != "detect-folder" && mode != "import-zip" && mode != "import-folder" {
 		writeError(w, http.StatusBadRequest, "Unsupported server upload action")
 		return
@@ -138,15 +141,13 @@ func (h apiHandler) uploadServerImport(w http.ResponseWriter, r *http.Request) {
 	zipMode := mode == "detect-zip" || mode == "import-zip"
 	fallbackName := "Imported server"
 	if zipMode {
-		file, header, err := r.FormFile("file")
-		if err != nil {
+		if upload.ZipPath == "" {
 			writeError(w, http.StatusBadRequest, "Server ZIP is required")
 			return
 		}
-		_ = file.Close()
-		fallbackName = fileDisplayName(header.Filename)
+		fallbackName = fileDisplayName(upload.ZipName)
 	} else {
-		paths, _ := formPaths(r.MultipartForm)
+		paths, _ := upload.Paths()
 		if len(paths) > 0 {
 			parts, err := relativeUploadParts(paths[0])
 			if err == nil && len(parts) > 0 {
@@ -154,7 +155,7 @@ func (h apiHandler) uploadServerImport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	name := displayName(r.FormValue("name"), fallbackName)
+	name := displayName(upload.Value("name"), fallbackName)
 	serverPath := ""
 	if detectMode {
 		token, err := newImportToken()
@@ -163,8 +164,7 @@ func (h apiHandler) uploadServerImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		serverPath = h.importSessionPath(token)
-		defer r.MultipartForm.RemoveAll()
-		if err := h.writeImportUpload(r, zipMode, serverPath); err != nil {
+		if err := upload.Write(zipMode, serverPath); err != nil {
 			_ = os.RemoveAll(serverPath)
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -189,23 +189,22 @@ func (h apiHandler) uploadServerImport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
-	if err := h.writeImportUpload(r, zipMode, serverPath); err != nil {
+	if err := upload.Write(zipMode, serverPath); err != nil {
 		_ = os.RemoveAll(serverPath)
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	input := serverCreateInput{
 		Name:             name,
-		Type:             r.FormValue("type"),
-		MinecraftVersion: r.FormValue("minecraftVersion"),
-		LoaderVersion:    r.FormValue("loaderVersion"),
-		JavaPath:         r.FormValue("javaPath"),
-		MinMemoryMB:      atoiDefault(r.FormValue("minMemoryMb"), 0),
-		MaxMemoryMB:      atoiDefault(r.FormValue("maxMemoryMb"), 0),
-		Port:             atoiDefault(r.FormValue("port"), 0),
-		LaunchJar:        r.FormValue("launchJar"),
-		ExtraArgs:        r.FormValue("extraArgs"),
+		Type:             upload.Value("type"),
+		MinecraftVersion: upload.Value("minecraftVersion"),
+		LoaderVersion:    upload.Value("loaderVersion"),
+		JavaPath:         upload.Value("javaPath"),
+		MinMemoryMB:      atoiDefault(upload.Value("minMemoryMb"), 0),
+		MaxMemoryMB:      atoiDefault(upload.Value("maxMemoryMb"), 0),
+		Port:             atoiDefault(upload.Value("port"), 0),
+		LaunchJar:        upload.Value("launchJar"),
+		ExtraArgs:        upload.Value("extraArgs"),
 	}
 	server, err := h.serverRecordFromInput(r, input, serverPath, name)
 	if err != nil {
@@ -512,6 +511,131 @@ func (h apiHandler) writeImportUpload(r *http.Request, zipMode bool, targetRoot 
 	return writeUploadedFolder(files, paths, targetRoot)
 }
 
+type stagedImportUpload struct {
+	Root        string
+	Values      map[string]string
+	ZipPath     string
+	ZipName     string
+	FolderFiles []stagedImportFile
+}
+
+type stagedImportFile struct {
+	Path string
+	Name string
+}
+
+func readServerImportUpload(r *http.Request) (*stagedImportUpload, error) {
+	reader, err := r.MultipartReader()
+	if err != nil {
+		return nil, errors.New("Server upload could not be read")
+	}
+	root, err := os.MkdirTemp("", "cliff-server-import-*")
+	if err != nil {
+		return nil, errors.New("Server upload could not be staged")
+	}
+	upload := &stagedImportUpload{
+		Root:   root,
+		Values: map[string]string{},
+	}
+	fail := func(err error) (*stagedImportUpload, error) {
+		_ = os.RemoveAll(root)
+		return nil, err
+	}
+	fileIndex := 0
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fail(errors.New("Server upload could not be read"))
+		}
+		formName := part.FormName()
+		fileName := part.FileName()
+		if formName == "" {
+			_ = part.Close()
+			continue
+		}
+		if fileName == "" {
+			limited := io.LimitReader(part, maxImportFieldBytes+1)
+			data, readErr := io.ReadAll(limited)
+			closeErr := part.Close()
+			if readErr != nil || closeErr != nil {
+				return fail(errors.New("Server upload fields could not be read"))
+			}
+			if int64(len(data)) > maxImportFieldBytes {
+				return fail(errors.New("Server upload metadata is too large"))
+			}
+			upload.Values[formName] = string(data)
+			continue
+		}
+		stagedPath := filepath.Join(root, strconv.Itoa(fileIndex)+".part")
+		fileIndex++
+		output, err := os.OpenFile(stagedPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+		if err != nil {
+			_ = part.Close()
+			return fail(errors.New("Server upload could not be staged"))
+		}
+		_, copyErr := io.Copy(output, part)
+		closeErr := output.Close()
+		partCloseErr := part.Close()
+		if copyErr != nil || closeErr != nil || partCloseErr != nil {
+			return fail(errors.New("Server upload could not be staged"))
+		}
+		if formName == "file" {
+			upload.ZipPath = stagedPath
+			upload.ZipName = fileName
+			continue
+		}
+		if formName == "files" {
+			upload.FolderFiles = append(upload.FolderFiles, stagedImportFile{Path: stagedPath, Name: fileName})
+		}
+	}
+	return upload, nil
+}
+
+func (u *stagedImportUpload) RemoveAll() {
+	if u != nil && u.Root != "" {
+		_ = os.RemoveAll(u.Root)
+	}
+}
+
+func (u *stagedImportUpload) Value(name string) string {
+	if u == nil {
+		return ""
+	}
+	return u.Values[name]
+}
+
+func (u *stagedImportUpload) Paths() ([]string, error) {
+	if u == nil {
+		return []string{}, nil
+	}
+	value := strings.TrimSpace(u.Values["paths"])
+	if value == "" {
+		return []string{}, nil
+	}
+	paths := []string{}
+	if err := json.Unmarshal([]byte(value), &paths); err != nil {
+		return nil, errors.New("Uploaded folder paths could not be read")
+	}
+	return paths, nil
+}
+
+func (u *stagedImportUpload) Write(zipMode bool, targetRoot string) error {
+	if zipMode {
+		if u.ZipPath == "" {
+			return errors.New("Server ZIP is required")
+		}
+		return extractStagedServerZip(u.ZipPath, u.ZipName, targetRoot)
+	}
+	paths, err := u.Paths()
+	if err != nil {
+		return err
+	}
+	return writeStagedFolder(u.FolderFiles, paths, targetRoot)
+}
+
 func (h apiHandler) inspectServerFolder(r *http.Request, serverPath string, fallbackName string, token string) (importDetection, error) {
 	serverType := detectServerTypeFromPath(serverPath)
 	minecraftVersion, loaderVersion := detectMinecraftProfileFromPath(serverPath, serverType)
@@ -574,6 +698,85 @@ func extractServerZip(file multipart.File, header *multipart.FileHeader, targetR
 	if err != nil {
 		return err
 	}
+	stripPrefix, err := archiveStripPrefix(archive.File)
+	if err != nil {
+		return err
+	}
+	filesWritten := 0
+	if err := os.MkdirAll(targetRoot, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range archive.File {
+		if entry.FileInfo().IsDir() {
+			continue
+		}
+		parts, err := normalizedArchiveParts(entry.Name)
+		if err != nil {
+			return err
+		}
+		if len(parts) == 0 || parts[0] == "__MACOSX" {
+			continue
+		}
+		if stripPrefix != "" && parts[0] == stripPrefix {
+			parts = parts[1:]
+		}
+		if len(parts) == 0 {
+			continue
+		}
+		target := filepath.Join(append([]string{targetRoot}, parts...)...)
+		if err := assertInsidePath(targetRoot, target); err != nil {
+			return err
+		}
+		reader, err := entry.Open()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			_ = reader.Close()
+			return err
+		}
+		output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, entry.Mode())
+		if err != nil {
+			_ = reader.Close()
+			return err
+		}
+		_, copyErr := io.Copy(output, reader)
+		closeErr := output.Close()
+		readCloseErr := reader.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if readCloseErr != nil {
+			return readCloseErr
+		}
+		filesWritten++
+	}
+	if filesWritten == 0 {
+		return errors.New("Server ZIP does not contain server files")
+	}
+	return nil
+}
+
+func extractStagedServerZip(path string, filename string, targetRoot string) error {
+	if !strings.HasSuffix(strings.ToLower(filename), ".zip") {
+		return errors.New("Upload a .zip server archive")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return errors.New("Server ZIP could not be read")
+	}
+	defer file.Close()
+	archive, err := zipReaderFromMultipart(file, "Server ZIP could not be read")
+	if err != nil {
+		return err
+	}
+	return extractServerZipArchive(archive, targetRoot)
+}
+
+func extractServerZipArchive(archive *zip.Reader, targetRoot string) error {
 	stripPrefix, err := archiveStripPrefix(archive.File)
 	if err != nil {
 		return err
@@ -729,6 +932,80 @@ func writeUploadedFolder(files []*multipart.FileHeader, relativePaths []string, 
 			return err
 		}
 		input, err := entry.header.Open()
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			_ = input.Close()
+			return err
+		}
+		output, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+		if err != nil {
+			_ = input.Close()
+			return err
+		}
+		_, copyErr := io.Copy(output, input)
+		closeErr := output.Close()
+		inputCloseErr := input.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if inputCloseErr != nil {
+			return inputCloseErr
+		}
+	}
+	return nil
+}
+
+func writeStagedFolder(files []stagedImportFile, relativePaths []string, targetRoot string) error {
+	if len(files) == 0 {
+		return errors.New("Choose a server folder to import")
+	}
+	entries := make([]struct {
+		file  stagedImportFile
+		parts []string
+	}, 0, len(files))
+	roots := map[string]bool{}
+	for index, file := range files {
+		relativePath := file.Name
+		if index < len(relativePaths) && relativePaths[index] != "" {
+			relativePath = relativePaths[index]
+		}
+		parts, err := relativeUploadParts(relativePath)
+		if err != nil {
+			return err
+		}
+		entries = append(entries, struct {
+			file  stagedImportFile
+			parts []string
+		}{file: file, parts: parts})
+		roots[parts[0]] = true
+	}
+	stripPrefix := ""
+	if len(roots) == 1 {
+		for root := range roots {
+			stripPrefix = root
+		}
+	}
+	if err := os.MkdirAll(targetRoot, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		parts := entry.parts
+		if stripPrefix != "" && parts[0] == stripPrefix {
+			parts = parts[1:]
+		}
+		if len(parts) == 0 {
+			continue
+		}
+		target := filepath.Join(append([]string{targetRoot}, parts...)...)
+		if err := assertInsidePath(targetRoot, target); err != nil {
+			return err
+		}
+		input, err := os.Open(entry.file.Path)
 		if err != nil {
 			return err
 		}
