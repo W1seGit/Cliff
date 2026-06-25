@@ -74,10 +74,6 @@ jobs:
             dist/*.zip
             dist/SHA256SUMS.txt
             dist/cliff-release.json
-            dist/install.sh
-            dist/install.ps1
-            dist/install-package.sh
-            dist/install-package.ps1
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
