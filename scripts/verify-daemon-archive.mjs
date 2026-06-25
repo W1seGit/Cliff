@@ -13,6 +13,8 @@ const webSizeBudgetBytes = readSizeBudget("CLIFF_WEB_SIZE_BUDGET_BYTES", 8 * 102
 const webJavaScriptBudgetBytes = readSizeBudget("CLIFF_WEB_JS_SIZE_BUDGET_BYTES", 4 * 1024 * 1024);
 const requiredPublicAssets = [
   "app-sw.js",
+  "icon.svg",
+  "apple-icon.svg",
   "assets/logos/fabric.png",
   "assets/logos/forge.svg",
   "assets/logos/localtonet.ico",

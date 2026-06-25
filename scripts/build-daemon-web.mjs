@@ -79,9 +79,7 @@ async function copyIfExists(source, target) {
 }
 
 // Remove Next.js static export artifacts that the daemon's SPA fallback
-// never uses: RSC .txt metadata files, the _not-found standalone page,
-// the no-op service worker, and the duplicate icon.svg (already in
-// _next/static/media).
+// never uses: RSC .txt metadata files and the _not-found standalone page.
 async function pruneStaticExportArtifacts(dir) {
   let removed = 0;
   let bytes = 0;
@@ -103,22 +101,6 @@ async function pruneStaticExportArtifacts(dir) {
       } else if (entry.isFile()) {
         // Remove .txt RSC metadata files
         if (entry.name.endsWith(".txt")) {
-          const s = await stat(fullPath);
-          await rm(fullPath, { force: true });
-          removed++;
-          bytes += s.size;
-          continue;
-        }
-        // Remove no-op service worker
-        if (entry.name === "app-sw.js") {
-          const s = await stat(fullPath);
-          await rm(fullPath, { force: true });
-          removed++;
-          bytes += s.size;
-          continue;
-        }
-        // Remove duplicate icon.svg at web root (already in _next/static/media/)
-        if (entry.name === "icon.svg" && dirPath === dir) {
           const s = await stat(fullPath);
           await rm(fullPath, { force: true });
           removed++;
@@ -169,6 +151,8 @@ try {
   await cp(outDir, webDir, { recursive: true });
 
   await copyIfExists(path.join(root, "public"), webDir);
+  await copyIfExists(path.join(root, "src", "app", "icon.svg"), path.join(webDir, "icon.svg"));
+  await copyIfExists(path.join(root, "src", "app", "apple-icon.svg"), path.join(webDir, "apple-icon.svg"));
 
   await pruneStaticExportArtifacts(webDir);
 
