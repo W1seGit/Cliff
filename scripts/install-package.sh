@@ -46,28 +46,9 @@ manifest_platform_field() {
   manifest_file="$1"
   platform="$2"
   field="$3"
-  awk -v platform="$platform" -v field="$field" '
-    /\{/ {
-      in_object = 1
-      object = ""
-    }
-    in_object {
-      object = object $0 "\n"
-    }
-    in_object && /\}/ {
-      platform_pattern = "\"" platform "\""
-      field_pattern = "\"" field "\"[[:space:]]*:[[:space:]]*\"[^\"]+\""
-      if (object ~ /"platform"[[:space:]]*:/ && object ~ platform_pattern && match(object, field_pattern)) {
-        value = substr(object, RSTART, RLENGTH)
-        sub(/^.*:[[:space:]]*"/, "", value)
-        sub(/"$/, "", value)
-        print value
-        exit
-      }
-      in_object = 0
-      object = ""
-    }
-  ' "$manifest_file"
+  sed -n "/\"platform\"[[:space:]]*:[[:space:]]*\"$platform\"/,/^[[:space:]]*}[,]*[[:space:]]*$/p" "$manifest_file" |
+    sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" |
+    head -n 1
 }
 
 if [ -n "$MANIFEST" ]; then
