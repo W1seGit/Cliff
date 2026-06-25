@@ -43,6 +43,21 @@ cleanup() {
 trap cleanup EXIT
 
 if [ -n "$MANIFEST" ]; then
+  # Detect the current platform.
+  OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  case "$OS" in
+    linux*) OS="linux" ;;
+    darwin*) OS="darwin" ;;
+    *) echo "Unsupported OS: $OS" >&2; exit 1 ;;
+  esac
+  ARCH="$(uname -m)"
+  case "$ARCH" in
+    x86_64|amd64) ARCH="amd64" ;;
+    aarch64|arm64) ARCH="arm64" ;;
+    *) echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
+  esac
+  PLATFORM="$OS-$ARCH"
+
   case "$MANIFEST" in
     http://*|https://*)
       manifest_file="$TEMP_ROOT/cliff-release.json"
@@ -54,27 +69,39 @@ if [ -n "$MANIFEST" ]; then
         echo "curl or wget is required to download a release manifest URL." >&2
         exit 1
       fi
-      archive="$(sed -n 's/.*"file":[[:space:]]*"\([^"]*\.zip\)".*/\1/p' "$manifest_file" | head -n 1)"
       base="${MANIFEST%/*}/"
-      PACKAGE="$base$archive"
       ;;
     *)
       manifest_file="$MANIFEST"
-      archive="$(sed -n 's/.*"file":[[:space:]]*"\([^"]*\.zip\)".*/\1/p' "$manifest_file" | head -n 1)"
-      PACKAGE="$(cd "$(dirname "$manifest_file")" && pwd)/$archive"
+      base="$(cd "$(dirname "$manifest_file")" && pwd)/"
       ;;
   esac
 
+  # Extract the archive filename for the current platform from the manifest.
+  # The manifest has a "platforms" array with entries like:
+  #   {"platform":"linux-amd64","archive":"cliff-0.1.0-linux-amd64.zip","sha256":"..."}
+  # We use a simple approach: find the platform entry, then extract archive + sha256.
+  archive="$(grep -o "\"platform\"[[:space:]]*:[[:space:]]*\"$PLATFORM\"[^\}]*" "$manifest_file" | sed -n 's/.*"archive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  EXPECTED_ARCHIVE_SHA256="$(grep -o "\"platform\"[[:space:]]*:[[:space:]]*\"$PLATFORM\"[^\}]*" "$manifest_file" | sed -n 's/.*"sha256"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f')"
+
   if [ -z "$archive" ]; then
-    echo "Release manifest does not include archive.file." >&2
+    echo "Release manifest does not include a package for platform '$PLATFORM'." >&2
     exit 1
   fi
-  EXPECTED_ARCHIVE_SHA256="$(sed -n 's/.*"sha256":[[:space:]]*"\([0-9a-fA-F][0-9a-fA-F]*\)".*/\1/p' "$manifest_file" | head -n 1 | tr 'A-F' 'a-f')"
+  PACKAGE="$base$archive"
 fi
 
 if [ -z "$PACKAGE" ]; then
   if [ -f "$ROOT/dist/cliff-release.json" ]; then
-    archive="$(sed -n 's/.*"file":[[:space:]]*"\([^"]*\.zip\)".*/\1/p' "$ROOT/dist/cliff-release.json" | head -n 1)"
+    # Try the new platforms schema first, fall back to globbing for the platform zip.
+    if [ -z "$PLATFORM" ]; then
+      OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
+      case "$OS" in linux*) OS="linux" ;; darwin*) OS="darwin" ;; esac
+      ARCH="$(uname -m)"
+      case "$ARCH" in x86_64|amd64) ARCH="amd64" ;; aarch64|arm64) ARCH="arm64" ;; esac
+      PLATFORM="$OS-$ARCH"
+    fi
+    archive="$(grep -o "\"platform\"[[:space:]]*:[[:space:]]*\"$PLATFORM\"[^\}]*" "$ROOT/dist/cliff-release.json" | sed -n 's/.*"archive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
     if [ -n "$archive" ] && [ -f "$ROOT/dist/$archive" ]; then
       PACKAGE="$ROOT/dist/$archive"
     fi

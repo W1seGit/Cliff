@@ -70,19 +70,33 @@ function Resolve-PackageFromManifest {
   }
 
   $ReleaseManifest = Get-Content $ManifestPath -Raw | ConvertFrom-Json
-  if (-not $ReleaseManifest.archive.file) {
-    throw "Release manifest does not include archive.file."
+
+  # Detect the current platform.
+  $Platform = "windows-amd64"
+  $Arch = if ([Environment]::Is64BitOperatingSystem) { "amd64" } else { "x86" }
+  $Platform = "windows-$Arch"
+
+  # Find the matching platform entry in the manifest.
+  $PlatformEntry = $ReleaseManifest.platforms | Where-Object { $_.platform -eq $Platform } | Select-Object -First 1
+  if (-not $PlatformEntry) {
+    throw "Release manifest does not include a package for platform '$Platform'."
   }
-  if ($ReleaseManifest.archive.sha256) {
-    $script:ExpectedArchiveSha256 = ([string]$ReleaseManifest.archive.sha256).Trim().ToLowerInvariant()
+
+  $ArchiveFile = $PlatformEntry.archive
+  if (-not $ArchiveFile) {
+    throw "Release manifest platform entry is missing archive filename."
+  }
+
+  if ($PlatformEntry.sha256) {
+    $script:ExpectedArchiveSha256 = ([string]$PlatformEntry.sha256).Trim().ToLowerInvariant()
   }
 
   if ($RequestedManifest -match "^https?://") {
-    $ArchiveUrl = $ManifestBase + $ReleaseManifest.archive.file
+    $ArchiveUrl = $ManifestBase + $ArchiveFile
     return Resolve-PackagePath $ArchiveUrl
   }
 
-  $ArchivePath = Join-Path $ManifestBase $ReleaseManifest.archive.file
+  $ArchivePath = Join-Path $ManifestBase $ArchiveFile
   return (Resolve-Path $ArchivePath).Path
 }
 
