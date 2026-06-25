@@ -280,25 +280,7 @@ setup_path_symlink() {
   return 0
 }
 
-remove_old_cliff_symlinks() {
-  expected="$HOME/.local/bin/cliff"
-  for target in /usr/local/bin/cliff /opt/homebrew/bin/cliff /opt/homebrew/sbin/cliff; do
-    if [ "$target" = "$expected" ]; then
-      continue
-    fi
-    if [ -L "$target" ]; then
-      link_target="$(readlink "$target" 2>/dev/null || true)"
-      case "$link_target" in
-        "$INSTALL_DIR/cliff")
-          rm -f "$target" 2>/dev/null || true
-          ;;
-      esac
-    fi
-  done
-}
-
 setup_path_symlink || true
-remove_old_cliff_symlinks
 
 if [ "$START" = "1" ]; then
   "$INSTALL_DIR/cliff" start -p "$PORT"
