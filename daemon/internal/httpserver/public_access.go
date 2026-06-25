@@ -258,10 +258,16 @@ func (h apiHandler) enrichPlayitStatus(r *http.Request, status playitStatus) pla
 func (h apiHandler) ensurePlayitAgent(r *http.Request) (playitStatus, error) {
 	release, err := fetchPlayitRelease(r, playitReleaseURL())
 	if err != nil {
+		if systemStatus, systemErr := h.useSystemPlayitAgent(); systemErr == nil {
+			return systemStatus, nil
+		}
 		return playitStatus{}, err
 	}
 	asset, err := selectPlayitAsset(release.Assets, runtime.GOOS, runtime.GOARCH)
 	if err != nil {
+		if systemStatus, systemErr := h.useSystemPlayitAgent(); systemErr == nil {
+			return systemStatus, nil
+		}
 		return playitStatus{}, err
 	}
 	destination := h.playitAgentPath()
@@ -296,6 +302,27 @@ func (h apiHandler) ensurePlayitAgent(r *http.Request) (playitStatus, error) {
 	return status, nil
 }
 
+func (h apiHandler) useSystemPlayitAgent() (playitStatus, error) {
+	for _, name := range []string{"playit-cli", "playit"} {
+		path, err := exec.LookPath(name)
+		if err != nil {
+			continue
+		}
+		status := playitStatus{
+			Installed: true,
+			Path:      path,
+			Version:   "system",
+			Asset:     "system:" + name,
+		}
+		_ = writeJSONFile(h.playitMetadataPath(), status)
+		return status, nil
+	}
+	if runtime.GOOS == "darwin" {
+		return playitStatus{}, errors.New("Playit does not currently publish a macOS binary release. Install or build playit so the 'playit' command is on PATH, then try again")
+	}
+	return playitStatus{}, errors.New("No compatible Playit agent binary was found for this platform")
+}
+
 func playitReleaseURL() string {
 	if runtime.GOOS == "windows" {
 		return playitWindowsCLIReleaseURL
@@ -304,7 +331,10 @@ func playitReleaseURL() string {
 }
 
 func playitInstallNeedsReplacement(status playitStatus) bool {
-	return runtime.GOOS == "windows" && status.Version != "0.17.1"
+	if runtime.GOOS == "windows" {
+		return status.Version != "0.17.1"
+	}
+	return strings.HasPrefix(status.Asset, "playit-linux-")
 }
 
 func fetchPlayitRelease(r *http.Request, releaseURL string) (githubRelease, error) {
@@ -347,14 +377,16 @@ func playitAssetTargets(goos string, goarch string) ([]string, error) {
 	case "linux":
 		switch goarch {
 		case "amd64":
-			return []string{"playit-linux-amd64"}, nil
+			return []string{"playit-cli-linux-amd64", "playit-linux-amd64"}, nil
 		case "arm64":
-			return []string{"playit-linux-aarch64"}, nil
+			return []string{"playit-cli-linux-aarch64", "playit-linux-aarch64"}, nil
 		case "arm":
-			return []string{"playit-linux-armv7"}, nil
+			return []string{"playit-cli-linux-armv7", "playit-linux-armv7"}, nil
 		case "386":
-			return []string{"playit-linux-i686"}, nil
+			return []string{"playit-cli-linux-i686", "playit-linux-i686"}, nil
 		}
+	case "darwin":
+		return nil, errors.New("Playit does not currently publish macOS release binaries. Install or build playit so the 'playit' command is on PATH")
 	}
 	return nil, fmt.Errorf("Playit managed install is not supported on %s/%s yet", goos, goarch)
 }
@@ -569,46 +601,7 @@ func newPlayitAgentManager() *playitAgentManager {
 }
 
 func (m *playitAgentManager) start(path string) error {
-	if runtime.GOOS == "windows" {
-		return m.prepareWindowsClaim(path)
-	}
-	m.mu.Lock()
-	if m.cmd != nil && m.cmd.Process != nil {
-		m.mu.Unlock()
-		return nil
-	}
-	m.claimURL = ""
-	m.lastError = ""
-	m.logs = nil
-	cmd := exec.Command(path)
-	cmd.Dir = filepath.Dir(path)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		m.mu.Unlock()
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		m.mu.Unlock()
-		return err
-	}
-	m.cmd = cmd
-	m.startedAt = time.Now().UTC()
-	m.mu.Unlock()
-
-	if err := cmd.Start(); err != nil {
-		m.mu.Lock()
-		m.cmd = nil
-		m.startedAt = time.Time{}
-		m.lastError = err.Error()
-		m.mu.Unlock()
-		return err
-	}
-
-	go m.scan(stdout)
-	go m.scan(stderr)
-	go m.wait(cmd)
-	return nil
+	return m.prepareManagedClaim(path)
 }
 
 func (m *playitAgentManager) stop() error {
@@ -656,7 +649,7 @@ func (m *playitAgentManager) reset(path string) error {
 	return nil
 }
 
-func (m *playitAgentManager) prepareWindowsClaim(path string) error {
+func (m *playitAgentManager) prepareManagedClaim(path string) error {
 	m.mu.Lock()
 	if m.cmd != nil && m.cmd.Process != nil {
 		m.mu.Unlock()
@@ -670,10 +663,10 @@ func (m *playitAgentManager) prepareWindowsClaim(path string) error {
 	m.startedAt = time.Now().UTC()
 	m.mu.Unlock()
 
-	return m.startWindowsAgent(path)
+	return m.startManagedAgent(path)
 }
 
-func (m *playitAgentManager) exchangeWindowsClaimAndStart(path string, code string) {
+func (m *playitAgentManager) exchangeManagedClaimAndStart(path string, code string) {
 	m.pushLog("Waiting for Playit account approval")
 	output, err := runPlayitCommand(path, "claim", "exchange", "--wait", "0", code)
 	if err != nil {
@@ -717,12 +710,12 @@ func (m *playitAgentManager) exchangeWindowsClaimAndStart(path string, code stri
 	m.claiming = false
 	m.mu.Unlock()
 	m.pushLog("Playit account approved")
-	if err := m.startWindowsAgent(path); err != nil {
+	if err := m.startManagedAgent(path); err != nil {
 		m.pushLog("Playit agent could not start: " + err.Error())
 	}
 }
 
-func (m *playitAgentManager) startWindowsAgent(path string) error {
+func (m *playitAgentManager) startManagedAgent(path string) error {
 	m.mu.Lock()
 	if m.cmd != nil && m.cmd.Process != nil {
 		m.mu.Unlock()

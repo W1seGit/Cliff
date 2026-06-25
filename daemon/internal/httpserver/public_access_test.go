@@ -6,6 +6,7 @@ func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
 	assets := []githubAssetRecord{
 		{Name: "playit_amd64.deb", BrowserDownloadURL: "https://example.invalid/deb"},
 		{Name: "playit-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux"},
+		{Name: "playit-cli-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux-cli"},
 		{Name: "playit-windows-x86_64-signed.exe", BrowserDownloadURL: "https://example.invalid/windows"},
 	}
 
@@ -13,8 +14,8 @@ func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected linux asset, got error %v", err)
 	}
-	if asset.Name != "playit-linux-amd64" {
-		t.Fatalf("expected direct linux binary, got %q", asset.Name)
+	if asset.Name != "playit-cli-linux-amd64" {
+		t.Fatalf("expected linux CLI binary, got %q", asset.Name)
 	}
 
 	asset, err = selectPlayitAsset(assets, "windows", "amd64")
@@ -26,10 +27,24 @@ func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
 	}
 }
 
-func TestSelectPlayitAssetRejectsUnsupportedPlatform(t *testing.T) {
+func TestSelectPlayitAssetFallsBackToLegacyLinuxBinary(t *testing.T) {
+	assets := []githubAssetRecord{
+		{Name: "playit-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux"},
+	}
+
+	asset, err := selectPlayitAsset(assets, "linux", "amd64")
+	if err != nil {
+		t.Fatalf("expected linux asset, got error %v", err)
+	}
+	if asset.Name != "playit-linux-amd64" {
+		t.Fatalf("expected legacy linux binary fallback, got %q", asset.Name)
+	}
+}
+
+func TestSelectPlayitAssetRequiresSystemBinaryForMacOS(t *testing.T) {
 	_, err := selectPlayitAsset(nil, "darwin", "arm64")
 	if err == nil {
-		t.Fatal("expected unsupported platform error")
+		t.Fatal("expected macOS system binary error")
 	}
 }
 
