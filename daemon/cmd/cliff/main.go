@@ -10,8 +10,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -60,6 +62,9 @@ func main() {
 	case "help", "--help", "-h":
 		printHelp()
 		return
+	case "__restart-child":
+		runRestartChild(os.Args[2:])
+		return
 	case "daemon":
 		// Strip the subcommand and fall through with the remaining args.
 		os.Args = append(os.Args[:1], os.Args[2:]...)
@@ -73,6 +78,43 @@ func main() {
 	}
 
 	runDaemon()
+}
+
+func runRestartChild(args []string) {
+	fs := flag.NewFlagSet("__restart-child", flag.ExitOnError)
+	var delayMS int
+	fs.IntVar(&delayMS, "delay-ms", 1500, "delay before restarting the daemon")
+	_ = fs.Parse(args)
+
+	daemonArgs := fs.Args()
+	if len(daemonArgs) > 0 && daemonArgs[0] == "--" {
+		daemonArgs = daemonArgs[1:]
+	}
+	if delayMS > 0 {
+		time.Sleep(time.Duration(delayMS) * time.Millisecond)
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "restart helper could not resolve executable:", err)
+		os.Exit(1)
+	}
+	cmd := exec.Command(self, daemonArgs...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{
+			CreationFlags: 0x00000008 | 0x00000200, // DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+		}
+	} else {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	}
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintln(os.Stderr, "restart helper could not start daemon:", err)
+		os.Exit(1)
+	}
+	_ = cmd.Process.Release()
 }
 
 // runDaemon is the actual daemon process — the original main() body.

@@ -33,7 +33,8 @@ func Restart(binaryPath string, args []string) error {
 	}
 
 	// On Windows, spawn a new process and signal the current one to exit.
-	cmd := exec.Command(binaryPath, args...)
+	helperArgs := append([]string{"__restart-child", "--delay-ms", "1500", "--"}, args...)
+	cmd := exec.Command(binaryPath, helperArgs...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
