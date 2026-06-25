@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { Download, RefreshCw } from "lucide-react";
 import { Modal } from "./ui/modal";
-import { Button } from "./ui/button";
-import { applyUpdate } from "../lib/runtime-client";
+import { applyUpdate, reloadAfterDaemonRestart } from "../lib/runtime-client";
 import type { UpdateCheckResult } from "../lib/types";
 
 export function UpdateModal({
@@ -12,24 +11,28 @@ export function UpdateModal({
   isOpen,
   onClose,
   onMessage,
-  onApplied,
 }: {
   update: UpdateCheckResult;
   isOpen: boolean;
   onClose: () => void;
   onMessage: (message: string) => void;
-  onApplied?: () => void;
 }) {
   const [applying, setApplying] = useState(false);
+  const [waitingForRestart, setWaitingForRestart] = useState(false);
+  const busy = applying || waitingForRestart;
 
   async function handleApply() {
     setApplying(true);
     try {
       const result = await applyUpdate();
       if (result.success) {
-        onMessage(result.message);
-        onApplied?.();
-        onClose();
+        setWaitingForRestart(Boolean(result.restarting));
+        onMessage(result.restarting ? "Update applied. Waiting for Cliff to restart..." : result.message);
+        if (result.restarting) {
+          await reloadAfterDaemonRestart();
+        } else {
+          window.location.reload();
+        }
       } else {
         onMessage(result.message || "Update failed");
       }
@@ -37,6 +40,7 @@ export function UpdateModal({
       onMessage(error instanceof Error ? error.message : "Update failed");
     } finally {
       setApplying(false);
+      setWaitingForRestart(false);
     }
   }
 
@@ -47,41 +51,55 @@ export function UpdateModal({
       title="Update available"
       description={
         <span>
-          A new version of Cliff is available. You are running{" "}
-          <strong>v{update.currentVersion}</strong> and version{" "}
-          <strong>v{update.latestVersion}</strong> is ready to install.
-          {update.archiveSize ? ` Download size: ${formatSize(update.archiveSize)}.` : ""}
-          {" "}Any running servers will be stopped gracefully during the update. Your server data, worlds, and settings are not affected."
+          Cliff can install this update locally, restart the daemon, then refresh this page with the new dashboard files.
         </span>
       }
-      confirmLabel={applying ? "Updating..." : "Install now"}
+      confirmLabel={waitingForRestart ? "Restarting..." : applying ? "Updating..." : "Install now"}
       confirmVariant="primary"
-      confirmDisabled={applying}
-      confirmLoading={applying}
+      confirmDisabled={busy}
+      confirmLoading={busy}
       onConfirm={handleApply}
       onCancel={onClose}
       cancelLabel="Later"
-      busy={applying}
+      busy={busy}
       form
     >
-      <div className="update-modal-info">
-        <div className="update-modal-row">
-          <span className="muted">Current version</span>
+      <div className="update-modal-panel">
+        <div className="update-version-card current">
+          <span>Current</span>
           <strong>v{update.currentVersion}</strong>
         </div>
-        <div className="update-modal-row">
-          <span className="muted">New version</span>
+        <div className="update-version-card latest">
+          <span>Available</span>
           <strong>v{update.latestVersion}</strong>
         </div>
+      </div>
+      <div className="update-modal-details">
+        {update.archiveSize ? (
+          <div className="update-modal-row">
+            <Download size={15} />
+            <span>Download</span>
+            <strong>{formatSize(update.archiveSize)}</strong>
+          </div>
+        ) : null}
         {update.builtAt && (
           <div className="update-modal-row">
-            <span className="muted">Released</span>
+            <RefreshCw size={15} />
+            <span>Released</span>
             <strong>{new Date(update.builtAt).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}</strong>
           </div>
         )}
-        <p className="update-modal-hint muted">
-          You can always install this update later from <strong>App Settings &rarr; Updates</strong>.
+      </div>
+      <p className="update-modal-hint muted">
+        Running servers are stopped gracefully during the update. Server data, worlds, and settings are not changed.
+      </p>
+      {waitingForRestart && (
+        <p className="update-modal-status">
+          Waiting for the restarted daemon, then this page will refresh.
         </p>
+      )}
+      <div className="update-modal-later muted">
+        App Settings &gt; Updates keeps this available later.
       </div>
     </Modal>
   );

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye, EyeOff, Download, Copy, RefreshCw } from "lucide-react";
+import { Eye, EyeOff, Download, Copy } from "lucide-react";
 import { browserOrigin, externalApiBase, formatBytes, serverTypeNeedsLoader } from "../lib/utils";
-import { daemonLogsUrl, fetchDaemonLogs, fetchDaemonLogsFull, fetchJavaRuntimes, fetchTypeVersions, installJavaRuntime, uninstallJavaRuntime, saveAccount as saveAccountProfile, saveSettings, checkForUpdates, applyUpdate } from "../lib/runtime-client";
+import { daemonLogsUrl, fetchDaemonLogs, fetchDaemonLogsFull, fetchJavaRuntimes, fetchTypeVersions, installJavaRuntime, uninstallJavaRuntime, saveAccount as saveAccountProfile, saveSettings, checkForUpdates, applyUpdate, reloadAfterDaemonRestart } from "../lib/runtime-client";
 import type { ConfirmRequest, JavaRuntimeInfo, MinecraftMetadata, ServerType, Settings, UnsavedChangesRegistration, UpdateCheckResult, User } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
@@ -293,7 +293,12 @@ export function AppSettingsPanel({
     try {
       const result = await applyUpdate();
       if (result.success) {
-        onMessage(result.message);
+        onMessage(result.restarting ? "Update applied. Waiting for Cliff to restart..." : result.message);
+        if (result.restarting) {
+          await reloadAfterDaemonRestart();
+        } else {
+          window.location.reload();
+        }
       } else {
         onMessage(result.message || "Update failed");
       }
@@ -529,7 +534,7 @@ export function AppSettingsPanel({
               {(() => {
                 const check = localUpdateCheck ?? updateCheck;
                 if (!check) {
-                  return <Hint>Click "Check for updates" to see if a new version is available.</Hint>;
+                  return <Hint>Click Check for updates to see if a new version is available.</Hint>;
                 }
                 if (check.error) {
                   return <Hint warn>Update check failed: {check.error}</Hint>;
@@ -560,7 +565,7 @@ export function AppSettingsPanel({
                     </div>
                     {check.updateAvailable ? (
                       <>
-                        <Hint>A new version is available. Click "Install update" to download and apply it. Any running servers will be stopped gracefully. The daemon will restart automatically after the update.</Hint>
+                        <Hint>A new version is available. Click Install update to download and apply it. Any running servers will be stopped gracefully. The daemon will restart automatically after the update.</Hint>
                         <Button variant="primary" disabled={updateBusy} onClick={installUpdate} loading={updateBusy} loadingText="Updating...">
                           {updateBusy ? "Updating..." : "Install update"}
                         </Button>

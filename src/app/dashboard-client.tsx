@@ -566,7 +566,6 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       window.clearTimeout(checkTimer);
       window.clearInterval(interval);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateDismissed]);
   useEffect(() => {
     const updateVisibility = () => setDocumentVisible(!document.hidden);
@@ -814,7 +813,6 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           isOpen={updateModalOpen}
           onClose={() => { setUpdateModalOpen(false); setUpdateDismissed(true); }}
           onMessage={setMessage}
-          onApplied={() => { setUpdateCheck(null); setUpdateModalOpen(false); }}
         />
       )}
     </main>

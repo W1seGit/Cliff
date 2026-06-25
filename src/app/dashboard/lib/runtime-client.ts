@@ -375,3 +375,34 @@ export async function checkForUpdates(force = false): Promise<UpdateCheckResult>
 export async function applyUpdate(): Promise<UpdateApplyResult> {
   return daemonApi<UpdateApplyResult>("/api/updates/apply", { method: "POST" });
 }
+
+export async function reloadAfterDaemonRestart(): Promise<void> {
+  const startedAt = Date.now();
+  let sawRestartGap = false;
+  await sleep(1200);
+
+  while (Date.now() - startedAt < 60000) {
+    try {
+      const response = await fetch(daemonPath("/api/settings?storage=0"), {
+        cache: "no-store",
+        credentials: "include",
+      });
+      if (response.ok && (sawRestartGap || Date.now() - startedAt > 3500)) {
+        window.location.reload();
+        return;
+      }
+      if (!response.ok && response.status >= 500) {
+        sawRestartGap = true;
+      }
+    } catch {
+      sawRestartGap = true;
+    }
+    await sleep(1000);
+  }
+
+  throw new Error("Update applied, but the restarted daemon did not respond. Refresh the page once Cliff is running again.");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}

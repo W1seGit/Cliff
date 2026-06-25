@@ -24,6 +24,10 @@
   width: min(520px, 100%);
 }
 
+.modal:has(.update-modal-panel) {
+  width: min(480px, 100%);
+}
+
 .modal h2 { margin: 0; font-size: 17px; }
 .modal p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
 .modal-message {
@@ -32,6 +36,96 @@
 }
 .modal-form { display: grid; gap: 12px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* Update modal */
+.update-modal-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.update-version-card {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+}
+
+.update-version-card span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.update-version-card strong {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.update-version-card.latest {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+
+.update-modal-details {
+  display: grid;
+  gap: 8px;
+}
+
+.update-modal-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+}
+
+.update-modal-row svg {
+  color: var(--text-secondary);
+}
+
+.update-modal-row span {
+  min-width: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.update-modal-row strong {
+  color: var(--text);
+  font-size: 13px;
+  text-align: right;
+}
+
+.update-modal-hint {
+  font-size: 13px;
+}
+
+.update-modal-status {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+  color: var(--text) !important;
+  font-size: 13px;
+}
+
+.update-modal-later {
+  font-size: 12px;
+}
+
+@media (max-width: 520px) {
+  .update-modal-panel {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* Image crop modal */
 .crop-modal-body {
