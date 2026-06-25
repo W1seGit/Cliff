@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Default player head" shape-rendering="crispEdges">
+  <rect width="32" height="32" fill="#8b5a3c"/>
+  <rect x="4" y="3" width="24" height="7" fill="#4a2d1f"/>
+  <rect x="4" y="10" width="24" height="18" fill="#b98263"/>
+  <rect x="8" y="14" width="5" height="4" fill="#ffffff"/>
+  <rect x="19" y="14" width="5" height="4" fill="#ffffff"/>
+  <rect x="10" y="15" width="2" height="3" fill="#3a68b8"/>
+  <rect x="21" y="15" width="2" height="3" fill="#3a68b8"/>
+  <rect x="14" y="19" width="4" height="3" fill="#8d5a43"/>
+  <rect x="11" y="24" width="10" height="2" fill="#6f352f"/>
+  <rect x="4" y="28" width="24" height="4" fill="#5b8def"/>
+</svg>

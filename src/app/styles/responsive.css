@@ -1,0 +1,507 @@
+/* Responsive */
+
+/* ── Tablet: collapse sidebar to overlay ─────────────────────── */
+@media (max-width: 1100px) {
+  .grid-2, .players-layout, .activity-layout, .settings-layout, .app-settings-tabbed, .profile-version-strip, .server-type-presets, .preset-row > div, .metadata-loader-grid, .metadata-health-grid, .access-columns, .import-detection, .schedule-row {
+    grid-template-columns: 1fr;
+  }
+  .wizard-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .discover-results.grid-view { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── Mobile landscape / small tablet ────────────────────────── */
+@media (max-width: 900px) {
+  .shell { grid-template-columns: 1fr; }
+  .shell.sidebar-collapsed { grid-template-columns: 1fr; }
+
+  /* Sidebar becomes a slide-in overlay */
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 90;
+    width: min(84vw, 320px);
+    height: 100dvh;
+    max-height: none;
+    padding: 20px 18px;
+    border-right: 1px solid var(--border);
+    box-shadow: 22px 0 44px rgba(0, 0, 0, 0.34);
+    transform: translateX(0);
+  }
+  .shell.sidebar-collapsed .sidebar { transform: translateX(-105%); }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: block;
+    padding: 0;
+    border-radius: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
+
+  /* When sidebar is open on mobile, show full labels with proper touch targets */
+  .sidebar.collapsed {
+    align-items: stretch;
+    padding: 20px 18px;
+  }
+  .sidebar.collapsed .sidebar-top {
+    display: flex;
+    justify-content: space-between;
+    width: auto;
+    margin-bottom: 18px;
+  }
+  .sidebar.collapsed .sidebar-app-name { display: none; }
+  .sidebar.collapsed .sidebar-brand { display: inline-flex; }
+  .sidebar.collapsed .server-switcher-wrap,
+  .sidebar.collapsed .sidebar-nav,
+  .sidebar.collapsed .sidebar-footer {
+    display: grid;
+    width: auto;
+  }
+  .sidebar.collapsed .server-switcher-meta,
+  .sidebar.collapsed .sidebar-nav-label,
+  .sidebar.collapsed .account-name {
+    display: block;
+  }
+
+  /* Touch-friendly sidebar items (min 44px height) */
+  .sidebar.collapsed .server-switcher {
+    display: flex;
+    width: auto;
+    min-height: 48px;
+    padding: 10px 12px;
+  }
+  .sidebar.collapsed .sidebar-nav-item {
+    display: flex;
+    width: auto;
+    min-height: 44px;
+    padding: 12px 12px;
+    font-size: 14px;
+  }
+  .sidebar.collapsed .sidebar-nav-item .sidebar-nav-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .sidebar.collapsed .sidebar-toggle {
+    width: 28px;
+    height: 28px;
+  }
+  .sidebar.collapsed .account-button {
+    display: flex;
+    width: 100%;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .sidebar.collapsed .account-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 12px;
+  }
+  .sidebar.collapsed .account-name { font-size: 14px; }
+
+  /* Server switcher dropdown items — bigger touch targets */
+  .sidebar.collapsed .server-switcher-initials {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+  .sidebar.collapsed .server-switcher-name { font-size: 14px; }
+  .sidebar.collapsed .server-switcher-sub { font-size: 12px; }
+
+  /* Workspace — let the page scroll naturally instead of creating a
+     nested scroll container. On desktop, height:100vh + overflow-y:auto
+     makes the workspace scroll independently of the fixed sidebar. On
+     mobile the sidebar is an overlay, so the workspace should flow
+     with the document to avoid double scrollbars. */
+  .workspace {
+    height: auto;
+    min-height: 100dvh;
+    overflow-y: visible;
+    padding: 20px;
+  }
+
+  /* Topbar — hamburger inline with title */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: -20px -20px 18px;
+    padding: 14px 20px;
+    background: rgba(11, 13, 16, 0.92);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(14px);
+  }
+  .topbar h1 { margin: 0; }
+  .mobile-sidebar-button { display: grid; }
+
+  /* Server header — hamburger inline with identity, actions wrap below */
+  .server-header {
+    position: sticky;
+    top: -20px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: -20px -20px 18px;
+    padding: 14px 20px;
+    border-radius: 0;
+    background: rgba(11, 13, 16, 0.92);
+    box-shadow: inset 0 -1px 0 var(--border);
+    backdrop-filter: blur(14px);
+  }
+  .server-header .mobile-sidebar-button {
+    display: grid;
+    flex: 0 0 auto;
+    order: -1;
+  }
+  .server-header-id {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 10px;
+  }
+  .server-header-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+  .server-header-title h1 { font-size: 15px; }
+  .server-header-sub {
+    font-size: 11px;
+    gap: 6px;
+  }
+  /* Actions row — full width below the identity row */
+  .server-header-actions {
+    flex-basis: 100%;
+    justify-content: stretch;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  /* Start/Stop/Restart/More — icon-only, equal width */
+  .server-header-actions button {
+    flex: 1 1 0;
+    min-height: 40px;
+    padding: 8px;
+    gap: 0;
+  }
+  .server-header-actions .server-header-action-label {
+    display: none;
+  }
+
+  .status-row {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+  .status-row > * { flex: 1 1 auto; }
+  .control-strip, .control-strip-actions { display: grid; grid-template-columns: 1fr; }
+
+  /* Tabs — keep desktop underline style, just make sticky + scrollable */
+  .tabs {
+    position: sticky;
+    top: 62px;
+    z-index: 45;
+    margin: 0 -20px 18px;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(11, 13, 16, 0.92);
+    backdrop-filter: blur(14px);
+  }
+  /* Keep the same underline style as desktop — no pill buttons */
+  .tabs button {
+    flex: 0 0 auto;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+
+  /* Discover / marketplace — single column, filters become sticky button */
+  .discover-marketplace-layout {
+    grid-template-columns: 1fr;
+  }
+  .discover-filter-sidebar {
+    position: static;
+    display: none;
+  }
+  /* Mobile filter button shown in place of the sidebar */
+  .discover-mobile-filter-toggle {
+    display: inline-flex;
+  }
+  /* Mobile filter panel — only the open state is allowed to display,
+     and only within this mobile breakpoint. On desktop the base
+     `display: none` in discover.css always wins, preventing a
+     duplicate filter panel if the toggle was opened on mobile. */
+  .discover-mobile-filters.open {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .discover-filters {
+    grid-template-columns: 1fr;
+  }
+  .discover-card.grid-view {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  /* Sticky bar — keeps search + filter button pinned below the tabs */
+  .discover-sticky-bar {
+    position: sticky;
+    top: 103px;
+    z-index: 44;
+    margin: 8px -20px 0;
+    padding: 12px 20px;
+    background: rgba(11, 13, 16, 0.92);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(14px);
+  }
+
+  /* Discover search row — search bar full width, filter button + view toggle below */
+  .discover-search-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .discover-search-bar {
+    flex: 1 1 100%;
+  }
+
+  /* Hide grid/list view toggle on mobile — always list view */
+  .discover-view-toggle {
+    display: none;
+  }
+  .discover-results.grid-view {
+    grid-template-columns: 1fr;
+  }
+  .discover-card.grid-view .discover-card-install {
+    position: static;
+  }
+
+  /* Filter bar — search takes full width, filters button wraps below */
+  .filter-bar {
+    display: grid;
+    gap: 8px;
+  }
+  .filter-bar-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .filter-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .filter-bar-actions {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: stretch;
+  }
+  .filter-bar-actions > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Make buttons inside wrapper elements (e.g. more-menu-wrap) fill their container */
+  .filter-bar-actions .more-menu-wrap {
+    display: flex;
+  }
+  .filter-bar-actions .more-menu-wrap > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Backups panel — Settings button on its own full-width row, then
+     Download + Create snapshot share the next row equally. */
+  .filter-bar-actions > .backups-settings-action {
+    flex: 1 1 100%;
+  }
+  .filter-bar-actions > .backups-action-pair {
+    flex: 1 1 100%;
+  }
+  .filter-bar-actions > .backups-action-pair > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  /* Make the filter button fill its row on mobile. The flex property
+     must go on .filter-menu-wrap (the actual flex item of
+     .filter-bar-row), not on .filter-menu-toggle whose parent is not
+     a flex container. */
+  .filter-menu-wrap {
+    flex: 1 1 100%;
+  }
+  .filter-menu-toggle {
+    width: 100%;
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  /* Split various grids to single column */
+  .split-fields, .toggle-grid, .command-row, .connection-card, .datapack-row, .world-card, .world-actions, .file-actions, .backup-create-row, .search-bar, .mod-filter-bar, .console-toolbar, .overview-status-stats, .runtime-snapshot { grid-template-columns: 1fr; display: grid; }
+  .console-toolbar > * { flex: none; }
+}
+
+/* ── Phone ──────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  .overview-layout { grid-template-columns: 1fr; }
+  .discover-results.grid-view { grid-template-columns: 1fr; }
+  .skeleton-graph-grid,
+  .skeleton-card-grid,
+  .usage-number-grid { grid-template-columns: 1fr; }
+
+  /* Overview stat cards — stack vertically */
+  .overview-stat-cards {
+    display: grid;
+    grid-template-columns: 1fr;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+  .overview-stat-card {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-hairline);
+    padding: 14px 18px;
+  }
+  .overview-stat-card:last-child { border-bottom: 0; }
+
+  /* Hero address — smaller font, wrap */
+  .overview-hero-address strong {
+    font-size: 20px;
+    overflow-wrap: break-word;
+    word-break: break-all;
+  }
+  .overview-hero-address em {
+    flex: 0 0 auto;
+  }
+
+  /* Chart card — controls wrap, legend stacks */
+  .chart-card {
+    padding: 16px 14px 12px;
+    gap: 14px;
+  }
+  .chart-card-head {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .chart-card-controls {
+    justify-content: flex-start;
+    gap: 10px;
+  }
+  .chart-legend {
+    gap: 10px;
+    font-size: 11px;
+  }
+  .chart-card-stat {
+    font-size: 20px;
+  }
+  .area-chart.has-y-axis .area-chart-plot {
+    padding-left: 36px;
+  }
+  .area-chart.has-y-axis .area-chart-x-axis {
+    padding-left: 36px;
+  }
+  .area-chart-y-axis { width: 32px; }
+  .area-chart-y-tick { font-size: 10px; }
+
+  /* Console — reduce left padding and time column width on mobile */
+  .console-line {
+    padding: 1px 10px;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 11px;
+  }
+  /* ConsoleView (daemon logs) — narrower time column for date+time format */
+  .console-view .console-line {
+    grid-template-columns: 120px minmax(0, 1fr);
+  }
+
+  /* Eliminate double scrollbars on mobile — the page is now the only
+     scroll container (workspace no longer has height:100vh). Console
+     containers should flow naturally with the page instead of creating
+     their own nested scroll areas. */
+  .console-panel {
+    /* Fill the viewport so the page doesn't scroll — only the console
+       log area scrolls internally. Account for sticky header (~62px),
+       sticky tabs (~44px), toolbar, input, and padding. */
+    height: calc(100dvh - 200px);
+    min-height: 300px;
+  }
+  /* Standalone ConsoleView (daemon logs in app settings) — cap height
+     so it doesn't take the entire page, but let the page scroll for
+     the rest of the settings content. */
+  .console-view .console {
+    height: auto;
+    max-height: 50dvh;
+  }
+  /* Public access agent console — same treatment */
+  .public-access-console .console {
+    height: auto;
+    max-height: 40dvh;
+  }
+}
+
+@media (max-width: 620px) {
+  .workspace, .center-panel { padding: 16px; }
+  .sidebar { width: min(90vw, 320px); padding: 18px 16px; }
+  .topbar h1 { font-size: 20px; }
+  .topbar {
+    margin: -16px -16px 16px;
+    padding: 12px 16px;
+  }
+  .server-header {
+    top: -16px;
+    margin: -16px -16px 16px;
+    padding: 12px 16px;
+  }
+  .server-header-title h1 { font-size: 15px; }
+  .tabs {
+    top: 56px;
+    margin: 0 -16px 16px;
+    padding: 0 16px;
+  }
+  .discover-sticky-bar {
+    top: 97px;
+    margin: 8px -16px 0;
+    padding: 12px 16px;
+  }
+  .settings-panel {
+    padding: 16px;
+  }
+  .settings-panel-header,
+  .tool-card-main {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .mc-server-preview {
+    grid-template-columns: 52px minmax(0, 1fr) auto;
+  }
+  .mc-server-icon {
+    width: 52px;
+    height: 52px;
+  }
+  .mc-server-stats {
+    font-size: 12px;
+  }
+  .settings-panel-header button,
+  .tool-card-main button {
+    width: 100%;
+  }
+  .settings-toggle-grid {
+    grid-template-columns: 1fr;
+  }
+  .not-found-page {
+    padding: 28px 18px;
+  }
+  .not-found-action {
+    min-width: 0;
+    width: 100%;
+    max-width: 280px;
+  }
+  .inline-check {
+    width: 100%;
+  }
+  .dns-records > div {
+    grid-template-columns: 1fr;
+  }
+  .wizard-review-grid { grid-template-columns: 1fr; }
+}

@@ -1,0 +1,78 @@
+/* Auth */
+/* Auth */
+.center-panel {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  display: grid;
+  width: min(400px, 100%);
+  gap: 14px;
+  text-align: center;
+  justify-items: center;
+}
+
+.auth-logo {
+  width: clamp(100px, 28vw, 150px);
+  height: auto;
+  margin-bottom: 4px;
+}
+
+.auth-card h1 { margin: 0; }
+
+.auth-card p { margin: 0; color: var(--text-secondary); }
+
+.auth-card label { width: 100%; text-align: left; }
+.auth-card > button { width: 100%; }
+
+/* Password show/hide toggle — positioned inside the input */
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.password-toggle svg {
+  transition: color 120ms ease, transform 120ms ease;
+}
+
+.password-toggle:hover svg {
+  color: var(--text);
+  transform: scale(1.15);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xs);
+  padding: 9px 14px;
+  background: var(--surface-2);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 500;
+  transition: background 120ms ease;
+}
+
+.button-link:hover:not(.disabled) { background: var(--surface-3); }
+.button-link.disabled { pointer-events: none; opacity: 0.45; }
+

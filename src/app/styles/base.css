@@ -1,0 +1,51 @@
+/* Base (variables, resets, element defaults) */
+:root {
+  --bg: #0d0f12;
+  --surface: #14171b;
+  --surface-2: #1b1f24;
+  --surface-3: #232830;
+  --border: #262b32;
+  --border-hairline: rgba(255, 255, 255, 0.07);
+  --text: #f0f2f5;
+  --text-secondary: #9ba3ad;
+  --text-tertiary: #6b7280;
+  --accent: #5b8def;
+  --accent-hover: #6e9cf7;
+  --accent-soft: rgba(91, 141, 239, 0.12);
+  --success: #8fb3ff;
+  --success-bg: #17233a;
+  --running: #6ee7a8;
+  --running-bg: #123424;
+  --warning: #fbbf24;
+  --warning-bg: #382a13;
+  --danger: #f87171;
+  --danger-bg: #3a1c1c;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-xs: 7px;
+  --border-soft: rgba(255, 255, 255, 0.06);
+  --chart-cpu: #5b8def;
+  --chart-mem: #2dd4bf;
+  --chart-players: #a78bfa;
+  --chart-tps: #6ee7a8;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+

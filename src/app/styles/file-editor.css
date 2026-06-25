@@ -1,0 +1,89 @@
+/* File editor */
+/* File editor */
+.editor-panel { min-height: 500px; }
+.file-manager-editor .editor-panel { min-height: min(72vh, 720px); }
+.file-editor {
+  width: 100%;
+  min-height: 520px;
+  height: 62vh;
+  resize: vertical;
+  border-radius: var(--radius-xs);
+  padding: 14px;
+  background: #080a0b;
+  color: #cdd3d8;
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.compact-path {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.file-actions-bar {
+  display: flex;
+  gap: 10px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.file-actions-bar .filter-input { flex: 1 1 200px; margin: 0; min-width: 160px; }
+
+.file-add-menu {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--radius-xs);
+  background: #030506;
+  margin-bottom: 10px;
+}
+
+.file-add-form { display: grid; gap: 10px; }
+
+.files-add-menu {
+  position: absolute !important;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  z-index: 1000;
+}
+
+.metadata-loader-card, .metadata-health-card, .settings-card, .profile-version-card {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.metadata-loader-card span, .metadata-health-card span, .settings-card span, .profile-version-card span {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.metadata-loader-card strong, .metadata-health-card strong, .settings-card strong, .profile-version-card strong { font-size: 14px; font-weight: 600; }
+
+.schedule-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(240px, auto) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.schedule-interval {
+  display: grid;
+  grid-template-columns: auto minmax(70px, 0.5fr) minmax(110px, 1fr);
+  gap: 8px;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.schedule-interval input,
+.schedule-interval select {
+  min-height: 40px;
+}
+

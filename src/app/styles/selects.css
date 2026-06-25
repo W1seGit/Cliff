@@ -1,0 +1,179 @@
+/* Version/Loader selects + Tables & filters + Shared select styles */
+/* Native select used for version/loader dropdowns */
+.native-select {
+  min-height: 40px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 30px 8px 12px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background-color: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.native-select:hover:not(:disabled) {
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.4);
+}
+
+.native-select:focus {
+  outline: none;
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.native-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Version / Loader wrapper */
+.version-combobox {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.version-combobox-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+}
+
+.version-combobox-stability {
+  min-height: 40px;
+  padding: 6px 30px 6px 10px;
+  font-size: 12px;
+}
+
+.version-combobox-refresh {
+  min-height: 40px;
+  padding: 6px 14px;
+  font-size: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.version-combobox-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.version-combobox-footer .field-note { margin: 0; flex: 1 1 auto; min-width: 0; }
+.version-combobox-footer button { padding: 6px 10px; font-size: 12px; flex: 0 0 auto; }
+
+/* Tables & filters */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  contain: inline-size;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+}
+
+.table-wrap table { min-width: 680px; }
+
+.table-wrap thead tr:first-child th:first-child { border-top-left-radius: var(--radius-sm); }
+.table-wrap thead tr:first-child th:last-child { border-top-right-radius: var(--radius-sm); }
+
+.table-heading-with-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.table-count {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table-load-more {
+  text-align: center;
+}
+.table-load-more button {
+  min-height: 36px;
+  padding: 6px 16px;
+  font-size: 13px;
+}
+
+.table-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.button-link svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 5px; }
+
+.selection-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.selection-actions span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.filter-input { margin: 10px 0; }
+
+.backup-create-row, .file-actions, .search-bar, .world-filter-bar, .access-filter-bar, .property-filter-bar, .backup-filter-bar, .file-filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.backup-create-row > *, .file-actions > *, .search-bar > *, .world-filter-bar > *, .access-filter-bar > * {
+  flex: 1 1 160px;
+}
+
+.search-bar input { flex: 2 1 200px; }
+.search-bar select { flex: 1 1 140px; }
+
+/* Shared select styles (discover filters, schedule interval) */
+.discover-filter-field select,
+.schedule-interval select {
+  appearance: none;
+  min-height: 40px;
+  padding: 8px 34px 8px 10px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background-color: var(--surface);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5.5 7.5 10 12l4.5-4.5' fill='none' stroke='%238996aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px 16px;
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+  color: var(--text);
+  font-size: 13px;
+  min-width: 0;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.discover-filter-field select:hover:not(:disabled),
+.schedule-interval select:hover:not(:disabled) {
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.4);
+}
+
+.discover-filter-field select:focus,
+.schedule-interval select:focus {
+  outline: none;
+  background-color: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+

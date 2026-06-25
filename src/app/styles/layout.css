@@ -1,0 +1,192 @@
+/* Layout + Utility */
+/* Layout */
+.shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 100vh;
+  transition: grid-template-columns 160ms ease;
+}
+
+.shell.sidebar-collapsed {
+  grid-template-columns: 68px minmax(0, 1fr);
+}
+
+.shell.standalone,
+.shell.sidebar-collapsed.standalone {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  padding: 22px 14px;
+  background: var(--bg);
+  border-right: 1px solid var(--border-hairline);
+  transition: transform 180ms ease, box-shadow 180ms ease, width 180ms ease;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 18px;
+  min-height: 24px;
+}
+
+.sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  user-select: none;
+}
+
+.sidebar-brand img {
+  display: block;
+  width: 72px;
+  max-width: 100%;
+  height: auto;
+}
+
+.sidebar-toggle {
+  flex: 0 0 auto;
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  box-shadow: none;
+  border-radius: var(--radius-xs);
+  opacity: 0.6;
+  transition: opacity 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.sidebar-toggle:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface);
+  opacity: 1;
+}
+
+.sidebar-footer {
+  display: grid;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.account-button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition: background 120ms ease;
+}
+
+.account-button:hover:not(:disabled) { background: var(--surface); }
+.account-button[aria-expanded="true"] { background: var(--surface); }
+
+.account-avatar {
+  flex: 0 0 auto;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(91, 141, 239, 0.12);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.account-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.floating-menu {
+  z-index: 1000;
+  display: grid;
+  gap: 1px;
+  padding: 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--border-soft);
+}
+
+.account-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.account-menu-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.floating-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.floating-menu button:hover:not(:disabled) { background: var(--surface-2); }
+
+.full { width: 100%; }
+
+/* Utility */
+.muted { color: var(--text-secondary); }
+.block { display: block; }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+}
+
+.pill.success { color: var(--success); background: var(--success-bg); }
+.pill.warning { color: var(--warning); background: var(--warning-bg); }
+.pill.danger { color: var(--danger); background: var(--danger-bg); }
+.pill.accent { color: var(--accent); background: rgba(91, 141, 239, 0.12); }
+

@@ -1,0 +1,111 @@
+/* 404 */
+/* 404 */
+.not-found-page {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  overflow: hidden;
+  padding: clamp(36px, 6vw, 96px);
+  background:
+    radial-gradient(circle at 76% 34%, rgba(28, 123, 255, 0.28), transparent 30%),
+    radial-gradient(circle at 38% 36%, rgba(91, 141, 239, 0.12), transparent 34%),
+    #030810;
+}
+
+.not-found-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(3, 8, 16, 0.15), transparent 48%, rgba(3, 8, 16, 0.28));
+  pointer-events: none;
+}
+
+.not-found-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.not-found-copy {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.not-found-logo {
+  width: clamp(120px, 13vw, 190px);
+  height: auto;
+  margin-bottom: 10px;
+}
+
+.not-found-copy h1 {
+  margin: 0;
+  color: #f5f8ff;
+  font-size: clamp(112px, 18vw, 260px);
+  font-weight: 850;
+  line-height: 0.82;
+  text-shadow: 0 8px 0 rgba(0, 95, 210, 0.32), 0 24px 70px rgba(0, 0, 0, 0.65);
+}
+
+.not-found-heading {
+  margin: 0;
+  color: #168cff;
+  font-size: clamp(30px, 4vw, 64px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.not-found-message {
+  max-width: 330px;
+  margin: 0;
+  color: #7f8da3;
+  font-size: clamp(18px, 2vw, 27px);
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.not-found-divider {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) 34px minmax(70px, 1fr);
+  align-items: center;
+  width: min(100%, 460px);
+  gap: 22px;
+}
+
+.not-found-divider span {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(91, 141, 239, 0.5), transparent);
+}
+
+.not-found-divider i {
+  width: 24px;
+  height: 24px;
+  margin: auto;
+  border: 1px solid #168cff;
+  transform: rotate(30deg) skewY(-18deg);
+  box-shadow: 0 0 18px rgba(22, 140, 255, 0.6);
+}
+
+.not-found-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-width: 230px;
+  margin-top: 34px;
+  padding: 16px 28px;
+  border: 1px solid #168cff;
+  border-radius: var(--radius-sm);
+  color: #f5f8ff;
+  background: rgba(3, 8, 16, 0.58);
+  text-decoration: none;
+  font-size: 20px;
+  font-weight: 800;
+  box-shadow: 0 0 32px rgba(22, 140, 255, 0.16);
+}
+
+.not-found-action svg {
+  color: #168cff;
+}
+

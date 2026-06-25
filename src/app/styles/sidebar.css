@@ -1,0 +1,133 @@
+/* Sidebar navigation */
+.sidebar-nav {
+  display: grid;
+  gap: 2px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+  align-content: start;
+  flex: 1 1 auto;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  font-weight: 500;
+  font-size: 13px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.sidebar-nav-group {
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar-nav-item:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.sidebar-nav-item.active {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.sidebar-nav-item.parent-active {
+  color: var(--text);
+}
+
+.sidebar-nav-item:disabled {
+  color: var(--text-tertiary);
+  opacity: 0.45;
+}
+
+.sidebar-nav-icon {
+  flex: 0 0 auto;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+}
+
+.sidebar-nav-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-nav-status-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--text-tertiary);
+  opacity: 0.8;
+}
+
+.sidebar-nav-status-dot.on {
+  background: #22c55e;
+  opacity: 1;
+}
+
+.sidebar-nav-status-dot.loading {
+  background: #22c55e;
+  opacity: 1;
+  animation: sidebar-dot-flash 1s ease-in-out infinite;
+}
+
+@keyframes sidebar-dot-flash {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.sidebar-nav-caret {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  transition: transform 120ms ease, color 120ms ease;
+}
+
+.sidebar-nav-group.expanded .sidebar-nav-caret {
+  color: currentColor;
+  transform: rotate(180deg);
+}
+
+.sidebar-nav-children {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 4px 18px;
+}
+
+.sidebar-nav-child {
+  color: var(--text-secondary);
+}
+
+.sidebar-nav-item.attention-flash {
+  animation: attention-flash 900ms ease-in-out 4;
+}
+
+.sidebar-nav-hint {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+

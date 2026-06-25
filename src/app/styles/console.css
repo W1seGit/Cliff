@@ -1,0 +1,202 @@
+/* Console */
+/* Console */
+.console-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: calc(100vh - 220px);
+  min-height: 420px;
+}
+
+.console-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.console-wrapper {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.console {
+  flex: 1 1 auto;
+  overflow: auto;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  padding: 14px 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 42px),
+    #030506;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+  cursor: text;
+}
+
+.console-jump-bottom {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #0b0d10;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.15s, transform 0.15s;
+  z-index: 2;
+}
+
+.console-jump-bottom:hover {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+.console-line {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 16px;
+  padding: 1px 18px;
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.console-line:hover { background: rgba(255, 255, 255, 0.025); }
+.console-line.error { color: var(--danger); background: rgba(248, 113, 113, 0.06); }
+.console-line.warning { color: var(--warning); }
+.console-line.command { color: var(--accent); }
+.console-line.muted-line { color: var(--text-tertiary); }
+
+.console-time {
+  justify-self: end;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.console-line.error .console-time,
+.console-line.warning .console-time {
+  color: currentColor;
+  opacity: 0.65;
+}
+
+.console-line pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: inherit;
+  font: inherit;
+}
+
+.console-prompt {
+  display: grid;
+  gap: 0;
+  margin-top: -10px;
+}
+
+.console-input-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+  background: #030506;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), inset 0 0 0 1px rgba(255, 255, 255, 0.045);
+}
+
+.console-input-line:focus-within {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055), inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.console-prompt-char {
+  color: var(--accent);
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  font-weight: 700;
+  font-size: 14px;
+  user-select: none;
+}
+
+.console-input-line input {
+  flex: 1;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text);
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  font-size: 13px;
+}
+
+.console-input-line input:focus { box-shadow: none; }
+.console-input-line button { white-space: nowrap; }
+
+.compact-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.compact-check input { width: auto; }
+
+/* Standalone ConsoleView (daemon logs, etc.) */
+.console-view {
+  display: flex;
+  flex-direction: column;
+}
+
+.console-view-header {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: #030506;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.045), inset -1px 0 0 rgba(255, 255, 255, 0.045);
+  font-family: var(--font-mono);
+  word-break: break-all;
+}
+
+.console-view-header code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.console-view:has(.console-view-header) .console {
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
+  box-shadow: inset -1px -1px 0 rgba(255, 255, 255, 0.045), inset 1px 0 0 rgba(255, 255, 255, 0.045);
+}
+
+.console-view .console {
+  flex: none;
+  height: 420px;
+  border-radius: var(--radius-xs);
+}
+
+/* Wider time column for daemon log timestamps (2024-01-15 12:30:45) */
+.console-view .console-line {
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+/* Log file path label shown above the ConsoleView in app settings */
+.log-file-path {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  word-break: break-all;
+}
+
+.log-file-path code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+}

@@ -1,0 +1,79 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build frontend (static export)
+        run: npm run build:daemon-web
+
+      - name: Cross-compile Go binaries
+        working-directory: daemon
+        run: |
+          VERSION=$(node -p "require('../package.json').version")
+          COMMIT=$(git rev-parse --short=12 HEAD)
+          BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          LDFLAGS="-s -w -X github.com/W1seGit/Cliff/daemon/internal/buildinfo.Version=${VERSION} -X github.com/W1seGit/Cliff/daemon/internal/buildinfo.Commit=${COMMIT} -X github.com/W1seGit/Cliff/daemon/internal/buildinfo.BuiltAt=${BUILT_AT}"
+
+          mkdir -p ../dist/bin
+
+          for target in \
+            "windows amd64" \
+            "linux amd64" \
+            "linux arm64" \
+            "darwin amd64" \
+            "darwin arm64"; do
+            OS=$(echo $target | cut -d' ' -f1)
+            ARCH=$(echo $target | cut -d' ' -f2)
+            BINARY="cliff"
+            if [ "$OS" = "windows" ]; then BINARY="cliff.exe"; fi
+            echo "Building $OS/$ARCH..."
+            GOOS=$OS GOARCH=$ARCH CGO_ENABLED=0 go build -ldflags "$LDFLAGS" \
+              -o "../dist/bin/${OS}-${ARCH}-${BINARY}" ./cmd/cliff
+          done
+
+      - name: Package all platforms
+        run: node scripts/ci-package.mjs
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cliff-builds
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/cliff-release.json
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+            dist/cliff-release.json
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

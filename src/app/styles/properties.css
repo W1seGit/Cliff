@@ -1,0 +1,26 @@
+/* Properties */
+/* Properties */
+.property-list { display: grid; gap: 0; }
+.property-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.45fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border-hairline);
+}
+.property-row:last-child { border-bottom: 0; }
+.property-row span { color: var(--text-secondary); font-size: 12px; }
+.property-row strong { font-weight: 500; overflow-wrap: anywhere; }
+.java-runtime-row {
+  grid-template-columns: minmax(140px, 1fr) auto auto;
+  align-items: center;
+}
+.java-runtime-row button { padding: 6px 10px; }
+
+.players-layout, .grid-2, .activity-layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+

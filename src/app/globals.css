@@ -1,0 +1,31 @@
+/* Global styles entry point.
+   Styles are split into ./styles/<section>.css for maintainability.
+   Order matters: base/reset first, then components, then feature panels, then responsive. */
+@import "./styles/base.css";
+@import "./styles/buttons.css";
+@import "./styles/inputs.css";
+@import "./styles/layout.css";
+@import "./styles/components.css";
+@import "./styles/server-list.css";
+@import "./styles/server-switcher.css";
+@import "./styles/sidebar.css";
+@import "./styles/server-header.css";
+@import "./styles/workspace.css";
+@import "./styles/tabs.css";
+@import "./styles/panels.css";
+@import "./styles/overview.css";
+@import "./styles/console.css";
+@import "./styles/forms.css";
+@import "./styles/selects.css";
+@import "./styles/mods.css";
+@import "./styles/discover.css";
+@import "./styles/lists.css";
+@import "./styles/file-editor.css";
+@import "./styles/result-cards.css";
+@import "./styles/properties.css";
+@import "./styles/player-list.css";
+@import "./styles/public-access.css";
+@import "./styles/modal.css";
+@import "./styles/not-found.css";
+@import "./styles/auth.css";
+@import "./styles/responsive.css";

@@ -1,0 +1,133 @@
+/* Modal */
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(3, 4, 5, 0.7);
+}
+
+.modal {
+  display: grid;
+  width: min(420px, 100%);
+  gap: 14px;
+  padding: 22px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.modal:has(.crop-modal-body) {
+  width: min(520px, 100%);
+}
+
+.modal h2 { margin: 0; font-size: 17px; }
+.modal p { margin: 0; color: var(--text-secondary); line-height: 1.5; }
+.modal-message {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.modal-form { display: grid; gap: 12px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* Image crop modal */
+.crop-modal-body {
+  display: grid;
+  gap: 12px;
+}
+
+.crop-canvas {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+  user-select: none;
+}
+
+.crop-image {
+  display: block;
+  max-width: 100%;
+  max-height: 50vh;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.crop-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.crop-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.dependency-prompt {
+  display: grid;
+  gap: 14px;
+}
+
+.dependency-prompt-list {
+  display: grid;
+  gap: 8px;
+}
+
+.dependency-prompt-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+}
+
+.dependency-prompt-row img,
+.dependency-prompt-row .installed-mod-fallback {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-xs);
+}
+
+.dependency-prompt-row img { object-fit: cover; }
+
+.dependency-prompt-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dependency-prompt-row a,
+.dependency-prompt-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dependency-prompt-row a {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.dependency-prompt-row a:hover {
+  color: var(--accent);
+}
+
+.dependency-prompt-row small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+

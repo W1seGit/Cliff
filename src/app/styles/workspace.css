@@ -1,0 +1,194 @@
+/* Workspace + Controls */
+/* Workspace */
+.workspace {
+  min-width: 0;
+  height: 100vh;
+  padding: 36px;
+  background: var(--bg);
+  overflow-x: clip;
+  overflow-y: auto;
+}
+
+.standalone-workspace {
+  width: 100%;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+}
+
+.standalone-workspace > * {
+  width: min(100%, 1040px);
+}
+
+.standalone-workspace > .settings-layout.account-only,
+.standalone-workspace > .app-settings-tabbed {
+  width: min(100%, 1040px);
+}
+
+.standalone-workspace > .utility-wizard-panel {
+  width: min(100%, 1040px);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 28px;
+}
+
+.standalone-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  width: min(100%, 1040px);
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.standalone-topbar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.topbar-save-button {
+  margin-left: auto;
+}
+
+.utility-back-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.utility-back-button:hover:not(:disabled) {
+  background: transparent;
+  color: var(--accent-hover);
+}
+
+.topbar-copy {
+  min-width: 0;
+}
+
+.mobile-sidebar-button {
+  display: none;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  place-items: center;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.eyebrow {
+  display: inline-flex;
+  margin-bottom: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.topbar h1 {
+  margin: 0 0 4px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.topbar p { margin: 0; color: var(--text-secondary); font-size: 13px; }
+
+.status-row, .toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-row { flex-wrap: wrap; justify-content: flex-end; }
+
+.spread { justify-content: space-between; }
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface);
+}
+
+.status.on { color: var(--success); background: var(--success-bg); }
+.status.busy { color: var(--accent); background: rgba(91, 141, 239, 0.12); }
+
+.status-detail {
+  padding: 6px 11px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Controls */
+.control-strip {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.control-strip-note { color: var(--text-secondary); font-size: 12px; }
+
+.control-strip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.control-strip .danger-button {
+  background: var(--danger-bg);
+  color: var(--danger);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.28);
+}
+
+.control-strip .danger-button:hover:not(:disabled) { background: #4a2323; }
+
+.more-menu-wrap { position: relative; }
+.more-menu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 1px;
+  width: 200px;
+  padding: 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--border-soft);
+}
+
+.more-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.more-menu button:hover:not(:disabled) { background: var(--surface-2); }
+

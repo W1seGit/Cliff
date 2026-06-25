@@ -1,0 +1,296 @@
+/* Mods workspace + Section tabs + Empty state */
+/* Mods workspace */
+.mods-workspace {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.mods-list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.mods-installed-table table {
+  table-layout: fixed;
+}
+
+.workspace-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.workspace-page-heading {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.workspace-page-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.workspace-page-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.workspace-page-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workspace-page-header p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.settings-column > .workspace-page-header {
+  margin-bottom: 16px;
+}
+
+.mods-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.mods-page-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mods-page-title h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.mods-page-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.mods-context-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Section tabs (Installed / Discover) */
+.mods-section-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.mods-section-tabs button {
+  flex: 1 1 auto;
+  padding: 8px 16px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 13px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.mods-section-tabs button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.mods-section-tabs button.active {
+  background: var(--accent);
+  color: #0b0d10;
+}
+
+.mod-icon-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: var(--surface-2);
+}
+
+.installed-mod-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.installed-mod-cell img,
+.installed-mod-fallback {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+}
+
+.installed-mod-cell img { object-fit: cover; }
+
+.installed-mod-fallback {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+}
+
+.installed-mod-cell span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.installed-mod-cell a,
+.installed-mod-cell strong {
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.installed-mod-cell a:hover { color: var(--accent); }
+
+.installed-mod-cell .installed-mod-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.installed-mod-cell small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modpack-expand-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.modpack-expand-button:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.modpack-child-row {
+  background: var(--surface-2);
+}
+
+.modpack-child-row td {
+  border-top: 1px solid var(--border-hairline);
+}
+
+.modpack-child-cell {
+  padding-left: 44px;
+}
+
+.installed-mod-fallback.small {
+  width: 24px;
+  height: 24px;
+}
+
+.dependency-warning-button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--warning);
+}
+
+.dependency-warning-button:hover {
+  color: color-mix(in srgb, var(--warning) 80%, white);
+}
+
+/* Empty state */
+.mods-empty {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  padding: 48px 24px;
+  text-align: center;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.mods-empty svg {
+  color: var(--text-tertiary);
+}
+
+.mods-empty h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.mods-empty p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  max-width: 380px;
+}
+
+.mods-empty.mini {
+  padding: 20px;
+  gap: 4px;
+}
+
+.mods-empty.mini h3 { font-size: 14px; }
+
