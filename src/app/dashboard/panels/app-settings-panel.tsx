@@ -560,7 +560,7 @@ export function AppSettingsPanel({
                     </div>
                     {check.updateAvailable ? (
                       <>
-                        <Hint>A new version is available. Click "Install update" to download and apply it. The daemon will restart automatically.</Hint>
+                        <Hint>A new version is available. Click "Install update" to download and apply it. Any running servers will be stopped gracefully. The daemon will restart automatically after the update.</Hint>
                         <Button variant="primary" disabled={updateBusy} onClick={installUpdate} loading={updateBusy} loadingText="Updating...">
                           {updateBusy ? "Updating..." : "Install update"}
                         </Button>

@@ -51,7 +51,7 @@ export function UpdateModal({
           <strong>v{update.currentVersion}</strong> and version{" "}
           <strong>v{update.latestVersion}</strong> is ready to install.
           {update.archiveSize ? ` Download size: ${formatSize(update.archiveSize)}.` : ""}
-          {" "}The daemon will restart after the update is applied."
+          {" "}Any running servers will be stopped gracefully during the update. Your server data, worlds, and settings are not affected."
         </span>
       }
       confirmLabel={applying ? "Updating..." : "Install now"}
