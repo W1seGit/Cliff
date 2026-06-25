@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $DefaultManifest = "https://github.com/W1seGit/Cliff/releases/latest/download/cliff-release.json"
-$InstallerSource = "https://github.com/W1seGit/Cliff/releases/latest/download/install-package.ps1"
+$InstallerSource = "https://raw.githubusercontent.com/W1seGit/Cliff/main/scripts/install-package.ps1"
 
 if (-not $Manifest) {
   $Manifest = if ($env:CLIFF_RELEASE_MANIFEST) { $env:CLIFF_RELEASE_MANIFEST } else { $DefaultManifest }

@@ -2,7 +2,7 @@
 set -eu
 
 DEFAULT_MANIFEST="https://github.com/W1seGit/Cliff/releases/latest/download/cliff-release.json"
-INSTALLER_SOURCE="${CLIFF_INSTALL_PACKAGE_SH:-https://github.com/W1seGit/Cliff/releases/latest/download/install-package.sh}"
+INSTALLER_SOURCE="${CLIFF_INSTALL_PACKAGE_SH:-https://raw.githubusercontent.com/W1seGit/Cliff/main/scripts/install-package.sh}"
 MANIFEST="${CLIFF_RELEASE_MANIFEST:-$DEFAULT_MANIFEST}"
 PACKAGE=""
 INSTALL_DIR="${CLIFF_INSTALL_DIR:-}"
