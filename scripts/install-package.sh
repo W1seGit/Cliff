@@ -42,6 +42,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
+manifest_platform_field() {
+  manifest_file="$1"
+  platform="$2"
+  field="$3"
+  awk -v platform="$platform" -v field="$field" '
+    /\{/ {
+      in_object = 1
+      object = ""
+    }
+    in_object {
+      object = object $0 "\n"
+    }
+    in_object && /\}/ {
+      platform_pattern = "\"" platform "\""
+      field_pattern = "\"" field "\"[[:space:]]*:[[:space:]]*\"[^\"]+\""
+      if (object ~ /"platform"[[:space:]]*:/ && object ~ platform_pattern && match(object, field_pattern)) {
+        value = substr(object, RSTART, RLENGTH)
+        sub(/^.*:[[:space:]]*"/, "", value)
+        sub(/"$/, "", value)
+        print value
+        exit
+      }
+      in_object = 0
+      object = ""
+    }
+  ' "$manifest_file"
+}
+
 if [ -n "$MANIFEST" ]; then
   # Detect the current platform.
   OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -77,12 +105,8 @@ if [ -n "$MANIFEST" ]; then
       ;;
   esac
 
-  # Extract the archive filename for the current platform from the manifest.
-  # The manifest has a "platforms" array with entries like:
-  #   {"platform":"linux-amd64","archive":"cliff-0.1.0-linux-amd64.zip","sha256":"..."}
-  # We use a simple approach: find the platform entry, then extract archive + sha256.
-  archive="$(grep -o "\"platform\"[[:space:]]*:[[:space:]]*\"$PLATFORM\"[^\}]*" "$manifest_file" | sed -n 's/.*"archive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
-  EXPECTED_ARCHIVE_SHA256="$(grep -o "\"platform\"[[:space:]]*:[[:space:]]*\"$PLATFORM\"[^\}]*" "$manifest_file" | sed -n 's/.*"sha256"[[:space:]]*:[[:space:]]*"\([0-9a-fA-F]*\)".*/\1/p' | head -n 1 | tr 'A-F' 'a-f')"
+  archive="$(manifest_platform_field "$manifest_file" "$PLATFORM" "archive")"
+  EXPECTED_ARCHIVE_SHA256="$(manifest_platform_field "$manifest_file" "$PLATFORM" "sha256" | tr 'A-F' 'a-f')"
 
   if [ -z "$archive" ]; then
     echo "Release manifest does not include a package for platform '$PLATFORM'." >&2
@@ -101,7 +125,7 @@ if [ -z "$PACKAGE" ]; then
       case "$ARCH" in x86_64|amd64) ARCH="amd64" ;; aarch64|arm64) ARCH="arm64" ;; esac
       PLATFORM="$OS-$ARCH"
     fi
-    archive="$(grep -o "\"platform\"[[:space:]]*:[[:space:]]*\"$PLATFORM\"[^\}]*" "$ROOT/dist/cliff-release.json" | sed -n 's/.*"archive"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    archive="$(manifest_platform_field "$ROOT/dist/cliff-release.json" "$PLATFORM" "archive")"
     if [ -n "$archive" ] && [ -f "$ROOT/dist/$archive" ]; then
       PACKAGE="$ROOT/dist/$archive"
     fi
