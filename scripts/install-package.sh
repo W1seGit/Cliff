@@ -126,10 +126,8 @@ case "$PACKAGE" in
   http://*|https://*)
     if command -v curl >/dev/null 2>&1; then
       curl -fsSL "$PACKAGE" -o "$TEMP_ROOT/cliff.zip"
-      curl -fsSL "$PACKAGE.sha256" -o "$TEMP_ROOT/cliff.zip.sha256" 2>/dev/null || true
     elif command -v wget >/dev/null 2>&1; then
       wget -qO "$TEMP_ROOT/cliff.zip" "$PACKAGE"
-      wget -qO "$TEMP_ROOT/cliff.zip.sha256" "$PACKAGE.sha256" 2>/dev/null || true
     else
       echo "curl or wget is required to download a package URL." >&2
       exit 1

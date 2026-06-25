@@ -23,11 +23,6 @@ function Resolve-PackagePath {
     if ($RequestedPackage -match "^https?://") {
       $TempPackage = Join-Path ([System.IO.Path]::GetTempPath()) ("cliff-" + [System.Guid]::NewGuid().ToString("N") + ".zip")
       Invoke-WebRequest -Uri $RequestedPackage -OutFile $TempPackage
-      try {
-        Invoke-WebRequest -Uri "$RequestedPackage.sha256" -OutFile "$TempPackage.sha256"
-      } catch {
-        Write-Warning "No package checksum sidecar found at $RequestedPackage.sha256"
-      }
       return $TempPackage
     }
     return (Resolve-Path $RequestedPackage).Path
