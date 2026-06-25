@@ -421,6 +421,37 @@ func TestLaunchCommandPreservesQuotedExtraArgs(t *testing.T) {
 	}
 }
 
+func TestLaunchCommandDoesNotDuplicateNoGUI(t *testing.T) {
+	dir := t.TempDir()
+	jarPath := filepath.Join(dir, "server.jar")
+	if err := os.WriteFile(jarPath, []byte("placeholder"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, args, _, err := launchCommand(store.Server{
+		Name:        "No GUI Args",
+		Path:        dir,
+		JavaPath:    "java",
+		MinMemoryMB: 512,
+		MaxMemoryMB: 1024,
+		LaunchJar:   "server.jar",
+		ExtraArgs:   "nogui",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := 0
+	for _, arg := range args {
+		if strings.TrimLeft(strings.ToLower(arg), "-") == "nogui" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected one nogui arg, got %d in %#v", count, args)
+	}
+}
+
 func TestLaunchCommandRejectsInstallerJars(t *testing.T) {
 	installerJars := []string{
 		"fabric-installer-1.1.1.jar",

@@ -1215,12 +1215,25 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 			"-jar",
 			server.LaunchJar,
 		}
-		args = append(args, splitArgs(server.ExtraArgs)...)
-		args = append(args, "nogui")
+		extraArgs := splitArgs(server.ExtraArgs)
+		args = append(args, extraArgs...)
+		if !hasNoGUIArg(extraArgs) {
+			args = append(args, "nogui")
+		}
 	}
 
 	cmd := exec.Command(command, args...)
 	return cmd, args, strings.Join(append([]string{command}, args...), " "), nil
+}
+
+func hasNoGUIArg(args []string) bool {
+	for _, arg := range args {
+		normalized := strings.TrimLeft(strings.ToLower(strings.TrimSpace(arg)), "-")
+		if normalized == "nogui" {
+			return true
+		}
+	}
+	return false
 }
 
 // isInstallerLaunchJar reports whether the launch jar is a mod-loader

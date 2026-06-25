@@ -2032,7 +2032,7 @@ func portValue(value int, fallback int) (int, error) {
 func javaPathValue(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "java"
+		return "auto"
 	}
 	return value
 }

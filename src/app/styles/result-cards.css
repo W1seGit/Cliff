@@ -143,6 +143,84 @@
   cursor: not-allowed;
 }
 
+.import-progress {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-hairline));
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--accent) 9%, var(--surface));
+}
+
+.import-progress-copy {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.import-progress-copy svg {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.import-progress-copy > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.import-progress-copy strong {
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.import-progress-copy span,
+.import-progress-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.import-progress-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.import-progress-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 260ms ease;
+}
+
+.import-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.import-progress-meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.import-progress-meta strong {
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.spin-icon {
+  animation: spin-icon 900ms linear infinite;
+}
+
 .wizard-panel {
   gap: 18px;
   animation: wizard-enter 220ms ease-out both;
@@ -298,9 +376,14 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes spin-icon {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wizard-panel,
-  .wizard-panel .form-section {
+  .wizard-panel .form-section,
+  .spin-icon {
     animation: none;
   }
 

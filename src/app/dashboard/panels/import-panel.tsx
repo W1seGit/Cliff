@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, Upload } from "lucide-react";
+import { CheckCircle2, FolderOpen, LoaderCircle, Upload } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange, validPort } from "../lib/utils";
 import { JavaPresetRow, ExtraArgsPresetRow, MemoryPresetRow } from "../components/preset-rows";
 import { ServerTypePresets } from "../components/server-type-presets";
@@ -20,6 +20,25 @@ type ImportSource = {
   files: File[];
   paths: string[];
   label: string;
+};
+
+type ImportProgressKind = "detect" | "import";
+
+const progressPlans: Record<ImportProgressKind, { label: string; detail: string; percent: number }[]> = {
+  detect: [
+    { label: "Preparing source", detail: "Staging the selected server files.", percent: 18 },
+    { label: "Uploading", detail: "Moving the server into temporary managed storage.", percent: 42 },
+    { label: "Detecting", detail: "Scanning jars, loader files, mods, worlds, and server properties.", percent: 68 },
+    { label: "Reading launch target", detail: "Choosing the safest server jar for this import.", percent: 88 },
+    { label: "Detected", detail: "Review the detected profile before importing.", percent: 100 },
+  ],
+  import: [
+    { label: "Preparing import", detail: "Creating the managed server folder.", percent: 20 },
+    { label: "Copying files", detail: "Moving the staged server into Cliff storage.", percent: 48 },
+    { label: "Writing profile", detail: "Saving Java, memory, port, and launch settings.", percent: 74 },
+    { label: "Finalizing", detail: "Cleaning up temporary import files.", percent: 92 },
+    { label: "Imported", detail: "The server is ready in the dashboard.", percent: 100 },
+  ],
 };
 
 function relativePathFor(file: File) {
@@ -90,10 +109,11 @@ export function ImportPanel({
   const [maxMemoryMb, setMaxMemoryMb] = useState(4096);
   const [port, setPort] = useState("");
   const [launchJar, setLaunchJar] = useState("");
-  const [javaPath, setJavaPath] = useState("java");
-  const [extraArgs, setExtraArgs] = useState("");
+  const [javaPath, setJavaPath] = useState("auto");
+  const [extraArgs, setExtraArgs] = useState("nogui");
   const [busy, setBusy] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [progress, setProgress] = useState<{ kind: ImportProgressKind; index: number } | null>(null);
 
   const importSteps = ["Source", "Detected", "Resources", "Review"];
   const effectiveMinecraftVersion = minecraftVersion || detection?.minecraftVersion || metadata?.latest.release || "";
@@ -121,6 +141,7 @@ export function ImportPanel({
     return importStepValid.slice(0, index).every(Boolean);
   };
   const hasUnsavedChanges = Boolean(source || detection || step > 0);
+  const currentProgress = progress ? progressPlans[progress.kind][progress.index] : null;
 
   useEffect(() => {
     onUnsavedChange(hasUnsavedChanges ? {
@@ -132,6 +153,27 @@ export function ImportPanel({
     } : null);
     return () => onUnsavedChange(null);
   }, [hasUnsavedChanges, onUnsavedChange]);
+
+  useEffect(() => {
+    if (!busy || !progress) return;
+    const plan = progressPlans[progress.kind];
+    if (progress.index >= plan.length - 2) return;
+    const timer = window.setTimeout(() => {
+      setProgress((current) => {
+        if (!current || current.kind !== progress.kind) return current;
+        return { ...current, index: Math.min(current.index + 1, plan.length - 2) };
+      });
+    }, 650 + progress.index * 140);
+    return () => window.clearTimeout(timer);
+  }, [busy, progress]);
+
+  function finishProgress(kind: ImportProgressKind) {
+    const finalIndex = progressPlans[kind].length - 1;
+    setProgress({ kind, index: finalIndex });
+    window.setTimeout(() => {
+      setProgress((current) => current?.kind === kind && current.index === finalIndex ? null : current);
+    }, 500);
+  }
 
   function chooseZip(file: File | null) {
     if (!file) return;
@@ -205,6 +247,7 @@ export function ImportPanel({
   async function detectSource() {
     if (!source || busy) return;
     setBusy(true);
+    setProgress({ kind: "detect", index: 0 });
     try {
       const form = new FormData();
       form.set("mode", source.kind === "zip" ? "detect-zip" : "detect-folder");
@@ -217,9 +260,11 @@ export function ImportPanel({
       }
       const data = await detectImportSource(form);
       applyDetection(data.detection);
+      finishProgress("detect");
       setStep(1);
       onMessage("Server detected");
     } catch (error) {
+      setProgress(null);
       onMessage(error instanceof Error ? error.message : "Detection failed");
     } finally {
       setBusy(false);
@@ -229,6 +274,7 @@ export function ImportPanel({
   async function importServer() {
     if (!canImport || !detection?.token) return;
     setBusy(true);
+    setProgress({ kind: "import", index: 0 });
     try {
       const data = await importStagedServer({
         mode: "import-staged",
@@ -244,10 +290,12 @@ export function ImportPanel({
         port: effectivePort,
         launchJar,
       });
+      finishProgress("import");
       await onImported(data.server?.id);
       onUnsavedChange(null);
       onMessage("Server imported");
     } catch (error) {
+      setProgress(null);
       onMessage(error instanceof Error ? error.message : "Import failed");
     } finally {
       setBusy(false);
@@ -279,6 +327,25 @@ export function ImportPanel({
           onSubmit={importServer}
         />
       </div>
+
+      {currentProgress && (
+        <div className="import-progress" role="status" aria-live="polite">
+          <div className="import-progress-copy">
+            {currentProgress.percent >= 100 ? <CheckCircle2 size={18} /> : <LoaderCircle size={18} className="spin-icon" />}
+            <div>
+              <strong>{currentProgress.label}</strong>
+              <span>{currentProgress.detail}</span>
+            </div>
+          </div>
+          <div className="import-progress-track" aria-hidden="true">
+            <div style={{ width: `${currentProgress.percent}%` }} />
+          </div>
+          <div className="import-progress-meta">
+            <span>{progressPlans[progress!.kind].map((stage) => stage.label).join(" / ")}</span>
+            <strong>{currentProgress.percent}%</strong>
+          </div>
+        </div>
+      )}
 
       {step === 0 && (
         <div className="form-section">
