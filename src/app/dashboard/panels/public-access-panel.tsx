@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   CheckCircle2, Clipboard, Loader2, RadioTower, XCircle,
@@ -342,7 +342,14 @@ export function PublicAccessPanel({
   const [agentLogs, setAgentLogs] = useState<string[]>([]);
   const [tunnelReady, setTunnelReady] = useState(false);
   const [agentPlatform, setAgentPlatform] = useState<string>("");
-  const [macBuildPhase, setMacBuildPhase] = useState<MacBuildPhase>("idle");
+  const [macBuildPhase, setMacBuildPhaseState] = useState<MacBuildPhase>("idle");
+  // Ref mirror of macBuildPhase so async callbacks (applyAgent) read the
+  // current value instead of a stale closure capture.
+  const macBuildPhaseRef = useRef<MacBuildPhase>(macBuildPhase);
+  const setMacBuildPhase = (phase: MacBuildPhase) => {
+    macBuildPhaseRef.current = phase;
+    setMacBuildPhaseState(phase);
+  };
   const [macDeps, setMacDeps] = useState<PlayitDepStatus[]>([]);
   const [macDepsJob, setMacDepsJob] = useState<PlayitJobState | null>(null);
   const [macBuildJob, setMacBuildJob] = useState<PlayitJobState | null>(null);
@@ -511,6 +518,9 @@ export function PublicAccessPanel({
     if (agent.depsInstall !== undefined) setMacDepsJob(agent.depsInstall);
     if (agent.build !== undefined) setMacBuildJob(agent.build);
     // Track macOS build phase transitions from the polled job state.
+    // Read from macBuildPhaseRef.current to avoid stale closure captures
+    // when applyAgent is called from async callbacks (e.g. startMacDepCheck).
+    const phase = macBuildPhaseRef.current;
     if (agent.platform === "darwin" && !agent.installed) {
       if (agent.build?.running) {
         setMacBuildPhase("building");
@@ -518,10 +528,10 @@ export function PublicAccessPanel({
         setMacBuildPhase("failed");
       } else if (agent.depsInstall?.running) {
         setMacBuildPhase("installing-deps");
-      } else if (agent.depsInstall?.done && !agent.depsInstall.error && macBuildPhase === "installing-deps") {
+      } else if (agent.depsInstall?.done && !agent.depsInstall.error && phase === "installing-deps") {
         // Deps install finished successfully — start the build.
         void startMacBuild();
-      } else if (agent.depsChecked && macBuildPhase === "checking-deps") {
+      } else if (agent.depsChecked && phase === "checking-deps") {
         const missing = (agent.deps ?? []).filter((dep) => !dep.installed);
         if (missing.length === 0) {
           // All deps present — start the build directly.
@@ -533,7 +543,7 @@ export function PublicAccessPanel({
     }
     if (!agent.installed) return;
     // Build completed successfully — reset mac build phase.
-    if (agent.platform === "darwin" && macBuildPhase !== "idle") {
+    if (agent.platform === "darwin" && phase !== "idle") {
       setMacBuildPhase("done");
     }
     const claimUrl = agent.claimUrl || (agent.running || agent.claiming ? "" : baseConfig.claimUrl);
