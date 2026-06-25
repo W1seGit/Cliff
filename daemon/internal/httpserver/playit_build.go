@@ -161,9 +161,9 @@ func (m *playitBuildManager) startDepsInstall(scriptDir string) error {
 		m.mu.Unlock()
 		return err
 	}
-	go m.scanJob(stdout, job, m.depsJobPtr)
-	go m.scanJob(stderr, job, m.depsJobPtr)
-	go m.waitJob(cmd, job, m.depsJobPtr)
+	go m.scanJob(stdout, job)
+	go m.scanJob(stderr, job)
+	go m.waitJob(cmd, job, func() *playitSubprocessJob { return m.depsJob })
 	return nil
 }
 
@@ -211,24 +211,10 @@ func (m *playitBuildManager) startBuild(scriptDir string, destDir string, onComp
 		m.mu.Unlock()
 		return err
 	}
-	go m.scanJob(stdout, job, m.buildJobPtr)
-	go m.scanJob(stderr, job, m.buildJobPtr)
-	go m.waitJob(cmd, job, m.buildJobPtr)
+	go m.scanJob(stdout, job)
+	go m.scanJob(stderr, job)
+	go m.waitJob(cmd, job, func() *playitSubprocessJob { return m.buildJob })
 	return nil
-}
-
-// depsJobPtr / buildJobPtr return the current job pointer under the lock,
-// used by scan/wait goroutines to check ownership.
-func (m *playitBuildManager) depsJobPtr() *playitSubprocessJob {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.depsJob
-}
-
-func (m *playitBuildManager) buildJobPtr() *playitSubprocessJob {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.buildJob
 }
 
 // mergeDepsState copies dep + job state into a playitStatus for the API.
@@ -268,7 +254,7 @@ var playitErrorMarkerPattern = regexp.MustCompile(`^\[cliff:error\]\s+(.+)$`)
 
 // scanJob reads subprocess output line-by-line, parses step markers, and
 // appends to the job's log ring buffer.
-func (m *playitBuildManager) scanJob(reader io.Reader, job *playitSubprocessJob, current func() *playitSubprocessJob) {
+func (m *playitBuildManager) scanJob(reader io.Reader, job *playitSubprocessJob) {
 	scanner := bufio.NewScanner(reader)
 	buffer := make([]byte, 0, 64*1024)
 	scanner.Buffer(buffer, 1024*1024)
@@ -320,10 +306,12 @@ func (m *playitBuildManager) appendJobLogLocked(job *playitSubprocessJob, line s
 }
 
 // waitJob waits for the subprocess to exit and finalizes job state.
-func (m *playitBuildManager) waitJob(cmd *exec.Cmd, job *playitSubprocessJob, current func() *playitSubprocessJob) {
+// currentLocked returns the current job slot pointer and MUST be called
+// while m.mu is held (it does not lock itself, avoiding a reentrant deadlock).
+func (m *playitBuildManager) waitJob(cmd *exec.Cmd, job *playitSubprocessJob, currentLocked func() *playitSubprocessJob) {
 	err := cmd.Wait()
 	m.mu.Lock()
-	if current() != job {
+	if currentLocked() != job {
 		m.mu.Unlock()
 		return
 	}

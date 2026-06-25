@@ -18,6 +18,7 @@ DEST_DIR="${1:?missing destination dir}"
 SRC_DIR="${DEST_DIR}/src"
 BINARY_PATH="${DEST_DIR}/playit"
 PLAYIT_REPO="https://github.com/playit-cloud/playit-agent.git"
+PLAYIT_TAG="v0.17.1"
 
 log_step() { printf '[cliff:step] %s\n' "$1"; }
 log_done()  { printf '[cliff:done]\n'; }
@@ -30,11 +31,12 @@ current_step="cloning playit-agent"
 log_step "$current_step"
 mkdir -p "$SRC_DIR"
 if [ -d "$SRC_DIR/.git" ]; then
-  git -C "$SRC_DIR" fetch --quiet origin || true
-  git -C "$SRC_DIR" reset --hard --quiet origin/$(git -C "$SRC_DIR" rev-parse --abbrev-ref HEAD) || true
+  git -C "$SRC_DIR" fetch --quiet origin tag "$PLAYIT_TAG" || git -C "$SRC_DIR" fetch --quiet --tags origin
+  git -C "$SRC_DIR" checkout --quiet "$PLAYIT_TAG"
+  git -C "$SRC_DIR" reset --hard --quiet "$PLAYIT_TAG"
 else
   rm -rf "$SRC_DIR"
-  git clone --depth 1 "$PLAYIT_REPO" "$SRC_DIR"
+  git clone --depth 1 --branch "$PLAYIT_TAG" "$PLAYIT_REPO" "$SRC_DIR"
 fi
 
 # --- Step 2: build release binary -----------------------------------------

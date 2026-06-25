@@ -176,7 +176,7 @@ func (h apiHandler) installPlayitAgent(w http.ResponseWriter, r *http.Request) {
 			status := playitStatus{
 				Installed: true,
 				Path:      agentPath,
-				Version:   "built",
+				Version:   playitCLIVersion,
 				Asset:     "built-from-source",
 			}
 			_ = writeJSONFile(metadataPath, status)
