@@ -150,10 +150,7 @@ function Assert-ExtractedPackage {
   $RequiredPaths = @(
     "cliff.exe",
     "web\index.html",
-    "package-manifest.json",
-    "run.ps1",
-    "status.ps1",
-    "stop.ps1"
+    "package-manifest.json"
   )
 
   foreach ($RelativePath in $RequiredPaths) {
@@ -185,6 +182,12 @@ try {
     powershell -ExecutionPolicy Bypass -File (Join-Path $InstallDir "stop.ps1") -Force | Out-Null
   }
 
+  # Also stop a CLI-managed daemon if running.
+  $CliffExe = Join-Path $InstallDir "cliff.exe"
+  if (Test-Path $CliffExe) {
+    & $CliffExe stop 2>$null
+  }
+
   if ((Test-Path $InstallDir) -and -not $Force) {
     throw "Install directory already exists: $InstallDir. Re-run with -Force to replace it."
   }
@@ -196,6 +199,13 @@ try {
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallDir) | Out-Null
   Move-Item -LiteralPath $ExtractedPackage -Destination $InstallDir
 
+  # Add the install directory to the user's PATH so `cliff` is available.
+  $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  if ($UserPath -notlike "*$InstallDir*") {
+    [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+    Write-Host "Added $InstallDir to user PATH (restart terminal to apply)."
+  }
+
   Write-Host "Cliff installed."
   Write-Host "Path: $InstallDir"
   Write-Host "Local: http://localhost:$Port"
@@ -206,12 +216,13 @@ try {
   if (-not $LanUrls) {
     Write-Host "Same network: no LAN IPv4 address detected"
   }
-  Write-Host "Run: powershell -ExecutionPolicy Bypass -File `"$InstallDir\run.ps1`" -Port $Port"
-  Write-Host "Status: powershell -ExecutionPolicy Bypass -File `"$InstallDir\status.ps1`""
-  Write-Host "Stop: powershell -ExecutionPolicy Bypass -File `"$InstallDir\stop.ps1`""
+  Write-Host ""
+  Write-Host "Run: cliff start -p $Port"
+  Write-Host "Status: cliff status"
+  Write-Host "Stop: cliff stop"
 
   if ($Start) {
-    powershell -ExecutionPolicy Bypass -File (Join-Path $InstallDir "run.ps1") -Port $Port
+    & $CliffExe start -p $Port
   }
 }
 finally {

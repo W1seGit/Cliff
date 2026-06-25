@@ -30,6 +30,8 @@ while [ "$#" -gt 0 ]; do
     --skip-checksum) SKIP_CHECKSUM=1; shift ;;
     -h|--help)
       echo "Usage: sh install.sh [--manifest json-or-url] [--package zip-or-url] [--install-dir path] [-p 8080|--port 8080] [--no-start] [--force] [--skip-checksum]"
+      echo ""
+      echo "After install, run: cliff start -p 8080"
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;

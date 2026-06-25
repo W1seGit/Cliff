@@ -27,6 +27,44 @@ import (
 )
 
 func main() {
+	// Subcommand dispatch: if the first arg is a known subcommand, handle it.
+	// Otherwise, fall through to running the daemon directly (backward compatible
+	// with `cliff --port 8080` style invocation).
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "start":
+			runStart(os.Args[2:])
+			return
+		case "stop":
+			runStop(os.Args[2:])
+			return
+		case "status":
+			runStatus(os.Args[2:])
+			return
+		case "update":
+			runUpdate(os.Args[2:])
+			return
+		case "uninstall":
+			runUninstall(os.Args[2:])
+			return
+		case "version":
+			printVersion()
+			return
+		case "help", "--help", "-h":
+			printHelp()
+			return
+		case "daemon":
+			// `cliff daemon` runs the daemon in the foreground (used by `cliff start`).
+			// Strip the subcommand and fall through with the remaining args.
+			os.Args = append(os.Args[:1], os.Args[2:]...)
+		}
+	}
+
+	runDaemon()
+}
+
+// runDaemon is the actual daemon process — the original main() body.
+func runDaemon() {
 	startedAt := time.Now().UTC()
 	var port int
 	var host string
@@ -47,8 +85,7 @@ func main() {
 	flag.BoolVar(&showVersion, "version", false, "print daemon version and exit")
 	flag.Parse()
 	if showVersion {
-		info := buildinfo.Current()
-		fmt.Printf("cliff %s commit %s built %s\n", info.Version, info.Commit, info.BuiltAt)
+		printVersion()
 		return
 	}
 
@@ -142,6 +179,40 @@ func main() {
 	}
 	manager.Shutdown(25 * time.Second)
 	slog.Info("daemon stopped")
+}
+
+func printVersion() {
+	info := buildinfo.Current()
+	fmt.Printf("cliff %s commit %s built %s\n", info.Version, info.Commit, info.BuiltAt)
+}
+
+func printHelp() {
+	fmt.Printf(`cliff %s — self-hosted Minecraft server dashboard
+
+Usage:
+  cliff start [flags]    Start the daemon in the background
+  cliff stop             Stop a running daemon
+  cliff status           Show daemon status (URL, uptime, PID)
+  cliff update           Check for and apply updates
+  cliff uninstall        Remove Cliff from this machine
+  cliff version          Print version information
+  cliff daemon [flags]   Run the daemon in the foreground (for debugging)
+  cliff help             Show this help message
+
+Start flags:
+  -p, --port <port>      HTTP port (default: 8080)
+  --host <host>          Host interface to bind (default: 0.0.0.0)
+  --data-dir <path>      Panel data directory (default: <install-dir>/data)
+  --server-root <path>   Minecraft server storage root (default: <install-dir>/servers)
+  --web-dir <path>       Static dashboard directory (default: <install-dir>/web)
+
+Examples:
+  cliff start
+  cliff start -p 3000
+  cliff status
+  cliff stop
+
+`, buildinfo.Current().Version)
 }
 
 func getenv(key string, fallback string) string {

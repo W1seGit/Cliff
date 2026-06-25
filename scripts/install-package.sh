@@ -193,12 +193,14 @@ fi
 require_extracted_file "cliff"
 require_extracted_file "web/index.html"
 require_extracted_file "package-manifest.json"
-require_extracted_file "run.sh"
-require_extracted_file "status.sh"
-require_extracted_file "stop.sh"
 
 if [ -x "$INSTALL_DIR/stop.sh" ]; then
   DATA_DIR=data FORCE=1 sh "$INSTALL_DIR/stop.sh" >/dev/null 2>&1 || true
+fi
+
+# Also stop a CLI-managed daemon if running.
+if [ -x "$INSTALL_DIR/cliff" ]; then
+  "$INSTALL_DIR/cliff" stop >/dev/null 2>&1 || true
 fi
 
 if [ -e "$INSTALL_DIR" ] && [ "$FORCE" != "1" ]; then
@@ -210,14 +212,45 @@ rm -rf "$INSTALL_DIR"
 mkdir -p "$(dirname "$INSTALL_DIR")"
 mv "$TEMP_ROOT/cliff" "$INSTALL_DIR"
 
+# Make the binary executable.
+chmod +x "$INSTALL_DIR/cliff" 2>/dev/null || true
+
+# Create a symlink in PATH so `cliff` is available system-wide.
+setup_path_symlink() {
+  binary="$INSTALL_DIR/cliff"
+  # Try /usr/local/bin first (common on Linux/macOS).
+  for target in /usr/local/bin "$HOME/.local/bin"; do
+    if [ -d "$target" ] || mkdir -p "$target" 2>/dev/null; then
+      if ln -sf "$binary" "$target/cliff" 2>/dev/null; then
+        echo "Symlinked: $target/cliff -> $binary"
+        if [ "$target" = "$HOME/.local/bin" ]; then
+          # Ensure ~/.local/bin is in PATH for common shells.
+          for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
+            if [ -f "$rc" ] && ! grep -q '\.local/bin' "$rc" 2>/dev/null; then
+              echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
+              echo "Added ~/.local/bin to PATH in $(basename "$rc")"
+            fi
+          done
+        fi
+        return 0
+      fi
+    fi
+  done
+  echo "Could not create symlink. Use $INSTALL_DIR/cliff directly." >&2
+  return 1
+}
+
+setup_path_symlink || true
+
 echo "Cliff installed."
 echo "Path: $INSTALL_DIR"
 echo "Local: http://localhost:$PORT"
 print_lan_urls
-echo "Run: PORT=$PORT sh $INSTALL_DIR/run.sh"
-echo "Status: sh $INSTALL_DIR/status.sh"
-echo "Stop: sh $INSTALL_DIR/stop.sh"
+echo ""
+echo "Run: cliff start -p $PORT"
+echo "Status: cliff status"
+echo "Stop: cliff stop"
 
 if [ "$START" = "1" ]; then
-  PORT="$PORT" sh "$INSTALL_DIR/run.sh"
+  "$INSTALL_DIR/cliff" start -p "$PORT"
 fi
