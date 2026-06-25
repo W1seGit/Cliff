@@ -1150,10 +1150,7 @@ func scanImportedServer(serverPath string) importedServerScan {
 	evidence := map[string]int{"vanilla": 1}
 	topJars, _ := topLevelJars(serverPath)
 
-	scriptTarget, scriptJar, scriptArgFile := detectLaunchScript(serverPath)
-	if scriptTarget != "" {
-		scan.LaunchTarget = scriptTarget
-	}
+	_, scriptJar, scriptArgFile := detectLaunchScript(serverPath)
 	if scriptJar != "" {
 		evidenceFromName(filepath.Base(scriptJar), evidence, &scan)
 	}
@@ -1201,7 +1198,7 @@ func scanImportedServer(serverPath string) importedServerScan {
 		}
 	}
 	if scan.LaunchTarget == "" && serverTypeNeedsLoader(scan.ServerType) {
-		scan.Warnings = append(scan.Warnings, "No launchable server jar or start script was detected. Choose the launch target before importing.")
+		scan.Warnings = append(scan.Warnings, "No launchable server jar was detected. Choose the generated server launcher before importing.")
 	}
 	return scan
 }

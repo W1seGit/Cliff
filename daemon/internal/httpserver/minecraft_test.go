@@ -188,7 +188,7 @@ func TestScanImportedFabricServerReadsLibrariesAndJarManifest(t *testing.T) {
 	}
 }
 
-func TestScanImportedForgeServerReadsScriptAndArgFile(t *testing.T) {
+func TestScanImportedForgeServerReadsScriptAndArgFileWithoutUsingScriptAsLaunchTarget(t *testing.T) {
 	serverDir := t.TempDir()
 	argDir := filepath.Join(serverDir, "libraries", "net", "minecraftforge", "forge", "1.20.1-47.2.0")
 	mustMkdir(t, argDir)
@@ -204,8 +204,24 @@ func TestScanImportedForgeServerReadsScriptAndArgFile(t *testing.T) {
 	}
 
 	scan := scanImportedServer(serverDir)
-	if scan.ServerType != "forge" || scan.MinecraftVersion != "1.20.1" || scan.LoaderVersion != "47.2.0" || scan.LaunchTarget != "run.sh" {
+	if scan.ServerType != "forge" || scan.MinecraftVersion != "1.20.1" || scan.LoaderVersion != "47.2.0" || scan.LaunchTarget != "" {
 		t.Fatalf("unexpected forge scan: %#v", scan)
+	}
+	if len(scan.Warnings) == 0 {
+		t.Fatalf("expected missing launch jar warning, got %#v", scan)
+	}
+}
+
+func TestScanImportedServerPrefersJarOverAbsolutePathScript(t *testing.T) {
+	serverDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(serverDir, "start.sh"), []byte("/opt/homebrew/opt/openjdk@25/bin/java -jar fabric-server-launch.jar nogui\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestJar(t, filepath.Join(serverDir, "fabric-server-launch.jar"), "net.fabricmc.loader.impl.launch.server.FabricServerLauncher")
+
+	scan := scanImportedServer(serverDir)
+	if scan.ServerType != "fabric" || scan.LaunchTarget != "fabric-server-launch.jar" {
+		t.Fatalf("expected jar launch target instead of start.sh, got %#v", scan)
 	}
 }
 

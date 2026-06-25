@@ -1231,12 +1231,6 @@ func isInstallerLaunchJar(lower string) bool {
 }
 
 func detectBetterLaunchTarget(serverPath string) string {
-	scripts := []string{"run.sh", "start.sh", "start.command", "server.sh", "run.bat", "start.bat", "server.bat"}
-	for _, script := range scripts {
-		if fileExists(filepath.Join(serverPath, script)) {
-			return script
-		}
-	}
 	entries, err := os.ReadDir(serverPath)
 	if err != nil {
 		return ""
