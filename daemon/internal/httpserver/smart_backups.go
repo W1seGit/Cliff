@@ -7,10 +7,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +22,7 @@ import (
 )
 
 const smartBackupFormatVersion = 1
+const maxBackupDiffBytes = 256 * 1024
 
 type smartBackupManifest struct {
 	Version        int                  `json:"version"`
@@ -41,6 +44,16 @@ type smartBackupFile struct {
 	Mode       uint32 `json:"mode"`
 	ModifiedAt string `json:"modifiedAt"`
 	Category   string `json:"category"`
+}
+
+type archiveMetadata struct {
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+}
+
+type backupDiffLine struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
 }
 
 func (h apiHandler) smartBackupRoot(serverID string) string {
@@ -202,6 +215,9 @@ func (h apiHandler) buildSmartBackupManifest(server store.Server, backup store.B
 			stats.FilesRemoved++
 			changes = append(changes, store.BackupChange{Path: path, Type: "removed", Category: previousFile.Category, Size: previousFile.Size, OldHash: previousFile.Hash})
 		}
+	}
+	for index := range changes {
+		changes[index] = enrichSmartBackupChange(blobsRoot, changes[index])
 	}
 	sort.Slice(changes, func(left int, right int) bool {
 		if changes[left].Category == changes[right].Category {
@@ -371,6 +387,316 @@ func (h apiHandler) writeSmartBackupZip(w http.ResponseWriter, fileName string, 
 			return
 		}
 	}
+}
+
+func (h apiHandler) backupDiff(w http.ResponseWriter, r *http.Request) {
+	server, ok, err := h.store.GetServer(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusNotFound, "server not found")
+		return
+	}
+	backupID := strings.TrimSpace(r.URL.Query().Get("backupId"))
+	path := strings.TrimSpace(r.URL.Query().Get("path"))
+	if backupID == "" || path == "" {
+		writeError(w, http.StatusBadRequest, "backupId and path are required")
+		return
+	}
+	backup, err := h.safeBackup(r, server, backupID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	manifest, err := h.loadSmartBackupManifest(backup)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Diffs are only available for smart snapshots")
+		return
+	}
+	path = filepath.ToSlash(strings.TrimPrefix(path, "/"))
+	var change store.BackupChange
+	found := false
+	for _, candidate := range manifest.Changes {
+		if candidate.Path == path {
+			change = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		writeError(w, http.StatusNotFound, "Changed file not found in snapshot")
+		return
+	}
+	if change.Category != "config" {
+		writeError(w, http.StatusBadRequest, "Diffs are only available for config/text files")
+		return
+	}
+	blobsRoot := h.smartBackupBlobsRoot(server.ID)
+	oldText, oldTruncated, err := readSmartBackupTextBlob(blobsRoot, change.OldHash)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	newText, newTruncated, err := readSmartBackupTextBlob(blobsRoot, change.NewHash)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	lines := buildSimpleLineDiff(splitDiffLines(oldText), splitDiffLines(newText))
+	writeJSON(w, http.StatusOK, map[string]any{
+		"path":      change.Path,
+		"change":    change,
+		"lines":     lines,
+		"truncated": oldTruncated || newTruncated,
+	})
+}
+
+func readSmartBackupTextBlob(blobsRoot string, hash string) (string, bool, error) {
+	if hash == "" {
+		return "", false, nil
+	}
+	path := smartBlobPath(blobsRoot, hash)
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", false, err
+	}
+	limit := int64(maxBackupDiffBytes)
+	truncated := info.Size() > limit
+	input, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer input.Close()
+	data, err := io.ReadAll(io.LimitReader(input, limit+1))
+	if err != nil {
+		return "", false, err
+	}
+	if len(data) > int(limit) {
+		data = data[:limit]
+		truncated = true
+	}
+	if bytesLookBinary(data) {
+		return "", truncated, errors.New("File appears to be binary")
+	}
+	return string(data), truncated, nil
+}
+
+func bytesLookBinary(data []byte) bool {
+	for _, value := range data {
+		if value == 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func splitDiffLines(value string) []string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.TrimRight(value, "\n")
+	if value == "" {
+		return []string{}
+	}
+	return strings.Split(value, "\n")
+}
+
+func buildSimpleLineDiff(oldLines []string, newLines []string) []backupDiffLine {
+	rows := len(oldLines) + 1
+	cols := len(newLines) + 1
+	lcs := make([][]int, rows)
+	for i := range lcs {
+		lcs[i] = make([]int, cols)
+	}
+	for i := len(oldLines) - 1; i >= 0; i-- {
+		for j := len(newLines) - 1; j >= 0; j-- {
+			if oldLines[i] == newLines[j] {
+				lcs[i][j] = lcs[i+1][j+1] + 1
+			} else if lcs[i+1][j] >= lcs[i][j+1] {
+				lcs[i][j] = lcs[i+1][j]
+			} else {
+				lcs[i][j] = lcs[i][j+1]
+			}
+		}
+	}
+	result := []backupDiffLine{}
+	i, j := 0, 0
+	for i < len(oldLines) && j < len(newLines) {
+		if oldLines[i] == newLines[j] {
+			result = append(result, backupDiffLine{Type: "context", Text: oldLines[i]})
+			i++
+			j++
+		} else if lcs[i+1][j] >= lcs[i][j+1] {
+			result = append(result, backupDiffLine{Type: "removed", Text: oldLines[i]})
+			i++
+		} else {
+			result = append(result, backupDiffLine{Type: "added", Text: newLines[j]})
+			j++
+		}
+	}
+	for ; i < len(oldLines); i++ {
+		result = append(result, backupDiffLine{Type: "removed", Text: oldLines[i]})
+	}
+	for ; j < len(newLines); j++ {
+		result = append(result, backupDiffLine{Type: "added", Text: newLines[j]})
+	}
+	return result
+}
+
+func enrichSmartBackupChange(blobsRoot string, change store.BackupChange) store.BackupChange {
+	if change.Category != "content" {
+		return change
+	}
+	oldMeta := archiveMetadata{}
+	newMeta := archiveMetadata{}
+	if change.OldHash != "" {
+		oldMeta = readArchiveMetadata(smartBlobPath(blobsRoot, change.OldHash), change.Path)
+	}
+	if change.NewHash != "" {
+		newMeta = readArchiveMetadata(smartBlobPath(blobsRoot, change.NewHash), change.Path)
+	}
+	if newMeta.Name != "" {
+		change.DisplayName = newMeta.Name
+	} else if oldMeta.Name != "" {
+		change.DisplayName = oldMeta.Name
+	}
+	if newMeta.Version != "" {
+		change.Version = newMeta.Version
+	}
+	if oldMeta.Version != "" {
+		change.OldVersion = oldMeta.Version
+	}
+	if newMeta.Version != "" {
+		change.NewVersion = newMeta.Version
+	}
+	return change
+}
+
+func readArchiveMetadata(path string, backupPath string) archiveMetadata {
+	lower := strings.ToLower(backupPath)
+	if !strings.HasSuffix(lower, ".jar") && !strings.HasSuffix(lower, ".zip") {
+		return archiveMetadata{Name: strings.TrimSuffix(filepath.Base(backupPath), filepath.Ext(backupPath))}
+	}
+	reader, err := zip.OpenReader(path)
+	if err != nil {
+		return archiveMetadata{Name: strings.TrimSuffix(filepath.Base(backupPath), filepath.Ext(backupPath))}
+	}
+	defer reader.Close()
+
+	readEntry := func(name string) []byte {
+		for _, file := range reader.File {
+			if strings.EqualFold(file.Name, name) {
+				input, err := file.Open()
+				if err != nil {
+					return nil
+				}
+				defer input.Close()
+				data, _ := io.ReadAll(io.LimitReader(input, 64*1024))
+				return data
+			}
+		}
+		return nil
+	}
+	if data := readEntry("fabric.mod.json"); len(data) > 0 {
+		var parsed struct {
+			ID      string `json:"id"`
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		}
+		if json.Unmarshal(data, &parsed) == nil {
+			return archiveMetadata{Name: firstNonEmptyBackupValue(parsed.Name, parsed.ID), Version: parsed.Version}
+		}
+	}
+	for _, name := range []string{"plugin.yml", "paper-plugin.yml"} {
+		if data := readEntry(name); len(data) > 0 {
+			fields := parseSimpleKeyValues(string(data), "name", "version")
+			return archiveMetadata{Name: fields["name"], Version: fields["version"]}
+		}
+	}
+	for _, name := range []string{"META-INF/mods.toml", "META-INF/neoforge.mods.toml"} {
+		if data := readEntry(name); len(data) > 0 {
+			fields := parseSimpleKeyValues(string(data), "displayName", "modId", "version")
+			return archiveMetadata{Name: firstNonEmptyBackupValue(fields["displayName"], fields["modId"]), Version: fields["version"]}
+		}
+	}
+	if data := readEntry("pack.mcmeta"); len(data) > 0 {
+		var parsed struct {
+			Pack struct {
+				Description any `json:"description"`
+			} `json:"pack"`
+		}
+		if json.Unmarshal(data, &parsed) == nil {
+			if description, ok := parsed.Pack.Description.(string); ok && strings.TrimSpace(description) != "" {
+				return archiveMetadata{Name: strings.TrimSpace(description)}
+			}
+		}
+	}
+	return archiveMetadata{Name: strings.TrimSuffix(filepath.Base(backupPath), filepath.Ext(backupPath))}
+}
+
+func parseSimpleKeyValues(data string, keys ...string) map[string]string {
+	result := map[string]string{}
+	want := map[string]bool{}
+	for _, key := range keys {
+		want[strings.ToLower(key)] = true
+	}
+	keyValuePattern := regexp.MustCompile(`^\s*([A-Za-z0-9_.-]+)\s*[:=]\s*["']?([^"'#\r\n]+)`)
+	for _, line := range strings.Split(data, "\n") {
+		matches := keyValuePattern.FindStringSubmatch(line)
+		if len(matches) != 3 {
+			continue
+		}
+		key := strings.TrimSpace(matches[1])
+		if want[strings.ToLower(key)] {
+			result[key] = strings.TrimSpace(matches[2])
+		}
+	}
+	return result
+}
+
+func firstNonEmptyBackupValue(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func (h apiHandler) collectSmartBackupGarbage(ctx context.Context, serverID string) error {
+	backups, err := h.store.ListBackups(ctx, serverID)
+	if err != nil {
+		return err
+	}
+	referenced := map[string]bool{}
+	for _, backup := range backups {
+		manifest, err := h.loadSmartBackupManifest(backup)
+		if err != nil {
+			continue
+		}
+		for _, file := range manifest.Files {
+			referenced[file.Hash] = true
+		}
+	}
+	blobsRoot := h.smartBackupBlobsRoot(serverID)
+	if _, err := os.Stat(blobsRoot); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	return filepath.WalkDir(blobsRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		hash := filepath.Base(path)
+		if !referenced[hash] {
+			if err := os.Remove(path); err != nil {
+				return fmt.Errorf("remove unreferenced backup blob %s: %w", hash, err)
+			}
+		}
+		return nil
+	})
 }
 
 func hashFile(path string) (string, error) {

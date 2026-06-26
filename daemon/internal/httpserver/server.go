@@ -118,6 +118,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/servers/{id}/command", api.requireUser(api.commandPresets))
 	mux.HandleFunc("POST /api/servers/{id}/command", api.requireUser(api.command))
 	mux.HandleFunc("GET /api/servers/{id}/backups", api.requireUser(api.backups))
+	mux.HandleFunc("GET /api/servers/{id}/backups/diff", api.requireUser(api.backupDiff))
 	mux.HandleFunc("POST /api/servers/{id}/backups", api.requireUser(api.backupAction))
 	mux.HandleFunc("GET /api/servers/{id}/logs", api.requireUser(api.logs))
 	mux.HandleFunc("GET /api/servers/{id}/console", api.requireUser(api.console))

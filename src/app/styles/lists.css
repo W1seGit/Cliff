@@ -88,7 +88,7 @@
 }
 .backup-change-item {
   display: grid;
-  grid-template-columns: 150px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   font-size: 12px;
@@ -105,6 +105,58 @@
 .backup-change-kind.content { color: var(--accent); }
 .backup-change-kind.config { color: var(--success); }
 .backup-change-kind.world { color: var(--warning); }
+.backup-change-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.backup-change-actions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.backup-diff-view {
+  display: grid;
+  max-height: min(62vh, 620px);
+  overflow: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.backup-diff-line {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+}
+.backup-diff-line:last-child {
+  border-bottom: 0;
+}
+.backup-diff-line span {
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.backup-diff-line code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.backup-diff-line.added {
+  background: color-mix(in srgb, var(--running) 12%, transparent);
+}
+.backup-diff-line.added span {
+  color: var(--running);
+}
+.backup-diff-line.removed {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.backup-diff-line.removed span {
+  color: var(--danger);
+}
 .files-list-panel { display: flex; flex-direction: column; gap: 16px; }
 
 .world-import-form {

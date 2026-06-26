@@ -122,6 +122,13 @@ func (h apiHandler) backupAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case "gc":
+		if err := h.collectSmartBackupGarbage(r.Context(), server.ID); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		backups, _ := h.backupsWithSizes(r, server.ID)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "backups": backups})
 	default:
 		backupID, err := h.createBackup(r.Context(), server, input.Reason)
 		if err != nil {
@@ -177,10 +184,20 @@ func (h apiHandler) deleteBackup(r *http.Request, server store.Server, backupID 
 	if err != nil {
 		return err
 	}
+	isSmart := false
+	if _, err := h.loadSmartBackupManifest(backup); err == nil {
+		isSmart = true
+	}
 	if err := os.RemoveAll(backup.SnapshotPath); err != nil {
 		return err
 	}
-	return h.store.DeleteBackupRecord(r.Context(), server.ID, backup.ID)
+	if err := h.store.DeleteBackupRecord(r.Context(), server.ID, backup.ID); err != nil {
+		return err
+	}
+	if isSmart {
+		return h.collectSmartBackupGarbage(r.Context(), server.ID)
+	}
+	return nil
 }
 
 func (h apiHandler) deleteSelectedBackups(r *http.Request, server store.Server, backupIDs []string) ([]string, error) {

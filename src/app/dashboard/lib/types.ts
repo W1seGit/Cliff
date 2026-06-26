@@ -242,7 +242,13 @@ export type BackupChange = {
   size?: number;
   oldHash?: string;
   newHash?: string;
+  displayName?: string;
+  version?: string;
+  oldVersion?: string;
+  newVersion?: string;
 };
+export type BackupDiffLine = { type: "context" | "added" | "removed" | string; text: string };
+export type BackupDiff = { path: string; change: BackupChange; lines: BackupDiffLine[]; truncated: boolean };
 export type Backup = {
   id: string;
   reason: string;

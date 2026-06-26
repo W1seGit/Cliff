@@ -108,3 +108,23 @@ func TestSafeJoinServerPathRejectsTraversal(t *testing.T) {
 		t.Fatalf("safe path escaped root: %s", safePath)
 	}
 }
+
+func TestBuildSimpleLineDiff(t *testing.T) {
+	lines := buildSimpleLineDiff(
+		[]string{"server-port=25565", "motd=old", "online-mode=true"},
+		[]string{"server-port=25565", "motd=new", "online-mode=true"},
+	)
+	kinds := []string{}
+	for _, line := range lines {
+		kinds = append(kinds, line.Type+":"+line.Text)
+	}
+	expected := []string{
+		"context:server-port=25565",
+		"removed:motd=old",
+		"added:motd=new",
+		"context:online-mode=true",
+	}
+	if strings.Join(kinds, "|") != strings.Join(expected, "|") {
+		t.Fatalf("unexpected diff: %#v", kinds)
+	}
+}

@@ -1,4 +1,4 @@
-import type { Backup, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, User, WorldsPayload } from "./types";
+import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -210,6 +210,10 @@ export async function fetchServerBackups(serverId: string) {
 
 export async function runBackupAction(serverId: string, body: Record<string, unknown>) {
   return daemonApi(`/api/servers/${serverId}/backups`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function fetchBackupDiff(serverId: string, backupId: string, path: string) {
+  return daemonApi<BackupDiff>(`/api/servers/${serverId}/backups/diff?backupId=${encodeURIComponent(backupId)}&path=${encodeURIComponent(path)}`);
 }
 
 export function backupUrl(serverId: string, query: string) {

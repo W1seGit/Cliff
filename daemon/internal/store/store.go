@@ -103,12 +103,16 @@ type BackupStats struct {
 }
 
 type BackupChange struct {
-	Path     string `json:"path"`
-	Type     string `json:"type"`
-	Category string `json:"category"`
-	Size     int64  `json:"size,omitempty"`
-	OldHash  string `json:"oldHash,omitempty"`
-	NewHash  string `json:"newHash,omitempty"`
+	Path        string `json:"path"`
+	Type        string `json:"type"`
+	Category    string `json:"category"`
+	Size        int64  `json:"size,omitempty"`
+	OldHash     string `json:"oldHash,omitempty"`
+	NewHash     string `json:"newHash,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
+	Version     string `json:"version,omitempty"`
+	OldVersion  string `json:"oldVersion,omitempty"`
+	NewVersion  string `json:"newVersion,omitempty"`
 }
 
 func Open(path string, defaultServerRoot string) (*Store, error) {

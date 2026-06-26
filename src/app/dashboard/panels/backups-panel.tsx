@@ -1,10 +1,10 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { Archive, Camera, ChevronDown, Download, RotateCcw, Settings, Trash2 } from "lucide-react";
+import { Archive, Camera, ChevronDown, Download, FileText, RotateCcw, Settings, Trash2 } from "lucide-react";
 import { formatBytes, formatDate, formatDateTime } from "../lib/utils";
-import { backupUrl, runBackupAction, updateServerProfile } from "../lib/runtime-client";
-import type { Backup, BackupChange, ConfirmRequest, ServerRecord } from "../lib/types";
+import { backupUrl, fetchBackupDiff, runBackupAction, updateServerProfile } from "../lib/runtime-client";
+import type { Backup, BackupChange, BackupDiff, ConfirmRequest, ServerRecord } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
 import { Modal } from "../components/ui/modal";
@@ -44,6 +44,8 @@ export function BackupsPanel({
   const [showSettings, setShowSettings] = useState(false);
   const [selectedBackups, setSelectedBackups] = useState<string[]>([]);
   const [expandedBackup, setExpandedBackup] = useState("");
+  const [diff, setDiff] = useState<BackupDiff | null>(null);
+  const [diffLoading, setDiffLoading] = useState("");
   const [snapshotOverride, setSnapshotOverride] = useState<{ serverId: string; enabled: boolean } | null>(null);
   const [scheduleOverride, setScheduleOverride] = useState<{ serverId: string; enabled: boolean; interval: number } | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState(() => ({ serverId: server.id, ...intervalParts(server.snapshotIntervalMinutes) }));
@@ -96,6 +98,11 @@ export function BackupsPanel({
   function changeLabel(change: BackupChange) {
     const type = change.type === "added" ? "Added" : change.type === "removed" ? "Removed" : change.type === "modified" ? "Modified" : change.type;
     const category = change.category === "content" ? "content" : change.category === "config" ? "config" : change.category === "world" ? "world data" : "file";
+    const name = change.displayName || change.path.split(/[\\/]/).pop() || change.path;
+    if (change.oldVersion && change.newVersion && change.oldVersion !== change.newVersion) {
+      return `${type} ${category}: ${name} ${change.oldVersion} -> ${change.newVersion}`;
+    }
+    if (change.version) return `${type} ${category}: ${name} ${change.version}`;
     return `${type} ${category}`;
   }
 
@@ -104,6 +111,18 @@ export function BackupsPanel({
     if (category === "config") return "config";
     if (category === "world") return "world";
     return "other";
+  }
+
+  async function openDiff(backupId: string, change: BackupChange) {
+    if (diffLoading) return;
+    setDiffLoading(`${backupId}:${change.path}`);
+    try {
+      setDiff(await fetchBackupDiff(server.id, backupId, change.path));
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : "Diff could not be loaded");
+    } finally {
+      setDiffLoading("");
+    }
   }
 
   async function toggleAutoSnapshots(nextValue: boolean) {
@@ -268,6 +287,26 @@ export function BackupsPanel({
         </div>
       </Modal>
 
+      <Modal
+        isOpen={Boolean(diff)}
+        onClose={() => setDiff(null)}
+        title={diff ? `Changes in ${diff.path}` : "Changes"}
+        description={diff?.truncated ? "Large file diff truncated to the first 256 KB." : undefined}
+        busy={Boolean(diffLoading)}
+        form={false}
+      >
+        {diff && (
+          <div className="backup-diff-view">
+            {diff.lines.length > 0 ? diff.lines.map((line, index) => (
+              <div key={`${index}-${line.type}`} className={`backup-diff-line ${line.type}`}>
+                <span>{line.type === "added" ? "+" : line.type === "removed" ? "-" : " "}</span>
+                <code>{line.text || " "}</code>
+              </div>
+            )) : <p className="muted">No text differences.</p>}
+          </div>
+        )}
+      </Modal>
+
       {isRunning && <Hint warn>Stop the server before restoring or exporting. Snapshots can still be created while running.</Hint>}
       <FilterBar
         fields={[
@@ -372,7 +411,19 @@ export function BackupsPanel({
                               <div key={`${change.type}-${change.path}`} className="backup-change-item">
                                 <span className={`backup-change-kind ${categoryClass(change.category)}`}>{changeLabel(change)}</span>
                                 <code>{change.path}</code>
-                                {typeof change.size === "number" && <small className="muted">{formatBytes(change.size)}</small>}
+                                <span className="backup-change-actions">
+                                  {change.category === "config" && (
+                                    <Button
+                                      disabled={Boolean(diffLoading)}
+                                      loading={diffLoading === `${backup.id}:${change.path}`}
+                                      onClick={() => openDiff(backup.id, change)}
+                                      title="View config diff"
+                                    >
+                                      <FileText size={13} />Diff
+                                    </Button>
+                                  )}
+                                  {typeof change.size === "number" && <small className="muted">{formatBytes(change.size)}</small>}
+                                </span>
                               </div>
                             ))}
                           </div>
