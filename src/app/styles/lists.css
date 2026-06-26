@@ -37,6 +37,74 @@
 .worlds-list-panel { display: flex; flex-direction: column; gap: 16px; }
 .worlds-list-panel .world-list { flex: 1 1 auto; }
 .backups-list-panel { display: flex; flex-direction: column; gap: 16px; }
+.backup-date-cell {
+  display: grid;
+  gap: 2px;
+}
+.backup-summary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+.backup-summary-button svg {
+  color: var(--text-secondary);
+  transition: transform 120ms ease;
+}
+.backup-summary-button svg.expanded {
+  transform: rotate(180deg);
+}
+.backup-details-row td {
+  padding-top: 0;
+}
+.backup-details {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.backup-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.backup-stats-grid span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.backup-stats-grid strong {
+  color: var(--text);
+}
+.backup-change-list {
+  display: grid;
+  gap: 6px;
+}
+.backup-change-item {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.backup-change-item code {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backup-change-kind {
+  color: var(--text-secondary);
+}
+.backup-change-kind.content { color: var(--accent); }
+.backup-change-kind.config { color: var(--success); }
+.backup-change-kind.world { color: var(--warning); }
 .files-list-panel { display: flex; flex-direction: column; gap: 16px; }
 
 .world-import-form {

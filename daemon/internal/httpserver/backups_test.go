@@ -69,3 +69,42 @@ func TestDirectorySizeDoesNotFollowSymlinkedDirectories(t *testing.T) {
 		t.Fatalf("directorySize followed symlinked directory outside root, got %d bytes", size)
 	}
 }
+
+func TestSmartBackupPathCategory(t *testing.T) {
+	cases := map[string]string{
+		"server.properties":           "config",
+		"config/fabric-api.json":      "config",
+		"mods/sodium.jar":             "content",
+		"plugins/LuckPerms.jar":       "content",
+		"world/region/r.0.0.mca":      "world",
+		"world/playerdata/leo.dat":    "world",
+		"world/datapacks/example.zip": "world",
+		"README.md":                   "other",
+	}
+	for path, expected := range cases {
+		if actual := backupPathCategory(path); actual != expected {
+			t.Fatalf("expected %s to be %s, got %s", path, expected, actual)
+		}
+	}
+}
+
+func TestSafeJoinServerPathRejectsTraversal(t *testing.T) {
+	root := t.TempDir()
+	unsafe := []string{
+		"../server.properties",
+		"world/../../server.properties",
+		filepath.Join("world", "..", "..", "server.properties"),
+	}
+	for _, path := range unsafe {
+		if _, err := safeJoinServerPath(root, path); err == nil {
+			t.Fatalf("expected unsafe path to be rejected: %s", path)
+		}
+	}
+	safePath, err := safeJoinServerPath(root, "world/region/r.0.0.mca")
+	if err != nil {
+		t.Fatalf("expected safe path to be accepted: %v", err)
+	}
+	if !strings.HasPrefix(safePath, root) {
+		t.Fatalf("safe path escaped root: %s", safePath)
+	}
+}

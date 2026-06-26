@@ -43,6 +43,10 @@ func (h apiHandler) backups(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fileName := safeArchiveName(server.Name) + "-" + backup.ID + ".zip"
+		if _, err := h.loadSmartBackupManifest(backup); err == nil {
+			h.writeSmartBackupZip(w, fileName, backup)
+			return
+		}
 		writeZipArchive(w, fileName, backup.SnapshotPath, "")
 		return
 	}
@@ -52,7 +56,7 @@ func (h apiHandler) backups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for index := range backups {
-		backups[index].SizeBytes = h.cachedDirectorySize(backups[index].SnapshotPath)
+		h.hydrateSmartBackup(&backups[index])
 	}
 	writeJSON(w, http.StatusOK, map[string][]store.Backup{"backups": backups})
 }
@@ -134,32 +138,13 @@ func (h apiHandler) backupsWithSizes(r *http.Request, serverID string) ([]store.
 		return nil, err
 	}
 	for index := range backups {
-		backups[index].SizeBytes = h.cachedDirectorySize(backups[index].SnapshotPath)
+		h.hydrateSmartBackup(&backups[index])
 	}
 	return backups, nil
 }
 
 func (h apiHandler) createBackup(ctx context.Context, server store.Server, reason string) (string, error) {
-	snapshotRoot := filepath.Join(h.config.ServerRoot, ".dashboard-snapshots", server.ID)
-	if err := os.MkdirAll(snapshotRoot, 0o755); err != nil {
-		return "", err
-	}
-	backupID, err := h.store.CreateBackupRecord(ctx, server.ID, reason, filepath.Join(snapshotRoot, "__pending__"))
-	if err != nil {
-		return "", err
-	}
-	target := filepath.Join(snapshotRoot, backupID)
-	if err := copyDir(server.Path, target); err != nil {
-		_ = h.store.DeleteBackupRecord(ctx, server.ID, backupID)
-		_ = os.RemoveAll(target)
-		return "", err
-	}
-	if err := h.store.RenameBackupPath(ctx, server.ID, backupID, target); err != nil {
-		_ = h.store.DeleteBackupRecord(ctx, server.ID, backupID)
-		_ = os.RemoveAll(target)
-		return "", err
-	}
-	return backupID, nil
+	return h.createSmartBackup(ctx, server, reason)
 }
 
 func (h apiHandler) createAutoSnapshot(ctx context.Context, server store.Server, reason string) error {
@@ -177,6 +162,9 @@ func (h apiHandler) restoreBackup(r *http.Request, server store.Server, backupID
 	}
 	if _, err := h.createBackup(r.Context(), server, "pre-restore safety snapshot"); err != nil {
 		return err
+	}
+	if _, err := h.loadSmartBackupManifest(backup); err == nil {
+		return h.restoreSmartBackup(r, server, backup)
 	}
 	if err := os.RemoveAll(server.Path); err != nil {
 		return err

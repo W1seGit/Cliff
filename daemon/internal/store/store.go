@@ -75,12 +75,40 @@ type PublicAccess struct {
 }
 
 type Backup struct {
-	ID           string `json:"id"`
-	ServerID     string `json:"serverId,omitempty"`
-	Reason       string `json:"reason"`
-	SnapshotPath string `json:"snapshotPath"`
-	CreatedAt    string `json:"createdAt"`
-	SizeBytes    int64  `json:"sizeBytes"`
+	ID               string         `json:"id"`
+	ServerID         string         `json:"serverId,omitempty"`
+	Reason           string         `json:"reason"`
+	SnapshotPath     string         `json:"snapshotPath"`
+	CreatedAt        string         `json:"createdAt"`
+	SizeBytes        int64          `json:"sizeBytes"`
+	LogicalSizeBytes int64          `json:"logicalSizeBytes,omitempty"`
+	Scope            string         `json:"scope,omitempty"`
+	Stats            BackupStats    `json:"stats,omitempty"`
+	Changes          []BackupChange `json:"changes,omitempty"`
+	Summary          string         `json:"summary,omitempty"`
+}
+
+type BackupStats struct {
+	FilesAdded     int   `json:"filesAdded"`
+	FilesModified  int   `json:"filesModified"`
+	FilesRemoved   int   `json:"filesRemoved"`
+	FilesUnchanged int   `json:"filesUnchanged"`
+	BytesStored    int64 `json:"bytesStored"`
+	LogicalBytes   int64 `json:"logicalBytes"`
+	ConfigChanges  int   `json:"configChanges"`
+	ContentChanges int   `json:"contentChanges"`
+	WorldChanges   int   `json:"worldChanges"`
+	OtherChanges   int   `json:"otherChanges"`
+	IgnoredFiles   int   `json:"ignoredFiles"`
+}
+
+type BackupChange struct {
+	Path     string `json:"path"`
+	Type     string `json:"type"`
+	Category string `json:"category"`
+	Size     int64  `json:"size,omitempty"`
+	OldHash  string `json:"oldHash,omitempty"`
+	NewHash  string `json:"newHash,omitempty"`
 }
 
 func Open(path string, defaultServerRoot string) (*Store, error) {

@@ -222,7 +222,39 @@ export type MinecraftMetadata = {
   loaders: Record<ServerType, LoaderOption[]>;
   loaderCatalog: Record<ServerType, LoaderOption[]>;
 };
-export type Backup = { id: string; reason: string; snapshotPath: string; createdAt: string; sizeBytes: number };
+export type BackupStats = {
+  filesAdded: number;
+  filesModified: number;
+  filesRemoved: number;
+  filesUnchanged: number;
+  bytesStored: number;
+  logicalBytes: number;
+  configChanges: number;
+  contentChanges: number;
+  worldChanges: number;
+  otherChanges: number;
+  ignoredFiles: number;
+};
+export type BackupChange = {
+  path: string;
+  type: "added" | "modified" | "removed" | string;
+  category: "config" | "content" | "world" | "other" | string;
+  size?: number;
+  oldHash?: string;
+  newHash?: string;
+};
+export type Backup = {
+  id: string;
+  reason: string;
+  snapshotPath: string;
+  createdAt: string;
+  sizeBytes: number;
+  logicalSizeBytes?: number;
+  scope?: string;
+  stats?: BackupStats;
+  changes?: BackupChange[];
+  summary?: string;
+};
 export type FileEntry = {
   name: string;
   path: string;

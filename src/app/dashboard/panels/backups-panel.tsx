@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Archive, Camera, Download, Settings } from "lucide-react";
+import { Fragment, useState } from "react";
+import { Archive, Camera, ChevronDown, Download, RotateCcw, Settings, Trash2 } from "lucide-react";
 import { formatBytes, formatDate, formatDateTime } from "../lib/utils";
 import { backupUrl, runBackupAction, updateServerProfile } from "../lib/runtime-client";
-import type { Backup, ConfirmRequest, ServerRecord } from "../lib/types";
+import type { Backup, BackupChange, ConfirmRequest, ServerRecord } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
 import { Modal } from "../components/ui/modal";
@@ -43,6 +43,7 @@ export function BackupsPanel({
   const [showCreateSnapshot, setShowCreateSnapshot] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [selectedBackups, setSelectedBackups] = useState<string[]>([]);
+  const [expandedBackup, setExpandedBackup] = useState("");
   const [snapshotOverride, setSnapshotOverride] = useState<{ serverId: string; enabled: boolean } | null>(null);
   const [scheduleOverride, setScheduleOverride] = useState<{ serverId: string; enabled: boolean; interval: number } | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState(() => ({ serverId: server.id, ...intervalParts(server.snapshotIntervalMinutes) }));
@@ -90,6 +91,19 @@ export function BackupsPanel({
     if (!reason) return onMessage("Snapshot label is required");
     const ok = await action({ reason }, "create");
     if (ok) setShowCreateSnapshot(false);
+  }
+
+  function changeLabel(change: BackupChange) {
+    const type = change.type === "added" ? "Added" : change.type === "removed" ? "Removed" : change.type === "modified" ? "Modified" : change.type;
+    const category = change.category === "content" ? "content" : change.category === "config" ? "config" : change.category === "world" ? "world data" : "file";
+    return `${type} ${category}`;
+  }
+
+  function categoryClass(category: string) {
+    if (category === "content") return "content";
+    if (category === "config") return "config";
+    if (category === "world") return "world";
+    return "other";
   }
 
   async function toggleAutoSnapshots(nextValue: boolean) {
@@ -297,20 +311,82 @@ export function BackupsPanel({
       )}
       <Table>
         <thead>
-          <tr><th><Input type="checkbox" aria-label="Select all snapshots" checked={allFilteredSelected} onChange={(event) => setSelectedBackups(event.target.checked ? filteredBackups.map((backup) => backup.id) : [])} /></th><th>Created</th><th>ID</th><th>Reason</th><th>Size</th><th><span className="table-count">{filteredBackups.length} of {backups.length}</span></th></tr>
+          <tr><th><Input type="checkbox" aria-label="Select all snapshots" checked={allFilteredSelected} onChange={(event) => setSelectedBackups(event.target.checked ? filteredBackups.map((backup) => backup.id) : [])} /></th><th>Created</th><th>Reason</th><th>Changes</th><th>Stored</th><th>Logical</th><th><span className="table-count">{filteredBackups.length} of {backups.length}</span></th></tr>
         </thead>
         <tbody>
-          {filteredBackups.map((backup) => (
-            <tr key={backup.id}>
-              <td><Input type="checkbox" aria-label={`Select snapshot ${backup.id}`} checked={selectedBackups.includes(backup.id)} onChange={(event) => setSelectedBackups((current) => event.target.checked ? [...current, backup.id] : current.filter((id) => id !== backup.id))} /></td>
-              <td>{formatDateTime(backup.createdAt)}</td>
-              <td><small className="muted">{backup.id}</small></td>
-              <td>{backup.reason}</td>
-              <td>{formatBytes(backup.sizeBytes)}</td>
-              <td></td>
-            </tr>
-          ))}
-          {backups.length === 0 && <tr><td colSpan={6} className="muted">No snapshots yet.</td></tr>}
+          {filteredBackups.map((backup) => {
+            const expanded = expandedBackup === backup.id;
+            const changes = backup.changes ?? [];
+            return (
+              <Fragment key={backup.id}>
+                <tr>
+                  <td><Input type="checkbox" aria-label={`Select snapshot ${backup.id}`} checked={selectedBackups.includes(backup.id)} onChange={(event) => setSelectedBackups((current) => event.target.checked ? [...current, backup.id] : current.filter((id) => id !== backup.id))} /></td>
+                  <td>
+                    <div className="backup-date-cell">
+                      <span>{formatDateTime(backup.createdAt)}</span>
+                      <small className="muted">{backup.id}</small>
+                    </div>
+                  </td>
+                  <td>{backup.reason}</td>
+                  <td>
+                    <button type="button" className="backup-summary-button" onClick={() => setExpandedBackup(expanded ? "" : backup.id)}>
+                      <ChevronDown size={14} className={expanded ? "expanded" : ""} />
+                      <span>{backup.summary || "Legacy snapshot"}</span>
+                    </button>
+                  </td>
+                  <td>{formatBytes(backup.sizeBytes)}</td>
+                  <td>{formatBytes(backup.logicalSizeBytes ?? backup.sizeBytes)}</td>
+                  <td>
+                    <div className="row-actions">
+                      <Button disabled={Boolean(busyAction) || isRunning} onClick={() => window.open(backupUrl(server.id, `?download=${encodeURIComponent(backup.id)}`), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download this revision"}><Download size={14} /></Button>
+                      <Button disabled={Boolean(busyAction) || isRunning} onClick={() => onConfirm({
+                        title: "Restore snapshot",
+                        message: `Restore ${backup.reason}? Cliff will create a safety snapshot first, then replace the server folder with this revision.`,
+                        confirmLabel: "Restore",
+                        dangerous: true,
+                        onConfirm: async () => { await action({ action: "restore", backupId: backup.id }, "restore"); },
+                      })} title={isRunning ? "Stop the server before restoring" : "Restore this revision"}><RotateCcw size={14} /></Button>
+                      <Button variant="danger" disabled={Boolean(busyAction)} onClick={() => onConfirm({
+                        title: "Delete snapshot",
+                        message: `${backup.reason} will be permanently removed.`,
+                        confirmLabel: "Delete",
+                        dangerous: true,
+                        onConfirm: async () => { await action({ action: "delete", backupId: backup.id }, "delete"); },
+                      })}><Trash2 size={14} /></Button>
+                    </div>
+                  </td>
+                </tr>
+                {expanded && (
+                  <tr className="backup-details-row">
+                    <td colSpan={7}>
+                      <div className="backup-details">
+                        <div className="backup-stats-grid">
+                          <span><strong>{backup.stats?.filesAdded ?? 0}</strong> added</span>
+                          <span><strong>{backup.stats?.filesModified ?? 0}</strong> modified</span>
+                          <span><strong>{backup.stats?.filesRemoved ?? 0}</strong> removed</span>
+                          <span><strong>{backup.stats?.filesUnchanged ?? 0}</strong> unchanged</span>
+                        </div>
+                        {changes.length > 0 ? (
+                          <div className="backup-change-list">
+                            {changes.map((change) => (
+                              <div key={`${change.type}-${change.path}`} className="backup-change-item">
+                                <span className={`backup-change-kind ${categoryClass(change.category)}`}>{changeLabel(change)}</span>
+                                <code>{change.path}</code>
+                                {typeof change.size === "number" && <small className="muted">{formatBytes(change.size)}</small>}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="muted">No changed files in this revision.</p>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+          {backups.length === 0 && <tr><td colSpan={7} className="muted">No snapshots yet.</td></tr>}
         </tbody>
       </Table>
     </Panel>
