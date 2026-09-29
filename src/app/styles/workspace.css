@@ -132,7 +132,7 @@
 }
 
 .status.on { color: var(--success); background: var(--success-bg); }
-.status.busy { color: var(--accent); background: rgba(91, 141, 239, 0.12); }
+.status.busy { color: var(--accent); background: var(--accent-tint); }
 
 .status-detail {
   padding: 6px 11px;
@@ -163,7 +163,7 @@
   box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.28);
 }
 
-.control-strip .danger-button:hover:not(:disabled) { background: #4a2323; }
+.control-strip .danger-button:hover:not(:disabled) { background: var(--danger-hover); }
 
 .more-menu-wrap { position: relative; }
 .more-menu {
@@ -175,7 +175,7 @@
   padding: 5px;
   border-radius: var(--radius-sm);
   background: var(--surface);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--border-soft);
+  box-shadow: var(--shadow-menu), inset 0 0 0 1px var(--border-soft);
 }
 
 .more-menu button {

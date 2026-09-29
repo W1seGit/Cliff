@@ -259,7 +259,7 @@
 }
 
 .split-button.danger > button:first-child:hover:not(:disabled) {
-  background: #4a2323;
+  background: var(--danger-hover);
 }
 
 .split-button-arrow {
@@ -281,7 +281,7 @@
 }
 
 .split-button.danger .split-button-arrow:hover:not(:disabled) {
-  background: #4a2323;
+  background: var(--danger-hover);
   color: var(--text);
 }
 

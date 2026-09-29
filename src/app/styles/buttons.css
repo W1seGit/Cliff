@@ -27,7 +27,7 @@ button:active:not(:disabled) {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: var(--disabled-opacity);
 }
 
 .primary {
@@ -52,7 +52,7 @@ button:disabled {
 }
 
 .secondary:hover:not(:disabled) {
-  background: rgba(91, 141, 239, 0.08);
+  background: var(--accent-tint);
 }
 
 .danger-button {
@@ -61,11 +61,11 @@ button:disabled {
 }
 
 .danger-button:hover:not(:disabled) {
-  background: #4a2323;
+  background: var(--danger-hover);
 }
 
 .danger-button:active:not(:disabled) {
-  background: #4a2323;
+  background: var(--danger-hover);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
