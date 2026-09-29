@@ -19,7 +19,7 @@ export function UpdatesTab({
   onInstall: () => void;
 }) {
   const checkButton = (
-    <Button size="sm" iconLeft={<RefreshCw size={14} />} disabled={checking} onClick={onCheck}>
+    <Button iconLeft={<RefreshCw size={14} />} disabled={checking} onClick={onCheck}>
       {checking ? "Checking..." : "Check for updates"}
     </Button>
   );
@@ -60,7 +60,7 @@ export function UpdatesTab({
           variant="info"
           title={`Version ${check.latestVersion} is available`}
           action={
-            <Button variant="primary" size="sm" disabled={installing} loading={installing} loadingText="Updating..." onClick={onInstall}>
+            <Button variant="primary" disabled={installing} loading={installing} loadingText="Updating..." onClick={onInstall}>
               Install update
             </Button>
           }

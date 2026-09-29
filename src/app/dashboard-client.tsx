@@ -3,12 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import toast, { Toaster } from "react-hot-toast";
-import { AlertCircle, ArrowLeft, CheckCircle2, Info, Menu, TriangleAlert } from "lucide-react";
+import { AlertCircle, CheckCircle2, Info, LayoutDashboard, Plus, Settings as SettingsIcon, TriangleAlert, Upload, UserRound } from "lucide-react";
 import { serverTypeSupportsContent } from "./dashboard/lib/utils";
 import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates } from "./dashboard/lib/runtime-client";
 import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
 import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
+import { PageBand } from "./dashboard/components/page-band";
 import { CloneServerDialog } from "./dashboard/components/clone-server-dialog";
 import { EulaModal } from "./dashboard/components/eula-modal";
 import { UpdateModal } from "./dashboard/components/update-modal";
@@ -264,7 +265,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const selectedLifecycle = isRunning ? selectedRuntime.lifecycle : "stopped";
   const selectedModsSupported = selected ? serverTypeSupportsContent(selected.type) : false;
   const publicAccessSetup = tab === "public-access/setup";
-  const serverContext = Boolean(selected && !utilityTabs.has(tab) && !publicAccessSetup);
+  const serverContext = Boolean(selected && !utilityTabs.has(tab));
   const liveServerId = selected && serverContext && documentVisible && selectedRuntime.runningServerId === selected.id ? selected.id : "";
   const selectedDisplayRuntime = useMemo(() => selectedRuntime.startedAt
     ? { ...selectedRuntime, uptimeSeconds: Math.max(0, Math.floor((nowMs - new Date(selectedRuntime.startedAt).getTime()) / 1000)) }
@@ -703,7 +704,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     };
   }, [logs, selectedRuntime, selected, tab]);
 
-  const standaloneUtility = tab === "app" || tab === "account" || tab === "import" || tab === "create" || publicAccessSetup;
+  const bandIcon = tab === "app" ? <SettingsIcon size={20} /> : tab === "account" ? <UserRound size={20} /> : tab === "import" ? <Upload size={20} /> : tab === "create" ? <Plus size={20} /> : <LayoutDashboard size={20} />;
   const pageTitle = initialLoading ? "Loading dashboard" : tab === "account" ? "Manage account" : tab === "app" ? "App settings" : tab === "import" ? "Import server" : tab === "create" ? "Create server" : publicAccessSetup ? "Public Access" : selected?.name ?? "No server selected";
   const pageSubtitle = initialLoading
     ? "Loading servers, runtime, and version metadata."
@@ -719,47 +720,30 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           ? selected ? `Set up Playit for ${selected.name}.` : "Set up Playit for this server."
         : selected ? `${selected.type} ${selected.minecraftVersion} / port ${selected.port}` : "Import or create a server.";
   const consoleAttention = tab !== "console" && startFailureLines(logs, selectedRuntime, selected).length > 0;
-  const goBackToServer = () => {
-    if (publicAccessSetup && selectedServerId) {
-      setTab("public-access", selectedServerId);
-      return;
-    }
-    if (selectedServerId) { setTab("overview", selectedServerId); return; }
-    // No server selected — go to overview, bypassing the guarded navigation
-    // since there's nothing to save and the guard can get stuck after deletions.
-    // Use replaceState to avoid syncRoute overriding the tab back to initialTab.
-    registerUnsavedChange(null);
-    setRawTab("overview");
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", "/");
-    }
-  };
 
   return (
-    <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${standaloneUtility ? "standalone" : ""}`}>
-      {!standaloneUtility && (
-        <Sidebar
-          user={account}
-          servers={servers}
-          runtime={runtime}
-          selected={selected}
-          showSelectedServer={serverContext}
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-          serverActionMenu={serverActionMenu}
-          setServerActionMenu={setServerActionMenu}
-          setSelectedId={selectServer}
-          setTab={setTab}
-          tab={tab}
-          consoleAttention={consoleAttention}
-          onRename={renameSidebarServer}
-          onDuplicate={duplicateSidebarServer}
-          onDelete={deleteSidebarServer}
-          loading={initialLoading}
-        />
-      )}
-      {!standaloneUtility && !sidebarCollapsed && <Button className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
-      <section className={`workspace ${standaloneUtility ? "standalone-workspace" : ""}`} ref={workspaceRef}>
+    <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <Sidebar
+        user={account}
+        servers={servers}
+        runtime={runtime}
+        selected={selected}
+        showSelectedServer={Boolean(selected)}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        serverActionMenu={serverActionMenu}
+        setServerActionMenu={setServerActionMenu}
+        setSelectedId={selectServer}
+        setTab={setTab}
+        tab={tab}
+        consoleAttention={consoleAttention}
+        onRename={renameSidebarServer}
+        onDuplicate={duplicateSidebarServer}
+        onDelete={deleteSidebarServer}
+        loading={initialLoading}
+      />
+      {!sidebarCollapsed && <Button className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
+      <section className="workspace" ref={workspaceRef}>
         {serverContext && selected && !initialLoading ? (
           <ServerHeader
             selected={selected}
@@ -775,27 +759,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
             onOpenSidebar={() => setSidebarCollapsed(false)}
           />
         ) : (
-          <header className={`topbar ${standaloneUtility ? "standalone-topbar" : ""}`}>
-            <div className="standalone-topbar-left">
-              {standaloneUtility ? (
-                <Button className="utility-back-button" onClick={goBackToServer}>
-                  <ArrowLeft size={16} />Back
-                </Button>
-              ) : (
-                <Button className="mobile-sidebar-button" aria-label="Open sidebar" onClick={() => setSidebarCollapsed(false)}>
-                  <Menu size={18} />
-                </Button>
-              )}
-              <div className="topbar-copy">
-                <h1>{pageTitle}</h1>
-                <p>{pageSubtitle}</p>
-              </div>
-            </div>
-            {serverContext && <div className="status-row">
-              <span className={`status ${isRunning ? selectedLifecycle === "running" ? "on" : "busy" : anotherServerRunning ? "busy" : ""}`}>{isRunning ? selectedLifecycle === "starting" ? "Starting" : selectedLifecycle === "stopping" ? "Stopping" : "Running" : anotherServerRunning ? "Blocked" : "Stopped"}</span>
-              {anotherServerRunning && runningServer && <span className="status-detail">Blocked by {runningServer.name}</span>}
-            </div>}
-          </header>
+          <PageBand icon={bandIcon} title={pageTitle} subtitle={pageSubtitle} onOpenSidebar={() => setSidebarCollapsed(false)} />
         )}
 
         {metadataError && (

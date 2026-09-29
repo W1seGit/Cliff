@@ -23,15 +23,14 @@ export interface SettingsLayoutProps {
 }
 
 /**
- * Two-column settings shell: a section rail on the left (a horizontal strip on
- * narrow screens) and the active section on the right.
+ * Settings shell: underline tabs (the same style the wizards use) above the
+ * active section. Tabs can carry an icon and an unsaved-changes dot.
  */
 export function SettingsLayout({ ariaLabel, items, activeId, onChange, idPrefix, children }: SettingsLayoutProps) {
   return (
     <div className="settings-shell">
       <Tabs
-        className="settings-nav"
-        orientation="vertical"
+        className="settings-tabs"
         ariaLabel={ariaLabel}
         idPrefix={idPrefix}
         activeId={activeId}

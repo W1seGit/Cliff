@@ -26,7 +26,7 @@ export function JavaTab({
       title="Java runtimes"
       description="Cliff installs the Java versions your servers need. Required runtimes cannot be removed while servers depend on them."
       actions={
-        <Button size="sm" iconLeft={<RefreshCw size={14} />} disabled={busy !== null} onClick={onRefresh}>
+        <Button iconLeft={<RefreshCw size={14} />} disabled={busy !== null} onClick={onRefresh}>
           {busy === -1 ? "Refreshing..." : "Refresh"}
         </Button>
       }
@@ -49,7 +49,6 @@ export function JavaTab({
               <Pill variant={runtime.installed ? "success" : "default"}>{runtime.installed ? "Installed" : "Not installed"}</Pill>
               {runtime.installed ? (
                 <Button
-                  size="sm"
                   variant="danger"
                   disabled={busy !== null || runtime.required}
                   onClick={() =>
@@ -70,7 +69,7 @@ export function JavaTab({
                   {busy === runtime.major ? "Uninstalling..." : "Uninstall"}
                 </Button>
               ) : (
-                <Button size="sm" disabled={busy !== null} onClick={() => onInstall(runtime.major)}>
+                <Button disabled={busy !== null} onClick={() => onInstall(runtime.major)}>
                   {busy === runtime.major ? "Installing..." : "Install"}
                 </Button>
               )}

@@ -11,11 +11,6 @@
   grid-template-columns: 68px minmax(0, 1fr);
 }
 
-.shell.standalone,
-.shell.sidebar-collapsed.standalone {
-  grid-template-columns: minmax(0, 1fr);
-}
-
 .sidebar {
   position: sticky;
   top: 0;
@@ -107,7 +102,8 @@
 }
 
 .account-button:hover:not(:disabled) { background: var(--surface); }
-.account-button[aria-expanded="true"] { background: var(--surface); }
+.account-button[aria-expanded="true"],
+.account-button.active { background: var(--surface); }
 
 .account-avatar {
   flex: 0 0 auto;

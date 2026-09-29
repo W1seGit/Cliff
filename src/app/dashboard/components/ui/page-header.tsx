@@ -10,7 +10,7 @@ export interface PageHeaderProps {
   actions?: React.ReactNode;
   /** Small link above the title, e.g. a Back button. */
   back?: React.ReactNode;
-  /** Heading level. Defaults to h2 because the server header (or the standalone topbar) already renders the page h1. */
+  /** Heading level. Defaults to h2 because the server header (or the page band) already renders the page h1. */
   as?: "h1" | "h2";
   className?: string;
 }

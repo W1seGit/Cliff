@@ -61,7 +61,7 @@ export function GeneralTab({
         title="Minecraft versions"
         description="Version data Cliff uses when creating and updating servers."
         actions={
-          <Button size="sm" iconLeft={<RefreshCw size={14} />} disabled={refreshing} onClick={onRefresh}>
+          <Button iconLeft={<RefreshCw size={14} />} disabled={refreshing} onClick={onRefresh}>
             {refreshing ? "Refreshing..." : "Refresh"}
           </Button>
         }

@@ -35,14 +35,13 @@ export function LogsTab({
             <option value="live">Live buffer</option>
             <option value="full">Full log file</option>
           </Select>
-          <Button size="sm" iconLeft={<Copy size={14} />} disabled={busy || lines.length === 0} onClick={onCopy}>
+          <Button iconLeft={<Copy size={14} />} disabled={busy || lines.length === 0} onClick={onCopy}>
             Copy
           </Button>
-          <Button size="sm" iconLeft={<RefreshCw size={14} />} disabled={busy} onClick={onRefresh}>
+          <Button iconLeft={<RefreshCw size={14} />} disabled={busy} onClick={onRefresh}>
             {busy ? "Loading..." : "Refresh"}
           </Button>
           <Button
-            size="sm"
             iconLeft={<Download size={14} />}
             disabled={lines.length === 0}
             onClick={() => window.open(daemonLogsUrl(mode === "full" ? "?full=1&download=1" : "?download=1"), "_blank")}

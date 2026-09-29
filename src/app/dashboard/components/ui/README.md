@@ -42,6 +42,14 @@ Forms that edit saved data register with the shell through `onUnsavedChange`, wh
 
 Wizards and the file editor register without `showSaveBar`; they keep their own controls but still get the "unsaved changes" navigation guard.
 
+## Page layout
+
+Every page renders inside the same shell: the sidebar, then a header band, then content.
+
+- Server pages use `ServerHeader`. Pages that are not about one server (App settings, Account, Create, Import) use `PageBand` (`components/page-band.tsx`), which shares the server header's layout.
+- Inside the content, `PageHeader` titles a panel, and `Tabs` (underline style) switch sections. Settings pages use `SettingsLayout`, which is the same tab style plus icons and unsaved-changes dots.
+- Group content in outlined `Card`s (hairline border, transparent fill). Do not add filled panels or a second navigation style.
+
 ## Rules of thumb
 
 - One save model per screen: edits collect in local state, the save bar applies them. Instant-apply toggles are fine for safe, reversible actions (for example snapshot settings), and should say so.

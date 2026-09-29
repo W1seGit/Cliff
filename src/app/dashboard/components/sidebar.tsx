@@ -37,11 +37,6 @@ const serverNavItems: NavItem[] = [
   { id: "settings", label: "Settings", Icon: Settings },
 ];
 
-const utilityNavItems: NavItem[] = [
-  { id: "import", label: "Import server", Icon: Upload },
-  { id: "create", label: "Create server", Icon: Plus },
-];
-
 const modsChildItems: ModsChildItem[] = [
   { id: "mods/installed", label: "Installed", Icon: Package },
   { id: "mods/discover", label: "Discover", Icon: Search },
@@ -197,9 +192,7 @@ export function Sidebar({
     };
   }, [serverActionMenu, switcherOpen, setServerActionMenu]);
 
-  const isUtilityTab = tab === "app" || tab === "account" || tab === "import" || tab === "create";
   const navItems = showSelectedServer && selected ? serverNavItems : [];
-  const utilityActiveItem = utilityNavItems.find((item) => item.id === tab);
   const modsActive = tab === "mods" || tab === "mods/installed" || tab === "mods/discover";
   const modsExpanded = modsOpen ?? modsActive;
 
@@ -340,7 +333,7 @@ export function Sidebar({
       <nav className="sidebar-nav" aria-label="Server sections">
         {navItems.map((item) => {
           const disabled = item.requiresContent && selected ? !serverTypeSupportsContent(selected.type) : false;
-          const active = item.id === "mods" ? modsActive : tab === item.id;
+          const active = item.id === "mods" ? modsActive : tab === item.id || tab.startsWith(`${item.id}/`);
           const Icon = item.Icon;
           if (item.id === "mods") {
             return (
@@ -396,16 +389,7 @@ export function Sidebar({
             </button>
           );
         })}
-        {isUtilityTab && (
-          <button
-            className={`sidebar-nav-item active`}
-            onClick={() => handleUtilityPick(tab)}
-          >
-            <span className="sidebar-nav-icon">{utilityActiveItem ? <utilityActiveItem.Icon size={17} /> : <Settings size={17} />}</span>
-            <span className="sidebar-nav-label">{utilityActiveItem ? utilityActiveItem.label : tab === "app" ? "App settings" : tab === "account" ? "Manage account" : tab}</span>
-          </button>
-        )}
-        {!showSelectedServer && !isUtilityTab && !loading && servers.length > 0 && (
+        {!showSelectedServer && !loading && servers.length > 0 && (
           <p className="sidebar-nav-hint muted">Select a server to see its sections.</p>
         )}
       </nav>
@@ -429,7 +413,7 @@ export function Sidebar({
             }
           }}
           trigger={
-            <button className="account-button" title={collapsed ? user.username : undefined}>
+            <button className={`account-button ${tab === "account" ? "active" : ""}`} title={collapsed ? user.username : undefined}>
               <span className="account-avatar" aria-hidden="true">{(user.username[0] ?? "?").toUpperCase()}</span>
               {!collapsed && <span className="account-name">{user.username}</span>}
               {!collapsed && <ChevronUp size={14} className="account-chevron" aria-hidden="true" />}

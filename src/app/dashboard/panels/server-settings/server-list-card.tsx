@@ -79,10 +79,10 @@ export function ServerListCard({
               }}
             />
             <div className="icon-picker-actions">
-              <Button size="sm" iconLeft={<Upload size={14} />} onClick={() => fileRef.current?.click()}>
+              <Button iconLeft={<Upload size={14} />} onClick={() => fileRef.current?.click()}>
                 Upload image
               </Button>
-              <Button size="sm" iconLeft={<RotateCcw size={14} />} onClick={onIconReset} disabled={iconResetDisabled}>
+              <Button iconLeft={<RotateCcw size={14} />} onClick={onIconReset} disabled={iconResetDisabled}>
                 Reset to default
               </Button>
             </div>
