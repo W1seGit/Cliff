@@ -10,20 +10,22 @@ export interface PageHeaderProps {
   actions?: React.ReactNode;
   /** Small link above the title, e.g. a Back button. */
   back?: React.ReactNode;
+  /** Heading level. Defaults to h2 because the server header (or the standalone topbar) already renders the page h1. */
+  as?: "h1" | "h2";
   className?: string;
 }
 
-/** Page title block. One h1 per screen. */
-export function PageHeader({ title, description, icon, actions, back, className = "" }: PageHeaderProps) {
+/** Title block at the top of a page or panel. */
+export function PageHeader({ title, description, icon, actions, back, as: Heading = "h2", className = "" }: PageHeaderProps) {
   return (
     <header className={`page-header ${className}`.trim()}>
       {back && <div className="page-header-back">{back}</div>}
       <div className="page-header-row">
         <div className="page-header-copy">
-          <h1 className="page-header-title">
+          <Heading className="page-header-title">
             {icon && <span className="page-header-icon" aria-hidden="true">{icon}</span>}
             {title}
-          </h1>
+          </Heading>
           {description && <p className="page-header-description">{description}</p>}
         </div>
         {actions && <div className="page-header-actions">{actions}</div>}

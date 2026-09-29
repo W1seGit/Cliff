@@ -29,31 +29,6 @@
 .auth-card > button { width: 100%; }
 
 /* Password show/hide toggle — positioned inside the input */
-.password-toggle {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.password-toggle svg {
-  transition: color 120ms ease, transform 120ms ease;
-}
-
-.password-toggle:hover svg {
-  color: var(--text);
-  transform: scale(1.15);
-}
 
 .error {
   margin: 0;

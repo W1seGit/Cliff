@@ -8,9 +8,20 @@
 }
 
 .btn-lg {
-  min-height: 40px;
-  padding: 10px 20px;
-  font-size: var(--text-base);
+  gap: 10px;
+  min-height: 44px;
+  padding: 9px 18px;
+  font-size: 15px;
+}
+
+/* Setup flows use large buttons as their main call to action. */
+.public-access-flow-actions .btn-lg,
+.public-access-install-flow-actions .btn-lg {
+  min-width: 180px;
+}
+
+.public-access-install-flow-actions .btn-lg {
+  width: min(280px, 100%);
 }
 
 .btn-block {
@@ -317,7 +328,7 @@
 .page-header {
   display: grid;
   gap: var(--space-2);
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-5);
 }
 
 .page-header-row {
@@ -336,24 +347,30 @@
 .page-header-title {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 10px;
   margin: 0;
-  font-size: var(--text-2xl);
-  font-weight: 700;
+  color: var(--text);
+  font-size: var(--text-xl);
+  font-weight: 600;
   letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 
 .page-header-icon {
   display: inline-grid;
   place-items: center;
-  color: var(--text-secondary);
+  color: var(--accent);
+}
+
+.page-header-icon svg {
+  width: 20px;
+  height: 20px;
 }
 
 .page-header-description {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
 }
 
 .page-header-actions {

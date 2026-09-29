@@ -242,18 +242,6 @@
   flex-wrap: nowrap;
 }
 
-.public-access-install-button {
-  min-height: 44px;
-  min-width: 180px;
-  padding: 9px 18px;
-  font-size: 15px;
-  gap: 10px;
-}
-
-.public-access-install-flow-actions .public-access-install-button {
-  width: min(280px, 100%);
-}
-
 .public-access-setup-view > .tabs {
   justify-content: center;
 }

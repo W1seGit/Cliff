@@ -32,6 +32,9 @@ const allowedDevOrigins = [
 ];
 
 const nextConfig: NextConfig = {
+  // Lets a second dev server or a verification build run beside the default one
+  // (Next allows one dev server per distDir). Unset, this is the usual .next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   allowedDevOrigins,
   cacheMaxMemorySize: 10 * 1024 * 1024,
   experimental: {

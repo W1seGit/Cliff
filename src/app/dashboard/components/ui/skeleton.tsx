@@ -3,7 +3,7 @@
 import React from "react";
 
 export interface SkeletonProps {
-  variant?: "line" | "block" | "dot" | "toggle" | "button";
+  variant?: "line" | "block" | "dot" | "toggle" | "button" | "mod-icon" | "stat";
   width?: "wide" | "medium" | "short";
   className?: string;
   style?: React.CSSProperties;

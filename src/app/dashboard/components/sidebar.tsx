@@ -14,6 +14,7 @@ import type { RuntimeStatus, ServerRecord, User } from "../lib/types";
 import { fetchPlayitAgent } from "../lib/runtime-client";
 import { ServerAvatar } from "./server-avatar";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
+import { Skeleton } from "./ui/skeleton";
 
 type NavItem = { id: string; label: string; Icon: LucideIcon; requiresContent?: boolean };
 type ModsChildItem = { id: "mods/installed" | "mods/discover"; label: string; Icon: LucideIcon };
@@ -316,10 +317,10 @@ export function Sidebar({
             </>
           ) : loading ? (
             <>
-              <span className="skeleton skeleton-dot" />
+              <Skeleton variant="dot" />
               <span className="server-switcher-meta">
-                <span className="skeleton skeleton-line wide" />
-                <span className="skeleton skeleton-line short" />
+                <Skeleton width="wide" />
+                <Skeleton width="short" />
               </span>
               <ChevronDown size={14} className="server-switcher-caret" aria-hidden="true" />
             </>

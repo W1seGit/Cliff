@@ -1,16 +1,15 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Eye, EyeOff } from "lucide-react";
 import { externalApiUrl } from "./dashboard/lib/utils";
 import type { User } from "./dashboard/lib/types";
 import { Button } from "./dashboard/components/ui/button";
 import { Input } from "./dashboard/components/ui/input";
+import { PasswordInput } from "./dashboard/components/ui/password-input";
 
 export default function AuthForm({ needsSetup, initialError = "", onAuthenticated }: { needsSetup: boolean; initialError?: string; onAuthenticated: (user: User) => void }) {
   const [message, setMessage] = useState(initialError);
   const [pending, setPending] = useState(false);
-  const [showPasswords, setShowPasswords] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -47,18 +46,6 @@ export default function AuthForm({ needsSetup, initialError = "", onAuthenticate
     }
   }
 
-  const passwordToggle = (
-    <button
-      type="button"
-      className="password-toggle"
-      onClick={() => setShowPasswords(!showPasswords)}
-      aria-label={showPasswords ? "Hide passwords" : "Show passwords"}
-      tabIndex={-1}
-    >
-      {showPasswords ? <EyeOff size={18} /> : <Eye size={18} />}
-    </button>
-  );
-
   return (
     <main className="center-panel">
       <form className="auth-card" onSubmit={submit}>
@@ -77,24 +64,20 @@ export default function AuthForm({ needsSetup, initialError = "", onAuthenticate
           autoComplete="username"
           required
         />
-        <Input
+        <PasswordInput
           label="Password"
           name="password"
-          type={showPasswords ? "text" : "password"}
           autoComplete={needsSetup ? "new-password" : "current-password"}
           required
-          suffix={passwordToggle}
         />
         {needsSetup && (
-          <Input
+          <PasswordInput
             label="Confirm password"
             name="confirm-password"
-            type={showPasswords ? "text" : "password"}
             autoComplete="new-password"
             required
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
-            suffix={passwordToggle}
           />
         )}
         <Button variant="primary" type="submit" disabled={pending}>

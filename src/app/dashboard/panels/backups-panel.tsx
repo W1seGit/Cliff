@@ -8,12 +8,12 @@ import type { Backup, BackupChange, BackupDiff, ConfirmRequest, ServerRecord } f
 import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
 import { Modal } from "../components/ui/modal";
-import { Toggle } from "../components/ui/toggle";
 import { Input } from "../components/ui/input";
 import { Hint } from "../components/ui/hint";
 import { Table } from "../components/ui/table";
 import { FilterBar } from "../components/ui/filter-bar";
 import { SelectionBar } from "../components/ui/selection-bar";
+import { ToggleRow } from "../components/ui/setting-row";
 
 export function BackupsPanel({
   server,
@@ -199,35 +199,25 @@ export function BackupsPanel({
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         title="Snapshot settings"
+        cancelLabel="Close"
         description="Configure automatic and scheduled snapshots for this server."
         busy={Boolean(busyAction)}
       >
         <div className="snapshot-settings">
-          <div className="snapshot-setting-row">
-            <div className="snapshot-setting-info">
-              <span className="snapshot-setting-label">Auto snapshots</span>
-              <span className="snapshot-setting-desc">Create a snapshot before mod or datapack add/remove.</span>
-            </div>
-            <Toggle
-              checked={snapshotsEnabled}
-              disabled={Boolean(busyAction)}
-              onChange={toggleAutoSnapshots}
-              aria-label="Toggle auto snapshots"
-            />
-          </div>
-
-          <div className="snapshot-setting-row">
-            <div className="snapshot-setting-info">
-              <span className="snapshot-setting-label">Scheduled snapshots</span>
-              <span className="snapshot-setting-desc">Automatically create snapshots at a regular interval.</span>
-            </div>
-            <Toggle
-              checked={scheduledSnapshotsEnabled}
-              disabled={Boolean(busyAction)}
-              onChange={(checked) => saveSchedule(checked, snapshotIntervalMinutes || 360)}
-              aria-label="Toggle scheduled snapshots"
-            />
-          </div>
+          <ToggleRow
+            label="Auto snapshots"
+            description="Create a snapshot before mod or datapack add/remove."
+            checked={snapshotsEnabled}
+            disabled={Boolean(busyAction)}
+            onChange={toggleAutoSnapshots}
+          />
+          <ToggleRow
+            label="Scheduled snapshots"
+            description="Automatically create snapshots at a regular interval."
+            checked={scheduledSnapshotsEnabled}
+            disabled={Boolean(busyAction)}
+            onChange={(checked) => saveSchedule(checked, snapshotIntervalMinutes || 360)}
+          />
 
           {scheduledSnapshotsEnabled && (
             <div className="schedule-presets">

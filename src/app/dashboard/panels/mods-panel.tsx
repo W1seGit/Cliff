@@ -17,6 +17,7 @@ import type {
 } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Panel } from "../components/ui/panel";
+import { PageHeader } from "../components/ui/page-header";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Table, SortableTh } from "../components/ui/table";
@@ -25,6 +26,7 @@ import { Pill } from "../components/ui/pill";
 import { FilterBar } from "../components/ui/filter-bar";
 import { SelectionBar } from "../components/ui/selection-bar";
 import { Tabs } from "../components/ui/tabs";
+import { Skeleton } from "../components/ui/skeleton";
 
 type DependencyWarning = NonNullable<NonNullable<ModFile["metadata"]>["dependencyWarnings"]>[number];
 type DiscoverSource = "marketplace" | "upload";
@@ -799,12 +801,11 @@ export function ModsPanel({
 
   return (
     <section className="mods-workspace">
-      <div className="mods-page-header">
-        <div className="mods-page-title">
-          <h1><span className="workspace-page-icon"><Puzzle /></span>{pluginProfile ? "Plugins" : "Mods / Plugins"}</h1>
-          <p className="mods-page-subtitle">{pluginProfile ? "Install, enable, and discover plugins and datapacks." : "Install, enable, and discover mods and datapacks."}</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={<Puzzle size={20} />}
+        title={pluginProfile ? "Plugins" : "Mods / Plugins"}
+        description={pluginProfile ? "Install, enable, and discover plugins and datapacks." : "Install, enable, and discover mods and datapacks."}
+      />
 
       {vanillaProfile && (
         <Hint variant="source" warn>
@@ -1112,13 +1113,13 @@ export function ModsPanel({
                   <div className="discover-skeletons">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                       <div key={i} className="discover-card discover-card-skeleton" aria-hidden="true">
-                        <span className="skeleton skeleton-mod-icon" />
+                        <Skeleton variant="mod-icon" />
                         <div className="discover-card-body">
-                          <span className="skeleton skeleton-line wide" />
-                          <span className="skeleton skeleton-line medium" />
-                          <span className="skeleton skeleton-line short" />
+                          <Skeleton width="wide" />
+                          <Skeleton width="medium" />
+                          <Skeleton width="short" />
                         </div>
-                        <span className="skeleton skeleton-button" />
+                        <Skeleton variant="button" />
                       </div>
                     ))}
                   </div>

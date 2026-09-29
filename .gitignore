@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-*/
 /out/
 /daemon/web/*
 !/daemon/web/index.html

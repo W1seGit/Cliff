@@ -321,7 +321,7 @@ export function ServerSettingsPanel({
     { id: "runtime", label: "Runtime", icon: <Cpu size={16} aria-hidden="true" />, dirty: runtimeDirty },
     { id: "advanced", label: "Advanced", icon: <Wrench size={16} aria-hidden="true" />, dirty: advancedDirty },
   ];
-  const header = <PageHeader title="Settings" icon={<Settings size={22} aria-hidden="true" />} description="Configure game behavior and the server profile." />;
+  const header = <PageHeader title="Settings" icon={<Settings size={20} aria-hidden="true" />} description="Configure game behavior and the server profile." />;
 
   if (!draft) return (
     <section className="server-settings-page">

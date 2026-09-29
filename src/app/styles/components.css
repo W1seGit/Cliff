@@ -430,35 +430,6 @@
   gap: 16px;
 }
 
-.snapshot-setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 16px;
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border-hairline);
-}
-
-.snapshot-setting-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.snapshot-setting-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.snapshot-setting-desc {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
 .schedule-presets {
   display: flex;
   flex-direction: column;
