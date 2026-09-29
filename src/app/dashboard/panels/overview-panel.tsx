@@ -105,7 +105,7 @@ export function OverviewPanel({
 
   if (!selected) {
     return (
-      <section className="welcome">
+      <section className="welcome surface-card">
         <div>
           <h2>Set up your first server</h2>
           <p>Import an existing folder or create a fresh Java server profile.</p>

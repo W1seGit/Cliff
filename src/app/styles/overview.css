@@ -95,9 +95,6 @@
 .join-address-card {
   padding: 20px 22px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-hairline);
-  background: var(--surface);
-  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .overview-hero-address em {
@@ -205,7 +202,6 @@
 .overview-stat-cards {
   display: flex;
   border-radius: var(--radius-sm);
-  box-shadow: inset 0 0 0 1px var(--border-hairline);
   overflow: hidden;
 }
 
@@ -255,10 +251,6 @@
   gap: 18px;
   min-width: 0;
   padding: 20px 22px 16px;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.018), var(--surface) 45%);
-  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .chart-card-head {

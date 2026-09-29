@@ -17,7 +17,7 @@ export function JoinAddress({
   className = "",
 }: JoinAddressProps) {
   return (
-    <div className={`overview-hero ${card ? "join-address-card" : ""} ${className}`.trim()}>
+    <div className={`overview-hero ${card ? "join-address-card surface-card" : ""} ${className}`.trim()}>
       <span className="overview-hero-label">{label}</span>
       <button className="overview-hero-address" type="button" onClick={onCopy} aria-label={`Copy ${address}`}>
         <strong>{address}</strong>

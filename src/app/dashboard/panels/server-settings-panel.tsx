@@ -297,7 +297,7 @@ export function ServerSettingsPanel({
           <p>Configure game behavior and the server profile.</p>
         </div>
       </div>
-      <Panel className="form-grid compact-form settings-panel"><p className="muted">Loading...</p></Panel>
+      <Panel className="form-grid compact-form settings-panel surface-card"><p className="muted">Loading...</p></Panel>
     </section>
   );
 
@@ -333,7 +333,7 @@ export function ServerSettingsPanel({
       />
 
       {activeSettingsTab === "profile" && (
-        <Panel className="form-grid compact-form settings-panel">
+        <Panel className="form-grid compact-form settings-panel surface-card">
           {isRunning && <Hint warn>Profile changes apply on the next start.</Hint>}
           <div className="settings-section">
             <h2 className="settings-section-header">General</h2>
@@ -371,7 +371,7 @@ export function ServerSettingsPanel({
       )}
 
       {activeSettingsTab === "game" && (
-        <Panel className="form-grid compact-form settings-panel">
+        <Panel className="form-grid compact-form settings-panel surface-card">
           {isRunning && <Hint warn>Most game settings require a restart.</Hint>}
           <div className="settings-section">
             <h2 className="settings-section-header">Server list</h2>

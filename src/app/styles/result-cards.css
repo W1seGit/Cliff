@@ -251,10 +251,6 @@
   width: min(100%, 1040px);
   max-width: none;
   padding: 22px;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius);
-  background: linear-gradient(155deg, rgba(255, 255, 255, 0.015), var(--surface) 52%);
-  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.025);
 }
 
 .utility-wizard-panel > .tabs {
