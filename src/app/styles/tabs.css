@@ -18,6 +18,7 @@
 }
 
 .tabs button {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -32,7 +33,7 @@
   margin-bottom: -1px;
   white-space: nowrap;
   scroll-snap-align: start;
-  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  transition: background var(--motion-fast) var(--ease-ui), color var(--motion-fast) var(--ease-ui), border-color var(--motion-fast) var(--ease-ui);
 }
 
 .tabs button:hover:not(:disabled) {
@@ -50,6 +51,7 @@
   color: var(--text);
   border-bottom-color: var(--accent);
   font-weight: 600;
+  background: linear-gradient(180deg, transparent 45%, rgba(91, 141, 239, 0.055));
 }
 
 .tabs button.attention-flash {

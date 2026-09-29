@@ -4,7 +4,7 @@
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
   min-height: 100vh;
-  transition: grid-template-columns 160ms ease;
+  transition: grid-template-columns var(--motion-base) var(--ease-ui);
 }
 
 .shell.sidebar-collapsed {
@@ -25,9 +25,9 @@
   min-height: 0;
   overflow: hidden;
   padding: 22px 14px;
-  background: var(--bg);
+  background: linear-gradient(180deg, rgba(20, 23, 27, 0.72), var(--bg) 36%);
   border-right: 1px solid var(--border-hairline);
-  transition: transform 180ms ease, box-shadow 180ms ease, width 180ms ease;
+  transition: transform var(--motion-base) var(--ease-ui), box-shadow var(--motion-base) var(--ease-ui), width var(--motion-base) var(--ease-ui);
 }
 
 .sidebar-backdrop {

@@ -13,7 +13,7 @@ button {
   font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  transition: background 150ms ease, box-shadow 150ms ease, color 150ms ease;
+  transition: background var(--motion-fast) var(--ease-ui), box-shadow var(--motion-fast) var(--ease-ui), color var(--motion-fast) var(--ease-ui), transform var(--motion-fast) var(--ease-ui);
 }
 
 button:hover:not(:disabled) {
@@ -38,11 +38,14 @@ button:disabled {
 
 .primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  box-shadow: 0 5px 16px rgba(91, 141, 239, 0.18);
+  transform: translateY(-1px);
 }
 
 .primary:active:not(:disabled) {
   background: var(--accent-hover);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
+  transform: translateY(0) scale(0.985);
 }
 
 .secondary {
@@ -62,11 +65,13 @@ button:disabled {
 
 .danger-button:hover:not(:disabled) {
   background: #4a2323;
+  transform: translateY(-1px);
 }
 
 .danger-button:active:not(:disabled) {
   background: #4a2323;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  transform: translateY(0) scale(0.985);
 }
 
 .icon-button {

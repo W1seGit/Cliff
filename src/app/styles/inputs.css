@@ -8,10 +8,18 @@ input, select, textarea {
   box-shadow: inset 0 0 0 1px var(--border-hairline);
   outline: none;
   font-size: 13px;
-  transition: background 120ms ease, box-shadow 120ms ease;
+  transition: background var(--motion-fast) var(--ease-ui), box-shadow var(--motion-fast) var(--ease-ui), border-color var(--motion-fast) var(--ease-ui);
 }
 
 input:focus, select:focus, textarea:focus {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px rgba(91, 141, 239, 0.12);
+}
+
+input:hover:not(:disabled), select:hover:not(:disabled), textarea:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+input:focus:hover, select:focus:hover, textarea:focus:hover {
   box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px rgba(91, 141, 239, 0.12);
 }
 

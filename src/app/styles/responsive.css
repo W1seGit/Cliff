@@ -442,6 +442,11 @@
 
 @media (max-width: 620px) {
   .workspace, .center-panel { padding: 16px; }
+  .welcome { flex-direction: column; align-items: flex-start; gap: 18px; padding: 18px; }
+  .welcome-actions { width: 100%; }
+  .welcome-actions > button { flex: 1 1 0; }
+  .utility-wizard-panel { padding: 16px; }
+  .overview-hero.surface-card { padding: 16px; }
   .sidebar { width: min(90vw, 320px); padding: 18px 16px; }
   .topbar h1 { font-size: 20px; }
   .topbar {
