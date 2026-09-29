@@ -42,7 +42,7 @@ A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. N
 
 - **Server management** — import, create, clone, start/stop Vanilla, Paper, Purpur, Folia, Fabric, Forge, and NeoForge servers
 - **Live console** — WebSocket streaming with command input, presets, and log download
-- **Mod & plugin management** — install, search, and bulk manage mods/plugins via Modrinth and CurseForge
+- **Mod & plugin management** — install, search, and bulk manage mods/plugins via Modrinth
 - **Worlds & datapacks** — switch worlds, import, rename, delete with snapshot protection
 - **Player access** — ops, whitelist, bans with Mojang UUID lookup and live player heads
 - **Backups** — automatic snapshots before risky actions, manual snapshots, restore, and retention cleanup

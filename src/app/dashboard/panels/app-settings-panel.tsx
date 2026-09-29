@@ -369,8 +369,8 @@ export function AppSettingsPanel({
           </div>
           <Panel className="form-grid compact-form settings-panel">
             <div className="settings-section">
-              <h2 className="settings-section-header">CurseForge API</h2>
-              <Hint>CurseForge integration will come in a later update.</Hint>
+              <h2 className="settings-section-header">Mod marketplace</h2>
+              <Hint>Mod and plugin discovery currently uses Modrinth. CurseForge support is not available yet.</Hint>
             </div>
             <div className="settings-section">
               <h2 className="settings-section-header">Versions</h2>

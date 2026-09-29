@@ -160,7 +160,7 @@ func (h apiHandler) mods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if source == "curseforge" || source == "curseforge-pack" {
-		writeJSON(w, http.StatusOK, map[string]any{"disabled": true, "results": []any{}, "nextOffset": options.Offset + options.Limit})
+		writeError(w, http.StatusNotImplemented, "CurseForge integration is not available yet. Use Modrinth instead.")
 		return
 	}
 	if source != "" {

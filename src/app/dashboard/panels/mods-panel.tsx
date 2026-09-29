@@ -29,7 +29,6 @@ import { Tabs } from "../components/ui/tabs";
 type DependencyWarning = NonNullable<NonNullable<ModFile["metadata"]>["dependencyWarnings"]>[number];
 type DiscoverSource = "marketplace" | "upload";
 type SideFilter = "both" | "server" | "client";
-type MarketFilter = "modrinth" | "curseforge";
 type InstalledItem = {
   id: string;
   type: "mod" | "datapack" | "modpack";
@@ -271,7 +270,6 @@ export function ModsPanel({
     content: (serverTypeNeedsPlugins(server.type) ? "plugin" : "mod") as "mod" | "modpack" | "datapack" | "plugin",
     sort: "downloads",
     side: "server" as SideFilter,
-    market: "modrinth" as MarketFilter,
   });
   const activeSearchKeyRef = useRef("");
   const blockedMoreKeyRef = useRef("");

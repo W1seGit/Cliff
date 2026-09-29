@@ -58,7 +58,17 @@ func installRoot() string {
 
 // defaultDataDir returns the default data directory relative to the install root.
 func defaultDataDir() string {
-	return filepath.Join(installRoot(), "data")
+	return resolveCLIPath(os.Getenv("CLIFF_DATA_DIR"), filepath.Join(installRoot(), "data"))
+}
+
+func resolveCLIPath(value string, fallback string) string {
+	if value == "" {
+		value = fallback
+	}
+	if path, err := filepath.Abs(value); err == nil {
+		return path
+	}
+	return value
 }
 
 // stateFilePath returns the path to the cliff-state.json file.
@@ -89,23 +99,17 @@ func runStart(args []string) {
 	fs.IntVar(&port, "port", getenvInt("CLIFF_PORT", 8080), "HTTP port to bind")
 	fs.IntVar(&port, "p", getenvInt("CLIFF_PORT", 8080), "HTTP port to bind (shorthand)")
 	fs.StringVar(&host, "host", getenv("CLIFF_HOST", "0.0.0.0"), "host interface to bind")
-	fs.StringVar(&dataDir, "data-dir", "", "panel data directory (default: <install-dir>/data)")
-	fs.StringVar(&serverRoot, "server-root", "", "Minecraft server storage root")
-	fs.StringVar(&webDir, "web-dir", "", "static dashboard directory")
+	fs.StringVar(&dataDir, "data-dir", os.Getenv("CLIFF_DATA_DIR"), "panel data directory (default: <install-dir>/data)")
+	fs.StringVar(&serverRoot, "server-root", os.Getenv("CLIFF_SERVER_ROOT"), "Minecraft server storage root")
+	fs.StringVar(&webDir, "web-dir", os.Getenv("CLIFF_WEB_DIR"), "static dashboard directory")
 	fs.Parse(args)
 
 	root := installRoot()
 
 	// Resolve defaults relative to the install root.
-	if dataDir == "" {
-		dataDir = filepath.Join(root, "data")
-	}
-	if serverRoot == "" {
-		serverRoot = filepath.Join(root, "servers")
-	}
-	if webDir == "" {
-		webDir = filepath.Join(root, "web")
-	}
+	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
+	serverRoot = resolveCLIPath(serverRoot, filepath.Join(root, "servers"))
+	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
 
 	logFile := filepath.Join(dataDir, "logs", "cliff.log")
 	errorLogFile := filepath.Join(dataDir, "logs", "cliff-error.log")
@@ -380,12 +384,27 @@ func runLogs(args []string) {
 func runUpdate(args []string) {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 	var checkOnly bool
+	var dataDir string
+	var webDir string
 	fs.BoolVar(&checkOnly, "check", false, "only check for updates, don't apply")
+	fs.StringVar(&dataDir, "data-dir", os.Getenv("CLIFF_DATA_DIR"), "panel data directory (default: <install-dir>/data)")
+	fs.StringVar(&webDir, "web-dir", os.Getenv("CLIFF_WEB_DIR"), "static dashboard directory")
 	fs.Parse(args)
 
 	root := installRoot()
-	dataDir := filepath.Join(root, "data")
-	webDir := filepath.Join(root, "web")
+	dataDirProvided := dataDir != ""
+	webDirProvided := webDir != ""
+	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
+	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
+	state := readState(dataDir)
+	if state != nil {
+		if !dataDirProvided {
+			dataDir = resolveCLIPath(state.DataDir, dataDir)
+		}
+		if !webDirProvided {
+			webDir = resolveCLIPath(state.WebDir, webDir)
+		}
+	}
 
 	self, _ := os.Executable()
 	mgr := updater.NewManager(self, webDir, dataDir)
@@ -417,9 +436,13 @@ func runUpdate(args []string) {
 	}
 
 	// Stop the daemon if it's running.
-	if state := readState(dataDir); state != nil && processAlive(state.PID) {
+	wasRunning := state != nil && processAlive(state.PID)
+	if wasRunning {
 		fmt.Println("Stopping running daemon...")
-		_ = stopProcess(state.PID)
+		if err := stopProcess(state.PID); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to stop daemon (PID %d): %s\n", state.PID, err)
+			os.Exit(1)
+		}
 		// Wait for it to exit.
 		deadline := time.Now().Add(15 * time.Second)
 		for time.Now().Before(deadline) {
@@ -427,6 +450,10 @@ func runUpdate(args []string) {
 				break
 			}
 			time.Sleep(200 * time.Millisecond)
+		}
+		if processAlive(state.PID) {
+			fmt.Fprintf(os.Stderr, "Daemon (PID %d) did not stop; update cancelled.\n", state.PID)
+			os.Exit(1)
 		}
 		os.Remove(stateFilePath(dataDir))
 		os.Remove(pidFilePath(dataDir))
@@ -441,10 +468,29 @@ func runUpdate(args []string) {
 
 	if applyResult.Success {
 		fmt.Printf("Update successful: %s\n", applyResult.Message)
-		fmt.Println("Restarting...")
-		updater.RestartAsync(self, os.Args[1:], 500*time.Millisecond)
-		// Wait for restart to happen.
-		time.Sleep(2 * time.Second)
+		if wasRunning {
+			fmt.Println("Restarting daemon...")
+			restartState := *state
+			restartDataDir := resolveCLIPath(restartState.DataDir, dataDir)
+			restartServerRoot := resolveCLIPath(restartState.ServerRoot, filepath.Join(root, "servers"))
+			restartWebDir := resolveCLIPath(restartState.WebDir, webDir)
+			restartHost := restartState.Host
+			if restartHost == "" {
+				restartHost = "0.0.0.0"
+			}
+			restartPort := restartState.Port
+			if restartPort < 1 || restartPort > 65535 {
+				restartPort = 8080
+			}
+			restartArgs := []string{
+				"start", "--host", restartHost, "--port", fmt.Sprint(restartPort),
+				"--data-dir", restartDataDir, "--server-root", restartServerRoot, "--web-dir", restartWebDir,
+			}
+			updater.RestartAsync(self, restartArgs, 500*time.Millisecond)
+			time.Sleep(2 * time.Second)
+		} else {
+			fmt.Println("Cliff was not running before the update; start it with 'cliff start'.")
+		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Update failed: %s\n", applyResult.Message)
 		os.Exit(1)
@@ -461,7 +507,7 @@ func runUninstall(args []string) {
 	fs.Parse(args)
 
 	root := installRoot()
-	dataDir := filepath.Join(root, "data")
+	dataDir := defaultDataDir()
 
 	// Stop the daemon if running.
 	if state := readState(dataDir); state != nil && processAlive(state.PID) {

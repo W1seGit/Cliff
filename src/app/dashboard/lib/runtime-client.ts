@@ -11,6 +11,7 @@ type RuntimeSubscription = {
   onSnapshot: (payload: { runtime: RuntimeStatus; logs?: string[] }) => void;
   onRuntime: (runtime: RuntimeStatus) => void;
   onLog: (line: string) => void;
+  onConnectionChange?: (connected: boolean) => void;
   onError?: (message: string) => void;
   onCommandSender?: (sender: ((command: string) => boolean) | null) => void;
   includeUsage?: boolean;
@@ -333,37 +334,88 @@ export function subscribeRuntime(serverId: string, handlers: RuntimeSubscription
   if (handlers.includeUsage) url.searchParams.set("usage", "1");
   if (handlers.includeLogs === false) url.searchParams.set("logs", "0");
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(url);
+  let socket: WebSocket | null = null;
+  let reconnectTimer: number | null = null;
+  let reconnectAttempt = 0;
+  let disposed = false;
   const sendCommand = (command: string) => {
-    if (socket.readyState !== WebSocket.OPEN) return false;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify({ type: "command", command }));
     return true;
   };
-  socket.addEventListener("open", () => handlers.onCommandSender?.(sendCommand));
-  socket.addEventListener("message", (event) => {
-    const message = JSON.parse(String(event.data)) as {
-      type: string;
-      logs?: string[];
-      status?: RuntimeStatus;
-      error?: string;
-      event?: { type: string; line?: string; status?: RuntimeStatus };
-    };
-    if (message.type === "snapshot") {
-      handlers.onSnapshot({ runtime: normalizeRuntime(message.status ?? emptyRuntime()), logs: Array.isArray(message.logs) ? message.logs : undefined });
+
+  function scheduleReconnect() {
+    if (disposed || reconnectTimer !== null) return;
+    const delay = Math.min(1000 * 2 ** reconnectAttempt, 15000);
+    reconnectAttempt += 1;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
+  function connect() {
+    if (disposed) return;
+    handlers.onConnectionChange?.(false);
+    let nextSocket: WebSocket;
+    try {
+      nextSocket = new WebSocket(url);
+    } catch {
+      scheduleReconnect();
+      return;
     }
-    if (message.type === "event" && message.event?.type === "log" && message.event.line) {
-      handlers.onLog(message.event.line);
-    }
-    if (message.type === "event" && message.event?.type === "status" && message.event.status) {
-      handlers.onRuntime(normalizeRuntime(message.event.status));
-    }
-    if (message.type === "error" && message.error) {
-      handlers.onError?.(message.error);
-    }
-  });
+    socket = nextSocket;
+    nextSocket.addEventListener("open", () => {
+      if (disposed || socket !== nextSocket) return;
+      reconnectAttempt = 0;
+      handlers.onConnectionChange?.(true);
+      handlers.onCommandSender?.(sendCommand);
+    });
+    nextSocket.addEventListener("message", (event) => {
+      if (disposed || socket !== nextSocket) return;
+      let message: {
+        type: string;
+        logs?: string[];
+        status?: RuntimeStatus;
+        error?: string;
+        event?: { type: string; line?: string; status?: RuntimeStatus };
+      };
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (message.type === "snapshot") {
+        handlers.onSnapshot({ runtime: normalizeRuntime(message.status ?? emptyRuntime()), logs: Array.isArray(message.logs) ? message.logs : undefined });
+      }
+      if (message.type === "event" && message.event?.type === "log" && message.event.line) {
+        handlers.onLog(message.event.line);
+      }
+      if (message.type === "event" && message.event?.type === "status" && message.event.status) {
+        handlers.onRuntime(normalizeRuntime(message.event.status));
+      }
+      if (message.type === "error" && message.error) {
+        handlers.onError?.(message.error);
+      }
+    });
+    nextSocket.addEventListener("close", () => {
+      if (socket !== nextSocket) return;
+      socket = null;
+      handlers.onCommandSender?.(null);
+      handlers.onConnectionChange?.(false);
+      scheduleReconnect();
+    });
+    nextSocket.addEventListener("error", () => nextSocket.close());
+  }
+
+  connect();
   return () => {
+    disposed = true;
+    if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
     handlers.onCommandSender?.(null);
-    socket.close();
+    const closingSocket = socket;
+    socket = null;
+    closingSocket?.close();
   };
 }
 

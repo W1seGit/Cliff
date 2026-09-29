@@ -103,7 +103,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [account, setAccount] = useState(user);
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [runtime, setRuntime] = useState<RuntimeStatus>(emptyRuntime);
-  const [selectedId, setSelectedId] = useState(initialServerId);
+  const [selectedId, setSelectedIdState] = useState(initialServerId);
   const [mods, setMods] = useState<ModFile[]>([]);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -111,7 +111,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [settings, setSettings] = useState<Settings | null>(null);
   const [metadata, setMetadata] = useState<MinecraftMetadata | null>(null);
   const [metadataError, setMetadataError] = useState("");
-  const [tab, setRawTab] = useState(initialTab);
+  const [tab, setRawTabState] = useState(initialTab);
   const [metadataBusy, setMetadataBusy] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
@@ -124,6 +124,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [quickBusyAction, setQuickBusyAction] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(true);
+  const [liveConnected, setLiveConnected] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
   const [liveCommandSender, setLiveCommandSender] = useState<((command: string) => boolean) | null>(null);
@@ -133,16 +134,20 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const runtimeRef = useRef<RuntimeStatus>(emptyRuntime);
   const runtimeWaiters = useRef<RuntimeWaiter[]>([]);
   const unsavedChangeRef = useRef<UnsavedChangesRegistration | null>(null);
-  const tabRef = useRef(tab);
-  const selectedIdRef = useRef(selectedId);
+  const tabRef = useRef(initialTab);
+  const selectedIdRef = useRef(initialServerId);
+  const selectedDataRequest = useRef(0);
 
-  useEffect(() => {
-    tabRef.current = tab;
-  }, [tab]);
-
-  useEffect(() => {
-    selectedIdRef.current = selectedId;
-  }, [selectedId]);
+  const setRawTab = useCallback((nextTab: string) => {
+    tabRef.current = nextTab;
+    selectedDataRequest.current += 1;
+    setRawTabState(nextTab);
+  }, []);
+  const setSelectedId = useCallback((nextServerId: string) => {
+    selectedIdRef.current = nextServerId;
+    selectedDataRequest.current += 1;
+    setSelectedIdState(nextServerId);
+  }, []);
 
   useEffect(() => {
     unsavedChangeRef.current = unsavedChange;
@@ -293,7 +298,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       setRawTab(resolvedTab);
       pushAppRoute(targetRoute);
     }, "another page");
-  }, [requestGuardedNavigation, selected, selectedId, servers, setMessage]);
+  }, [requestGuardedNavigation, selected, selectedId, servers, setMessage, setRawTab]);
 
   const selectServer = useCallback((id: string, nextTab = utilityTabs.has(tab) ? "overview" : tab) => {
     const targetRoute = routeFor(nextTab, id);
@@ -303,9 +308,11 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       setRawTab(nextTab);
       pushAppRoute(targetRoute);
     }, "another server");
-  }, [requestGuardedNavigation, tab]);
+  }, [requestGuardedNavigation, setRawTab, setSelectedId, tab]);
 
   async function loadDashboard({ includeSettings = true, includeSettingsStorage = false, includeHealth = false }: { includeSettings?: boolean; includeSettingsStorage?: boolean; includeHealth?: boolean } = {}) {
+    const selectionAtStart = selectedId;
+    const tabAtStart = tab;
     const metadataRequest = metadata
       ? Promise.resolve<{ data: MinecraftMetadata | null; error: string }>({ data: metadata, error: "" })
       : fetchMinecraftMetadata().then((data) => ({ data, error: "" })).catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Metadata failed" }));
@@ -318,7 +325,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     setServers(serverData.servers);
     applyRuntime(serverData.runtime);
     const activeServerId = selectedId && serverData.servers.some((server) => server.id === selectedId) ? selectedId : serverData.servers[0]?.id ?? "";
-    if (includeHealth && activeServerId && serverData.health?.[activeServerId]) {
+    const selectionStillCurrent = selectedIdRef.current === selectionAtStart && tabRef.current === tabAtStart;
+    if (selectionStillCurrent && includeHealth && activeServerId && serverData.health?.[activeServerId]) {
       setHealth(serverData.health[activeServerId]);
     }
     if (metadataResult.data) { setMetadata(metadataResult.data); setMetadataError(""); }
@@ -326,18 +334,18 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     if (settingsData) {
       setSettings((current) => settingsData.storage || !current ? settingsData : { ...settingsData, storage: current.storage });
     }
-    if (!selectedId && serverData.servers[0] && !utilityTabs.has(tab)) setSelectedId(serverData.servers[0].id);
-    if (selectedId && !serverData.servers.some((server) => server.id === selectedId)) setSelectedId(serverData.servers[0]?.id ?? "");
+    if (selectionStillCurrent && !selectedId && serverData.servers[0] && !utilityTabs.has(tab)) setSelectedId(serverData.servers[0].id);
+    if (selectionStillCurrent && selectedId && !serverData.servers.some((server) => server.id === selectedId)) setSelectedId(serverData.servers[0]?.id ?? "");
     // No servers exist — redirect to the overview welcome screen.
     // Use replaceState instead of pushAppRoute to avoid syncRoute
     // overriding the tab back to initialTab (e.g., "create").
-    if (serverData.servers.length === 0 && tab !== "overview" && tab !== "create" && tab !== "import") {
+    if (selectionStillCurrent && serverData.servers.length === 0 && tab !== "overview" && tab !== "create" && tab !== "import") {
       setRawTab("overview");
       setSelectedId("");
       if (typeof window !== "undefined") {
         window.history.replaceState(null, "", "/");
       }
-    } else if (serverData.servers.length === 0 && selectedId) {
+    } else if (selectionStillCurrent && serverData.servers.length === 0 && selectedId) {
       setSelectedId("");
       if (typeof window !== "undefined" && !utilityTabs.has(tab)) {
         window.history.replaceState(null, "", "/");
@@ -380,6 +388,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   async function refreshSelected(serverId = selected?.id, { clear = false, includeMods = isModsTab(tab), includeBackups = tab === "backups", includeLogs = tab === "console", includeHealth = tab === "overview" }: { clear?: boolean; includeMods?: boolean; includeBackups?: boolean; includeLogs?: boolean; includeHealth?: boolean } = {}) {
     if (!serverId) { if (clear) { setMods([]); setBackups([]); setLogs([]); setHealth(null); } return; }
     if (clear) { setMods([]); setBackups([]); setLogs([]); setHealth(null); }
+    const requestId = ++selectedDataRequest.current;
+    const requestTab = tabRef.current;
     const targetServer = servers.find((server) => server.id === serverId) ?? (selected?.id === serverId ? selected : null);
     const fetchMods = includeMods && Boolean(targetServer && serverTypeSupportsContent(targetServer.type));
     const [modData, backupData, logData, healthData] = await Promise.all([
@@ -388,6 +398,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       includeLogs ? fetchServerLogs(serverId) : Promise.resolve(null),
       includeHealth ? fetchServerHealth(serverId) : Promise.resolve(null),
     ]);
+    if (requestId !== selectedDataRequest.current || selectedIdRef.current !== serverId || tabRef.current !== requestTab) return;
     if (modData) setMods(modData.mods ?? []);
     else if (targetServer && !serverTypeSupportsContent(targetServer.type)) setMods([]);
     if (backupData) setBackups(backupData.backups ?? []);
@@ -614,22 +625,27 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     return () => window.clearTimeout(timer);
   }, [initialLoading, selectedServerId, selectedModsSupported, setTab, tab]);
   useEffect(() => {
-    if (daemonRuntimeEnabled() && liveServerId) return;
+    if (daemonRuntimeEnabled() && liveServerId && liveConnected) return;
     const intervalMs = runtime.runningServerId ? 60000 : 120000;
     const timer = window.setInterval(() => {
       if (document.hidden) return;
       loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: false }).catch(() => undefined);
       if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: false, includeHealth: tab === "overview" }).catch(() => undefined);
     }, intervalMs);
-    return () => window.clearTimeout(timer);
+    if (liveServerId && !liveConnected) {
+      loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: tab === "overview" }).catch(() => undefined);
+      if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: tab === "console", includeHealth: tab === "overview" }).catch(() => undefined);
+    }
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveServerId, runtime.runningServerId, selected?.id, tab]);
+  }, [liveConnected, liveServerId, runtime.runningServerId, selected?.id, tab]);
 
   useEffect(() => {
     if (!liveServerId || typeof WebSocket === "undefined") {
       return;
     }
     return subscribeRuntime(liveServerId, {
+      onConnectionChange: setLiveConnected,
       onSnapshot: (data) => {
         applyRuntime(data.runtime);
         if (data.logs) setLogs(data.logs);
@@ -645,7 +661,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       includeUsage: tab === "overview",
       includeLogs: tab === "console",
     });
-  }, [applyRuntime, liveServerId, setMessage, tab]);
+  }, [applyRuntime, liveServerId, setMessage, setLiveConnected, tab]);
 
   useEffect(() => {
     const attentionLines = startFailureLines(logs, selectedRuntime, selected);
