@@ -235,6 +235,21 @@
 }
 
 /* Chart cards */
+.chart-card { position: relative; }
+
+.chart-empty {
+  position: absolute;
+  right: 0;
+  left: 0;
+  top: 58%;
+  margin: 0;
+  padding: 0 24px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+  text-align: center;
+  pointer-events: none;
+}
+
 .chart-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

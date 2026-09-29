@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, FolderPlus, FilePlus, Plus, Upload } from "lucide-react";
+import { FolderOpen, FolderPlus, FilePlus, Plus, Trash2, Upload } from "lucide-react";
 import { formatBytes, joinDisplayPath, shortDate } from "../lib/utils";
 import { fetchServerFile, runFileAction, uploadServerFile } from "../lib/runtime-client";
 import type { ConfirmRequest, FileListing, FilePayload, ServerRecord, UnsavedChangesRegistration } from "../lib/types";
@@ -273,12 +273,12 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
               <Input type="checkbox" aria-label={`Select ${entry.name}`} checked={selectedPaths.includes(entry.path)} onChange={(event) => setSelectedPaths((current) => event.target.checked ? [...current, entry.path] : current.filter((item) => item !== entry.path))} />
               <Button className="file-open-button" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
                 <span>{entry.type === "directory" ? "📁" : entry.editable ? "📝" : "📄"} {entry.name}</span>
-                <small>{entry.type === "file" ? `${formatBytes(entry.size)}${entry.editable ? " / editable" : ""}` : "folder"} / {shortDate(entry.updatedAt)}</small>
+                <small>{entry.type === "file" ? `${formatBytes(entry.size)}${entry.editable ? " · editable" : ""}` : "Folder"} · {shortDate(entry.updatedAt)}</small>
               </Button>
-              <Button variant="danger" disabled={Boolean(busy)} onClick={() => onConfirm({
+              <Button variant="danger-ghost" aria-label={`Delete ${entry.name}`} title="Delete" disabled={Boolean(busy)} onClick={() => onConfirm({
                 title: entry.type === "directory" ? "Delete folder" : "Delete file", message: `${entry.name} will be removed.${entry.type === "directory" ? " This also removes everything inside it." : ""}`, confirmLabel: "Delete", dangerous: true,
                 onConfirm: () => deletePath(entry.path, entry.name),
-              })} loading={busy === `delete:${entry.path}`} loadingText="Deleting...">Delete</Button>
+              })} loading={busy === `delete:${entry.path}`} loadingText="Deleting..."><Trash2 size={15} /></Button>
             </div>
           ))}
           {entries.length === 0 && listing && <p className="muted">No entries match.</p>}

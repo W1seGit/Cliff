@@ -28,6 +28,17 @@
   width: 100%;
 }
 
+/* Quiet destructive action for rows and tables: red on hover, not a solid block. */
+.danger-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.danger-ghost:hover:not(:disabled) {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
 /* Icon-only buttons */
 .icon-only {
   width: 32px;
@@ -587,6 +598,13 @@
   color: var(--text);
   font-size: var(--text-xs);
   line-height: 1.4;
+}
+
+/* Links inside cards, banners and rows */
+.card a,
+.banner a,
+.setting-row a {
+  color: var(--accent);
 }
 
 /* Inline field validation message */

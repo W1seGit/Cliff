@@ -392,10 +392,13 @@
   text-align: center;
 }
 
-.empty-state h3 {
+.empty-state h3,
+.panel .empty-state h3 {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
   color: var(--text);
 }
 

@@ -3,7 +3,7 @@
 import type { ServerType } from "../lib/types";
 
 type ServerTypePreset = { type: ServerType; label: string; logo: string; detail: string; recommended?: boolean };
-type DisabledPreset = { label: string; logo: string; detail: string; badge: string };
+type DisabledPreset = { label: string; logo: string; detail: string };
 
 const pluginPresets: ServerTypePreset[] = [
   { type: "paper", label: "Paper", logo: "/assets/logos/papermc.svg", detail: "High-performance plugin server", recommended: true },
@@ -22,7 +22,7 @@ const vanillaPresets: ServerTypePreset[] = [
 ];
 
 const comingLaterPresets: DisabledPreset[] = [
-  { label: "Spigot", logo: "/assets/logos/spigot.png", detail: "Requires BuildTools compilation", badge: "Coming later" },
+  { label: "Spigot", logo: "/assets/logos/spigot.png", detail: "Requires BuildTools compilation" },
 ];
 
 function PresetButton({ preset, active, onClick }: { preset: ServerTypePreset; active: boolean; onClick: () => void }) {
@@ -51,7 +51,6 @@ function DisabledPresetButton({ preset }: { preset: DisabledPreset }) {
         <strong>{preset.label}</strong>
         <small>{preset.detail}</small>
       </span>
-      <span className="preset-badge">{preset.badge}</span>
     </button>
   );
 }

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import {
   Archive, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   FolderOpen, Globe, LayoutDashboard, LogOut, MoreHorizontal,
-  Package, Plus, Puzzle, RadioTower, Search, Settings, Terminal, Upload, UserRound, Users,
+  Package, Plus, Puzzle, RadioTower, Search, Settings, SlidersHorizontal, Terminal, Upload, UserRound, Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -34,7 +34,7 @@ const serverNavItems: NavItem[] = [
   { id: "backups", label: "Backups", Icon: Archive },
   { id: "players", label: "Players", Icon: Users },
   { id: "public-access", label: "Public Access", Icon: RadioTower },
-  { id: "settings", label: "Settings", Icon: Settings },
+  { id: "settings", label: "Settings", Icon: SlidersHorizontal },
 ];
 
 const modsChildItems: ModsChildItem[] = [

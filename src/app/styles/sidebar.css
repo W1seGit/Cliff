@@ -43,6 +43,12 @@
   color: var(--text);
 }
 
+/* When the group is open, the highlighted child carries the selection. */
+.sidebar-nav-group.expanded > .sidebar-nav-item.parent-active {
+  background: transparent;
+  box-shadow: none;
+}
+
 .sidebar-nav-item:disabled {
   color: var(--text-tertiary);
   opacity: 0.45;

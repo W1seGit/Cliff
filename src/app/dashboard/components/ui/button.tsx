@@ -3,7 +3,7 @@
 import React from "react";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "danger" | "link" | "default";
+  variant?: "primary" | "danger" | "danger-ghost" | "link" | "default";
   size?: "sm" | "md" | "lg";
   /** Stretch to the full width of the container. */
   block?: boolean;
@@ -31,6 +31,7 @@ export function Button({
     const classes: string[] = [];
     if (variant === "primary") classes.push("primary");
     else if (variant === "danger") classes.push("danger-button");
+    else if (variant === "danger-ghost") classes.push("danger-ghost");
     else if (variant === "link") classes.push("button-link");
     if (size !== "md") classes.push(`btn-${size}`);
     if (block) classes.push("btn-block");

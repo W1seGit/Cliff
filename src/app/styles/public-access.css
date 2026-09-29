@@ -171,30 +171,6 @@
   object-fit: contain;
 }
 
-.public-access-empty-state {
-  display: grid;
-  gap: 10px;
-  align-items: start;
-  min-height: 150px;
-  padding: 18px 0 6px;
-}
-
-.public-access-empty-copy {
-  display: grid;
-  gap: 7px;
-  min-width: 0;
-}
-
-.public-access-empty-copy h3,
-.public-access-empty-copy p {
-  margin: 0;
-}
-
-.public-access-empty-copy p {
-  max-width: 620px;
-  color: var(--text-secondary);
-}
-
 .inline-actions button {
   display: inline-flex;
   align-items: center;
@@ -380,10 +356,6 @@
 
 @media (max-width: 760px) {
   .public-access-flow-hero {
-    grid-template-columns: 1fr;
-  }
-
-  .public-access-empty-state {
     grid-template-columns: 1fr;
   }
 }

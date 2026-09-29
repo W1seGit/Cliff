@@ -49,9 +49,11 @@
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--text);
+  color: var(--text-secondary);
+  font-weight: 400;
   text-align: left;
 }
+.backup-summary-button:hover { color: var(--text); }
 .backup-summary-button svg {
   color: var(--text-secondary);
   transition: transform 120ms ease;
@@ -217,6 +219,25 @@
   padding: 6px;
   background: transparent;
   text-align: left;
+}
+
+.file-open-button > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-open-button small {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+@media (max-width: 620px) {
+  .file-open-button small {
+    display: none;
+  }
 }
 .file-open-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.03); }
 

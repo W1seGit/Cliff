@@ -31,6 +31,7 @@ import { Toggle } from "../components/ui/toggle";
 import { JoinAddress } from "../components/ui/join-address";
 import { ConsoleView } from "../components/ui/console-view";
 import { Skeleton } from "../components/ui/skeleton";
+import { EmptyState } from "../components/ui/empty-state";
 
 type InstallState = "not-installed" | "installing" | "installed" | "failed";
 type ClaimState = "starting-agent" | "waiting-for-claim-link" | "claim-link-ready" | "waiting-for-user-to-claim" | "claimed" | "failed";
@@ -996,14 +997,17 @@ export function PublicAccessPanel({
     );
   }
 
+  const openSetup = () => {
+    if (onConfigure) onConfigure();
+    else { setSetupOpen(true); goToSetupStep(config.claimed ? 2 : agentInstalled ? 1 : 0); }
+  };
+
   return (
-    <Panel className="public-access-panel public-access-layout" title="Public Access" description="Expose this server to the internet so friends can join remotely." icon={<RadioTower />} headerActions={
+    <Panel className="public-access-panel public-access-layout" title="Public Access" description="Expose this server to the internet so friends can join remotely." icon={<RadioTower />} headerActions={configured ? (
       <Toolbar>
-        <Button variant="primary" onClick={() => { if (onConfigure) onConfigure(); else { setSetupOpen(true); goToSetupStep(config.claimed ? 2 : agentInstalled ? 1 : 0); } }}>
-          {configured ? "Manage setup" : "Configure Public Access"}
-        </Button>
+        <Button variant="primary" onClick={openSetup}>Manage setup</Button>
       </Toolbar>
-    }>
+    ) : undefined}>
       {loadingConfig ? (
         <div className="public-access-skeleton" aria-hidden="true">
           <div className="public-access-skeleton-row">
@@ -1057,12 +1061,12 @@ export function PublicAccessPanel({
           ) : null}
         </>
       ) : (
-        <div className="public-access-empty-state">
-          <div className="public-access-empty-copy">
-            <h3>Your server is currently not configured for public access.</h3>
-            <p>Public Access uses Playit to create a secure tunnel, allowing your friends to join this server from anywhere without requiring you to configure router port forwarding.</p>
-          </div>
-        </div>
+        <EmptyState
+          icon={<RadioTower size={22} />}
+          title="Public access is off"
+          description="Public Access uses Playit to create a secure tunnel, so friends can join from anywhere without router port forwarding."
+          action={<Button variant="primary" onClick={openSetup}>Configure Public Access</Button>}
+        />
       )}
     </Panel>
   );

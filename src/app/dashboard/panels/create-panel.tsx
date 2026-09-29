@@ -108,7 +108,6 @@ export function CreatePanel({
 
   return (
     <Panel className="form-grid utility-wizard-panel wizard-panel">
-      <h2>Create server profile</h2>
       <div className="wizard-header">
         <WizardTabs
           steps={createSteps}

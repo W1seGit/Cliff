@@ -137,12 +137,18 @@ export function OverviewPanel({
   const healthChecks = health?.checks ?? [];
   const attentionChecks = healthChecks.filter((check) => check.state !== "ok");
 
+  // Type, version and address already live in the header and the join address above,
+  // so this strip only shows facts that appear nowhere else.
+  const pluginServer = ["paper", "purpur", "folia"].includes(selected.type);
   const overviewStats = [
-    { label: "Type", value: selected.type },
-    { label: "Version", value: selected.minecraftVersion },
-    { label: "Port", value: selected.port },
+    { label: "Active world", value: health?.activeWorld || "—" },
     { label: "Worlds", value: health?.counts.worlds ?? "—" },
-    { label: "Mods", value: health ? `${health.counts.mods}${health.counts.disabledMods ? ` (${health.counts.disabledMods} off)` : ""}` : "—" },
+    ...(selected.type === "vanilla" ? [] : [{
+      label: pluginServer ? "Plugins" : "Mods",
+      value: health ? `${health.counts.mods}${health.counts.disabledMods ? ` (${health.counts.disabledMods} off)` : ""}` : "—",
+    }]),
+    { label: "Datapacks", value: health?.counts.datapacks ?? "—" },
+    { label: "Player files", value: health?.counts.playerFiles ?? "—" },
   ];
 
   // Rolling window — right edge is always "now", ticking every 1s.
@@ -220,7 +226,7 @@ export function OverviewPanel({
         <div className="chart-card-head">
           <div className="chart-card-heading">
             <h2>Server usage</h2>
-            <p>{isRunning && hasChartData ? "live" : (hasChartData ? "historical" : "no data")}</p>
+            {hasChartData && <p>{isRunning ? "live" : "historical"}</p>}
           </div>
           <div className="chart-card-controls">
             <div className="chart-legend">
@@ -250,6 +256,11 @@ export function OverviewPanel({
             </div>
           </div>
         </div>
+        {!hasChartData && (
+          <p className="chart-empty">
+            {isRunning ? "Collecting usage data..." : "CPU, memory and player history will appear here once the server has run."}
+          </p>
+        )}
         <AreaChart
           height={300}
           max={100}

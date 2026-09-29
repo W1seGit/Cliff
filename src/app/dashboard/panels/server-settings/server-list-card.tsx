@@ -3,14 +3,12 @@
 import { useId, useRef } from "react";
 import { RotateCcw, Upload } from "lucide-react";
 import type { ServerProperties } from "../../lib/types";
-import { Button, Card, Input, ToggleRow } from "../../components/ui";
+import { Button, Card, Input } from "../../components/ui";
 
 export function ServerListCard({
   serverName,
   draft,
   onMotdChange,
-  eulaAccepted,
-  onEulaChange,
   iconSrc,
   onIconError,
   onIconFile,
@@ -20,8 +18,6 @@ export function ServerListCard({
   serverName: string;
   draft: ServerProperties["editable"];
   onMotdChange: (value: string) => void;
-  eulaAccepted: boolean;
-  onEulaChange: (accepted: boolean) => void;
   iconSrc: string;
   onIconError: () => void;
   onIconFile: (file: File | null) => void;
@@ -33,7 +29,6 @@ export function ServerListCard({
 
   return (
     <Card title="Server list" description="How your server appears in the Minecraft multiplayer menu.">
-      <ToggleRow label="Accept Minecraft EULA" description="Required before the server can start." checked={eulaAccepted} onChange={onEulaChange} />
       <div className="server-list-editor">
         <div className="mc-server-preview" aria-label="Minecraft server list preview">
           <div className="mc-server-icon">

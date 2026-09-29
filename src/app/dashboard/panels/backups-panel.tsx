@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState } from "react";
-import { Archive, Camera, ChevronDown, Download, FileText, RotateCcw, Settings, Trash2 } from "lucide-react";
+import { Archive, CalendarClock, Camera, ChevronDown, Download, FileText, RotateCcw, Trash2 } from "lucide-react";
 import { formatBytes, formatDate, formatDateTime } from "../lib/utils";
 import { backupUrl, fetchBackupDiff, runBackupAction, updateServerProfile } from "../lib/runtime-client";
 import type { Backup, BackupChange, BackupDiff, ConfirmRequest, ServerRecord } from "../lib/types";
@@ -170,7 +170,7 @@ export function BackupsPanel({
   return (
     <Panel
       className="backups-list-panel"
-      title="Snapshots"
+      title="Backups"
       description="Point-in-time snapshots you can restore or export."
       icon={<Archive />}
     >
@@ -198,7 +198,7 @@ export function BackupsPanel({
       <Modal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
-        title="Snapshot settings"
+        title="Auto backups"
         cancelLabel="Close"
         description="Configure automatic and scheduled snapshots for this server."
         busy={Boolean(busyAction)}
@@ -311,7 +311,7 @@ export function BackupsPanel({
         ]}
         actions={
           <>
-            <Button className="backups-settings-action" onClick={() => setShowSettings(true)}><Settings size={14} />Settings</Button>
+            <Button className="backups-settings-action" onClick={() => setShowSettings(true)}><CalendarClock size={14} />Auto backups</Button>
             <div className="backups-action-pair">
               <Button disabled={Boolean(busyAction) || isRunning} onClick={() => window.open(backupUrl(server.id, "?current=1"), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download the current server folder as a zip"}><Download size={14} />Download server</Button>
               <Button variant="primary" disabled={Boolean(busyAction)} onClick={() => setShowCreateSnapshot(true)}><Camera size={14} />Create snapshot</Button>
@@ -375,7 +375,7 @@ export function BackupsPanel({
                         dangerous: true,
                         onConfirm: async () => { await action({ action: "restore", backupId: backup.id }, "restore"); },
                       })} title={isRunning ? "Stop the server before restoring" : "Restore this revision"}><RotateCcw size={14} /></Button>
-                      <Button variant="danger" disabled={Boolean(busyAction)} onClick={() => onConfirm({
+                      <Button variant="danger-ghost" aria-label="Delete snapshot" title="Delete this revision" disabled={Boolean(busyAction)} onClick={() => onConfirm({
                         title: "Delete snapshot",
                         message: `${backup.reason} will be permanently removed.`,
                         confirmLabel: "Delete",

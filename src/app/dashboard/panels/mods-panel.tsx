@@ -965,7 +965,7 @@ export function ModsPanel({
                               </Button>
                             ) : null}
                           </span>
-                          <small>{item.metadata ? `${item.metadata.source}${item.metadata.versionNumber ? ` / ${item.metadata.versionNumber}` : ""}` : item.fileName}</small>
+                          {item.metadata && <small>{`${item.metadata.source}${item.metadata.versionNumber ? ` / ${item.metadata.versionNumber}` : ""}`}</small>}
                         </span>
                       </div>
                     </td>

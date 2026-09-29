@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Cpu, Gamepad2, Settings, SlidersHorizontal, Wrench } from "lucide-react";
+import { Cpu, Gamepad2, Server, SlidersHorizontal, Wrench } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange } from "../lib/utils";
 import { fetchServerProperties, runFileAction, saveServerProperties, serverFileUrl, updateServerProfile, uploadServerFile } from "../lib/runtime-client";
 import { useHashSection } from "../lib/use-hash-section";
@@ -9,7 +9,7 @@ import type { MinecraftMetadata, ServerProperties, ServerPropertiesEditable, Ser
 import { Banner, Card, PageHeader, SettingsLayout, SettingsSectionPanel, SkeletonRows } from "../components/ui";
 import { ImageCropModal } from "../components/ui/image-crop-modal";
 import { notifyServerIconUpdated } from "../components/server-avatar";
-import { GameplayCard, RulesCard, WorldCard } from "./server-settings/game-sections";
+import { EulaCard, GameplayCard, RulesCard, WorldCard } from "./server-settings/game-sections";
 import { ServerListCard } from "./server-settings/server-list-card";
 import { ProfileGeneralCard, ProfileVersionCard, RuntimeSections } from "./server-settings/profile-sections";
 import { RawPropertiesCard } from "./server-settings/advanced-section";
@@ -317,11 +317,11 @@ export function ServerSettingsPanel({
 
   const navItems = [
     { id: "game", label: "Game", icon: <Gamepad2 size={16} aria-hidden="true" />, dirty: gameDirty },
-    { id: "profile", label: "Profile", icon: <SlidersHorizontal size={16} aria-hidden="true" />, dirty: profileSectionDirty },
+    { id: "profile", label: "Profile", icon: <Server size={16} aria-hidden="true" />, dirty: profileSectionDirty },
     { id: "runtime", label: "Runtime", icon: <Cpu size={16} aria-hidden="true" />, dirty: runtimeDirty },
     { id: "advanced", label: "Advanced", icon: <Wrench size={16} aria-hidden="true" />, dirty: advancedDirty },
   ];
-  const header = <PageHeader title="Settings" icon={<Settings size={20} aria-hidden="true" />} description="Configure game behavior and the server profile." />;
+  const header = <PageHeader title="Settings" icon={<SlidersHorizontal size={20} aria-hidden="true" />} description="Configure game behavior and the server profile." />;
 
   if (!draft) return (
     <section className="server-settings-page">
@@ -341,12 +341,11 @@ export function ServerSettingsPanel({
       <SettingsLayout ariaLabel="Server settings sections" items={navItems} activeId={activeSection} onChange={selectSection} idPrefix={idPrefix}>
         <SettingsSectionPanel idPrefix={idPrefix} id="game" activeId={activeSection}>
           {restartNote}
+          <EulaCard accepted={eulaAccepted} onChange={setEulaAccepted} />
           <ServerListCard
             serverName={profile.name || server.name}
             draft={draft}
             onMotdChange={(value) => setField("motd", value)}
-            eulaAccepted={eulaAccepted}
-            onEulaChange={setEulaAccepted}
             iconSrc={iconSrc}
             onIconError={() => setIconFallback(true)}
             onIconFile={uploadServerIcon}

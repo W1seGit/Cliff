@@ -1,6 +1,6 @@
 "use client";
 
-import { HardDrive, ScrollText, SlidersHorizontal, Coffee, Download } from "lucide-react";
+import { HardDrive, ScrollText, Package, Coffee, Download } from "lucide-react";
 import { browserOrigin, externalApiBase } from "../lib/utils";
 import { useHashSection } from "../lib/use-hash-section";
 import type { ConfirmRequest, MinecraftMetadata, Settings, UnsavedChangesRegistration, UpdateCheckResult, User } from "../lib/types";
@@ -17,7 +17,7 @@ const sections = ["general", "java", "network", "logs", "updates"] as const;
 type SettingsSection = (typeof sections)[number];
 
 const navItems = [
-  { id: "general", label: "General", icon: <SlidersHorizontal size={16} aria-hidden="true" /> },
+  { id: "general", label: "Versions", icon: <Package size={16} aria-hidden="true" /> },
   { id: "java", label: "Java", icon: <Coffee size={16} aria-hidden="true" /> },
   { id: "network", label: "Network & Storage", icon: <HardDrive size={16} aria-hidden="true" /> },
   { id: "logs", label: "Logs", icon: <ScrollText size={16} aria-hidden="true" /> },
