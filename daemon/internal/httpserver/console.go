@@ -9,10 +9,14 @@ import (
 	"github.com/W1seGit/Cliff/daemon/internal/process"
 )
 
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true
-	},
+// consoleUpgrader only accepts browser handshakes from the daemon's own origin
+// (or CLIFF_ALLOWED_ORIGINS), blocking cross-site WebSocket hijacking.
+func (h apiHandler) consoleUpgrader() *websocket.Upgrader {
+	return &websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return originAllowed(r, h.config.AllowedOrigins)
+		},
+	}
 }
 
 type consoleMessage struct {
@@ -46,7 +50,7 @@ func (h apiHandler) console(w http.ResponseWriter, r *http.Request) {
 	serverID := r.PathValue("id")
 	includeUsage := r.URL.Query().Get("usage") == "1"
 	includeLogs := consoleIncludesLogs(r)
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := h.consoleUpgrader().Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}

@@ -116,6 +116,47 @@ After installing, `cliff` is available in your terminal:
 
 ---
 
+## 🔒 Security & HTTPS
+
+Cliff listens on plain HTTP and binds to all interfaces by default, so treat it accordingly:
+
+- **On a home network**, HTTP is fine. Use `--host 127.0.0.1` (or `CLIFF_HOST=127.0.0.1`) if only the local machine needs access.
+- **On a VPS or the internet**, put Cliff behind a reverse proxy that terminates HTTPS and bind Cliff to `127.0.0.1`. Session cookies automatically become `Secure` when the proxy sends `X-Forwarded-Proto: https`.
+- Logins are rate limited (5 failures per 15 minutes per IP and per username), and browser requests from other origins are rejected.
+
+**Caddy** (automatic certificates):
+
+```caddyfile
+cliff.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+**nginx:**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name cliff.example.com;
+    # ssl_certificate / ssl_certificate_key ...
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;      # live console WebSocket
+        proxy_set_header Connection "upgrade";
+        client_max_body_size 0;                       # large world/mod uploads
+    }
+}
+```
+
+The proxy must pass the original `Host` header; the console WebSocket and API reject requests whose `Origin` does not match it. If you serve the dashboard from a different hostname than the API, list that origin in `CLIFF_ALLOWED_ORIGINS`.
+
+---
+
 ## 💻 Supported Platforms
 
 | Platform | Architecture |

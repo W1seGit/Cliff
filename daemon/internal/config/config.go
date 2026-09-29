@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 type Options struct {
@@ -23,6 +24,9 @@ type Config struct {
 	WebDir       string `json:"webDir"`
 	Host         string `json:"host"`
 	Port         int    `json:"port"`
+	// AllowedOrigins lists extra browser origins (scheme://host[:port]) that may
+	// call the API cross-origin. Same-origin requests never need an entry.
+	AllowedOrigins []string `json:"-"`
 }
 
 func Load(options Options) (Config, error) {
@@ -85,7 +89,20 @@ func Load(options Options) (Config, error) {
 		WebDir:       webDir,
 		Host:         host,
 		Port:         port,
+
+		AllowedOrigins: parseOriginList(os.Getenv("CLIFF_ALLOWED_ORIGINS")),
 	}, nil
+}
+
+func parseOriginList(value string) []string {
+	var origins []string
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimRight(strings.TrimSpace(part), "/")
+		if part != "" {
+			origins = append(origins, part)
+		}
+	}
+	return origins
 }
 
 func (c Config) LocalURL() string {

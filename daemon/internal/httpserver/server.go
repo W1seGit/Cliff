@@ -63,6 +63,7 @@ func New(options Options) http.Handler {
 		playitBuild:   newPlayitBuildManager(),
 		logBuffer:     options.LogBuffer,
 		updater:       options.Updater,
+		loginLimiter:  newLoginLimiter(),
 	}
 	if options.SchedulerContext != nil {
 		go api.runScheduler(options.SchedulerContext)
@@ -124,7 +125,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/servers/{id}/console", api.requireUser(api.console))
 	mux.Handle("/", spaFileServer(options.Config.WebDir))
 
-	return withErrorLogging(withCommonHeaders(mux))
+	return withErrorLogging(withCommonHeaders(options.Config.AllowedOrigins, mux))
 }
 
 type apiHandler struct {
@@ -140,6 +141,7 @@ type apiHandler struct {
 	playitBuild   *playitBuildManager
 	logBuffer     *logbuf.Buffer
 	updater       *updater.Manager
+	loginLimiter  *loginLimiter
 }
 
 type storageUsageCache struct {
@@ -1038,24 +1040,6 @@ func setStaticCacheHeaders(w http.ResponseWriter, requestPath string, spaFallbac
 		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-}
-
-func withCommonHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if origin := r.Header.Get("Origin"); origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
-		}
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 type statusRecorder struct {

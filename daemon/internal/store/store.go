@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -13,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/pbkdf2"
 	_ "modernc.org/sqlite"
 )
 
@@ -32,6 +32,16 @@ type Settings struct {
 }
 
 const passwordIterations = 210_000
+
+// ErrInvalidCredentials is returned for an unknown user or a wrong password.
+var ErrInvalidCredentials = errors.New("Invalid username or password")
+
+// dummyPasswordHash is a well-formed hash no password matches, used to keep
+// login timing uniform for unknown usernames.
+var dummyPasswordHash = func() string {
+	hash, _ := hashPassword("cliff-dummy-password", "0000000000000000")
+	return hash
+}()
 const sessionDays = 14
 
 type Server struct {
@@ -307,7 +317,7 @@ func (s *Store) CreateUser(ctx context.Context, username string, password string
 	if hasUser {
 		return User{}, errors.New("Initial user already exists")
 	}
-	if len(stringsTrim(username)) < 3 {
+	if len(strings.TrimSpace(username)) < 3 {
 		return User{}, errors.New("Username must be at least 3 characters")
 	}
 	if len(password) < 10 {
@@ -322,7 +332,7 @@ func (s *Store) CreateUser(ctx context.Context, username string, password string
 	if err != nil {
 		return User{}, err
 	}
-	user := User{ID: id, Username: stringsTrim(username)}
+	user := User{ID: id, Username: strings.TrimSpace(username)}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)`, user.ID, user.Username, passwordHash, time.Now().UTC().Format(time.RFC3339))
 	if err != nil {
 		return User{}, err
@@ -331,17 +341,20 @@ func (s *Store) CreateUser(ctx context.Context, username string, password string
 }
 
 func (s *Store) Authenticate(ctx context.Context, username string, password string) (User, error) {
-	row := s.db.QueryRowContext(ctx, `SELECT id, username, password_hash FROM users WHERE username = ?`, stringsTrim(username))
+	row := s.db.QueryRowContext(ctx, `SELECT id, username, password_hash FROM users WHERE username = ?`, strings.TrimSpace(username))
 	var user User
 	var passwordHash string
 	if err := row.Scan(&user.ID, &user.Username, &passwordHash); err != nil {
-		if err == sql.ErrNoRows {
-			return User{}, errors.New("Invalid username or password")
+		if errors.Is(err, sql.ErrNoRows) {
+			// Burn the same PBKDF2 cost as a real check so response time
+			// does not reveal whether the username exists.
+			verifyPassword(password, dummyPasswordHash)
+			return User{}, ErrInvalidCredentials
 		}
 		return User{}, err
 	}
 	if !verifyPassword(password, passwordHash) {
-		return User{}, errors.New("Invalid username or password")
+		return User{}, ErrInvalidCredentials
 	}
 	return user, nil
 }
@@ -573,12 +586,12 @@ func hashPassword(password string, salt string) (string, error) {
 		salt = nextSalt
 	}
 	saltBytes := []byte(salt)
-	hash := pbkdf2SHA256([]byte(password), saltBytes, passwordIterations, 32)
+	hash := pbkdf2.Key([]byte(password), saltBytes, passwordIterations, 32, sha256.New)
 	return fmt.Sprintf("%s:%s", salt, hex.EncodeToString(hash)), nil
 }
 
 func verifyPassword(password string, stored string) bool {
-	salt, expectedHex, ok := stringsCut(stored, ":")
+	salt, expectedHex, ok := strings.Cut(stored, ":")
 	if !ok {
 		return false
 	}
@@ -586,7 +599,7 @@ func verifyPassword(password string, stored string) bool {
 	if err != nil {
 		return false
 	}
-	_, candidateHex, ok := stringsCut(candidate, ":")
+	_, candidateHex, ok := strings.Cut(candidate, ":")
 	if !ok {
 		return false
 	}
@@ -599,50 +612,6 @@ func verifyPassword(password string, stored string) bool {
 		return false
 	}
 	return subtle.ConstantTimeCompare(expected, actual) == 1
-}
-
-func pbkdf2SHA256(password []byte, salt []byte, iterations int, keyLength int) []byte {
-	hashLength := sha256.Size
-	blocks := (keyLength + hashLength - 1) / hashLength
-	output := make([]byte, 0, blocks*hashLength)
-	for block := 1; block <= blocks; block++ {
-		mac := hmac.New(sha256.New, password)
-		mac.Write(salt)
-		mac.Write([]byte{byte(block >> 24), byte(block >> 16), byte(block >> 8), byte(block)})
-		u := mac.Sum(nil)
-		t := append([]byte(nil), u...)
-		for i := 1; i < iterations; i++ {
-			mac = hmac.New(sha256.New, password)
-			mac.Write(u)
-			u = mac.Sum(nil)
-			for j := range t {
-				t[j] ^= u[j]
-			}
-		}
-		output = append(output, t...)
-	}
-	return output[:keyLength]
-}
-
-func stringsTrim(value string) string {
-	start := 0
-	end := len(value)
-	for start < end && (value[start] == ' ' || value[start] == '\t' || value[start] == '\n' || value[start] == '\r') {
-		start++
-	}
-	for end > start && (value[end-1] == ' ' || value[end-1] == '\t' || value[end-1] == '\n' || value[end-1] == '\r') {
-		end--
-	}
-	return value[start:end]
-}
-
-func stringsCut(value string, separator string) (string, string, bool) {
-	for i := 0; i+len(separator) <= len(value); i++ {
-		if value[i:i+len(separator)] == separator {
-			return value[:i], value[i+len(separator):], true
-		}
-	}
-	return value, "", false
 }
 
 func (s *Store) GetServer(ctx context.Context, id string) (Server, bool, error) {
