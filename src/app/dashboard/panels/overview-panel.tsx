@@ -199,7 +199,7 @@ export function OverviewPanel({
 
   return (
     <section className="overview-layout">
-      <div className="overview-hero surface-card">
+      <div className="overview-hero">
         <span className="overview-hero-label">{publicActive ? "Public join address" : "Join address"}</span>
         <button className="overview-hero-address" onClick={() => copyAddress()} aria-label="Copy join address">
           <strong>{joinAddress}</strong>
@@ -207,7 +207,7 @@ export function OverviewPanel({
         </button>
       </div>
 
-      <div className="overview-stat-cards surface-card">
+      <div className="overview-stat-cards">
         {overviewStats.map((stat) => (
           <div key={String(stat.label)} className="overview-stat-card">
             <span className="overview-stat-card-label">{stat.label}</span>
@@ -216,7 +216,7 @@ export function OverviewPanel({
         ))}
       </div>
 
-      <div className="chart-card surface-card">
+      <div className="chart-card">
         <div className="chart-card-head">
           <div className="chart-card-heading">
             <h2>Server usage</h2>

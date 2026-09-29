@@ -1,11 +1,4 @@
 /* Standardized component library */
-.surface-card {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius);
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.018), var(--surface) 58%);
-  box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.025);
-}
-
 .filter-bar {
   display: grid;
   gap: 10px;
