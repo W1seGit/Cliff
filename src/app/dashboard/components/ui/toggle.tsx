@@ -6,9 +6,19 @@ export interface ToggleProps {
   disabled?: boolean;
   id?: string;
   "aria-label"?: string;
+  "aria-labelledby"?: string;
+  "aria-describedby"?: string;
 }
 
-export function Toggle({ checked, onChange, disabled, id, "aria-label": ariaLabel }: ToggleProps) {
+export function Toggle({
+  checked,
+  onChange,
+  disabled,
+  id,
+  "aria-label": ariaLabel,
+  "aria-labelledby": ariaLabelledBy,
+  "aria-describedby": ariaDescribedBy,
+}: ToggleProps) {
   return (
     <button
       type="button"
@@ -16,6 +26,8 @@ export function Toggle({ checked, onChange, disabled, id, "aria-label": ariaLabe
       id={id}
       aria-checked={checked}
       aria-label={ariaLabel}
+      aria-labelledby={ariaLabelledBy}
+      aria-describedby={ariaDescribedBy}
       disabled={disabled}
       className={`toggle ${checked ? "on" : ""}`.trim()}
       onClick={() => onChange(!checked)}

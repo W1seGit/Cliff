@@ -57,7 +57,7 @@
   /* Stacking */
   --z-sticky: 40;
   --z-bar: 60;
-  --z-menu: 100;
+  --z-popover: 300;
   --z-modal: 200;
   --z-toast: 1000;
 
