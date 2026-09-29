@@ -236,7 +236,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       window.removeEventListener("popstate", syncRoute);
       window.removeEventListener("cliff:navigate", syncRoute);
     };
-  }, [initialServerId, initialTab, requestGuardedNavigation]);
+  }, [initialServerId, initialTab, requestGuardedNavigation, setRawTab, setSelectedId]);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -632,11 +632,17 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: false }).catch(() => undefined);
       if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: false, includeHealth: tab === "overview" }).catch(() => undefined);
     }, intervalMs);
+    let fallbackRefreshTimer: number | null = null;
     if (liveServerId && !liveConnected) {
-      loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: tab === "overview" }).catch(() => undefined);
-      if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: tab === "console", includeHealth: tab === "overview" }).catch(() => undefined);
+      fallbackRefreshTimer = window.setTimeout(() => {
+        loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: tab === "overview" }).catch(() => undefined);
+        if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: tab === "console", includeHealth: tab === "overview" }).catch(() => undefined);
+      }, 0);
     }
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      if (fallbackRefreshTimer !== null) window.clearTimeout(fallbackRefreshTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveConnected, liveServerId, runtime.runningServerId, selected?.id, tab]);
 

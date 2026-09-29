@@ -356,7 +356,7 @@ export function ServerSettingsPanel({
             <div className="settings-section">
               <Input label="Java runtime" value={profile.javaPath} onChange={(event) => setProfile((current) => ({ ...current, javaPath: event.target.value }))} />
               <JavaPresetRow javaPath={profile.javaPath} onApply={(javaPath) => setProfile((current) => ({ ...current, javaPath }))} />
-              <Hint>Auto-managed installs and uses the Java version required by this Minecraft profile on first start.</Hint>
+              <Hint>Auto-managed installs the Java version this profile needs during setup or first start.</Hint>
               <FieldGrid columns={2}>
                 <Input label="Min memory" type="number" value={profile.minMemoryMb} onChange={(event) => setProfile((current) => ({ ...current, minMemoryMb: Number(event.target.value) }))} />
                 <Input label="Max memory" type="number" value={profile.maxMemoryMb} onChange={(event) => setProfile((current) => ({ ...current, maxMemoryMb: Number(event.target.value) }))} />

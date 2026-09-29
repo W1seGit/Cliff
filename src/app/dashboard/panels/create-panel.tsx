@@ -49,6 +49,9 @@ export function CreatePanel({
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
 
+  const submittingLabel = type === "forge" || type === "neoforge"
+    ? `Installing ${type === "neoforge" ? "NeoForge" : "Forge"}...`
+    : "Creating...";
   const effectiveMinecraftVersion = minecraftVersion || metadata?.latest.release || "";
   const needsLoader = serverTypeNeedsLoader(type);
   const memoryValid = validMemoryRange(minMemoryMb, maxMemoryMb);
@@ -122,7 +125,7 @@ export function CreatePanel({
           canContinue={canContinue}
           canSubmit={canSubmit}
           submitLabel="Create profile"
-          submittingLabel="Creating..."
+          submittingLabel={submittingLabel}
           onBack={() => setStep((current) => Math.max(0, current - 1))}
           onContinue={() => setStep((current) => Math.min(createSteps.length - 1, current + 1))}
           onSubmit={submit}
@@ -171,7 +174,7 @@ export function CreatePanel({
             <summary>Advanced launch settings</summary>
             <Input label="Java runtime" value={javaPath} onChange={(event) => setJavaPath(event.target.value)} />
             <JavaPresetRow javaPath={javaPath} onApply={setJavaPath} />
-            <Hint>Auto-managed installs and uses the Java version required by this Minecraft profile on first start.</Hint>
+            <Hint>Auto-managed installs the Java version this profile needs during setup or first start.</Hint>
             <Input label="Extra args" value={extraArgs} onChange={(event) => setExtraArgs(event.target.value)} />
             <ExtraArgsPresetRow extraArgs={extraArgs} onApply={setExtraArgs} />
           </details>

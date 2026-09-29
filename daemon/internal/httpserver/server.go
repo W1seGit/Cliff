@@ -721,6 +721,11 @@ func (h apiHandler) start(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	server, err = h.resolveServerLaunchTarget(r, server)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	server, err = h.resolveJavaForLaunch(r, server)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -763,6 +768,11 @@ func (h apiHandler) restart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid restart body")
 		return
 	}
+	server, err = h.resolveServerLaunchTarget(r, server)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	server, err = h.resolveJavaForLaunch(r, server)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -783,6 +793,18 @@ func (h apiHandler) resolveJavaForLaunch(r *http.Request, server store.Server) (
 	}
 	server.JavaPath = resolved
 	return server, nil
+}
+
+func (h apiHandler) resolveServerLaunchTarget(r *http.Request, server store.Server) (store.Server, error) {
+	launchTarget := process.SuggestLaunchTarget(server.Path, server.LaunchJar)
+	if launchTarget == "" {
+		return server, nil
+	}
+	updated, err := h.store.UpdateServer(r.Context(), server.ID, store.Server{LaunchJar: launchTarget})
+	if err != nil {
+		return server, fmt.Errorf("could not update server launch target: %w", err)
+	}
+	return updated, nil
 }
 
 func (h apiHandler) command(w http.ResponseWriter, r *http.Request) {

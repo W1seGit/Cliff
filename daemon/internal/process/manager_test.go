@@ -501,6 +501,31 @@ func TestLaunchCommandSuggestsBetterTargetForInstallerJar(t *testing.T) {
 	}
 }
 
+func TestDetectPlatformLaunchScript(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"run.sh", "run.bat"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("launcher"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, target := range []struct{ goos, want string }{
+		{goos: "windows", want: "run.bat"},
+		{goos: "linux", want: "run.sh"},
+		{goos: "darwin", want: "run.sh"},
+	} {
+		if got := detectPlatformLaunchScript(dir, target.goos); got != target.want {
+			t.Fatalf("platform %s should select %s, got %s", target.goos, target.want, got)
+		}
+	}
+	platformTarget := "run.sh"
+	if runtime.GOOS == "windows" {
+		platformTarget = "run.bat"
+	}
+	if got := SuggestLaunchTarget(dir, "neoforge-installer.jar"); got != platformTarget {
+		t.Fatalf("should suggest the current platform launcher %s, got %s", platformTarget, got)
+	}
+}
+
 func TestCollectUsageFromRowsIncludesProcessTree(t *testing.T) {
 	usage := collectUsageFromRows(10, []processUsageRow{
 		{pid: 1, parentPID: 0, rssKB: 500, cpuPercent: 99},

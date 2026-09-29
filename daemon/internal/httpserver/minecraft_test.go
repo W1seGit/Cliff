@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -188,15 +189,22 @@ func TestScanImportedFabricServerReadsLibrariesAndJarManifest(t *testing.T) {
 	}
 }
 
-func TestScanImportedForgeServerReadsScriptAndArgFileWithoutUsingScriptAsLaunchTarget(t *testing.T) {
+func TestScanImportedForgeServerSelectsPlatformLaunchScript(t *testing.T) {
 	serverDir := t.TempDir()
 	argDir := filepath.Join(serverDir, "libraries", "net", "minecraftforge", "forge", "1.20.1-47.2.0")
 	mustMkdir(t, argDir)
 	if err := os.WriteFile(filepath.Join(argDir, "unix_args.txt"), []byte("--launchTarget forge_server"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	script := "java @libraries/net/minecraftforge/forge/1.20.1-47.2.0/unix_args.txt nogui\n"
-	if err := os.WriteFile(filepath.Join(serverDir, "run.sh"), []byte(script), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(argDir, "win_args.txt"), []byte("--launchTarget forge_server"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	unixScript := "java @libraries/net/minecraftforge/forge/1.20.1-47.2.0/unix_args.txt nogui\n"
+	windowsScript := "java @libraries/net/minecraftforge/forge/1.20.1-47.2.0/win_args.txt nogui\r\n"
+	if err := os.WriteFile(filepath.Join(serverDir, "run.sh"), []byte(unixScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(serverDir, "run.bat"), []byte(windowsScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(serverDir, "forge-1.20.1-47.2.0-installer.jar"), []byte("installer"), 0o644); err != nil {
@@ -204,11 +212,21 @@ func TestScanImportedForgeServerReadsScriptAndArgFileWithoutUsingScriptAsLaunchT
 	}
 
 	scan := scanImportedServer(serverDir)
-	if scan.ServerType != "forge" || scan.MinecraftVersion != "1.20.1" || scan.LoaderVersion != "47.2.0" || scan.LaunchTarget != "" {
+	platformTarget := "run.sh"
+	if runtime.GOOS == "windows" {
+		platformTarget = "run.bat"
+	}
+	if scan.ServerType != "forge" || scan.MinecraftVersion != "1.20.1" || scan.LoaderVersion != "47.2.0" || scan.LaunchTarget != platformTarget {
 		t.Fatalf("unexpected forge scan: %#v", scan)
 	}
-	if len(scan.Warnings) == 0 {
-		t.Fatalf("expected missing launch jar warning, got %#v", scan)
+	for _, target := range []struct{ goos, want string }{
+		{goos: "windows", want: "run.bat"},
+		{goos: "linux", want: "run.sh"},
+		{goos: "darwin", want: "run.sh"},
+	} {
+		if got := platformLaunchScript(serverDir, target.goos); got != target.want {
+			t.Fatalf("platform %s should select %s, got %s", target.goos, target.want, got)
+		}
 	}
 }
 

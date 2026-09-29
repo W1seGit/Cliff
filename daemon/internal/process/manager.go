@@ -1243,7 +1243,19 @@ func isInstallerLaunchJar(lower string) bool {
 	return strings.Contains(lower, "installer")
 }
 
+// SuggestLaunchTarget returns a usable replacement when a persisted profile
+// still points at a loader installer jar.
+func SuggestLaunchTarget(serverPath string, launchTarget string) string {
+	if !isInstallerLaunchJar(strings.ToLower(launchTarget)) {
+		return ""
+	}
+	return detectBetterLaunchTarget(serverPath)
+}
+
 func detectBetterLaunchTarget(serverPath string) string {
+	if target := detectPlatformLaunchScript(serverPath, runtime.GOOS); target != "" {
+		return target
+	}
 	entries, err := os.ReadDir(serverPath)
 	if err != nil {
 		return ""
@@ -1268,6 +1280,20 @@ func detectBetterLaunchTarget(serverPath string) string {
 	for _, jar := range jars {
 		if !isInstallerLaunchJar(strings.ToLower(jar)) {
 			return jar
+		}
+	}
+	return ""
+}
+
+func detectPlatformLaunchScript(serverPath string, goos string) string {
+	names := []string{"run.sh", "start.sh", "start.command", "server.sh"}
+	if goos == "windows" {
+		names = []string{"run.bat", "start.bat", "server.bat"}
+	}
+	for _, name := range names {
+		info, err := os.Stat(filepath.Join(serverPath, name))
+		if err == nil && !info.IsDir() {
+			return name
 		}
 	}
 	return ""
