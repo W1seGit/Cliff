@@ -303,7 +303,7 @@ export function ImportPanel({
   }
 
   return (
-    <Panel className="form-grid utility-wizard-panel surface-card wizard-panel">
+    <Panel className="form-grid utility-wizard-panel wizard-panel">
       <h2>Import existing server</h2>
       <div className="wizard-header">
         <WizardTabs

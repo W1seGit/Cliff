@@ -323,7 +323,7 @@ export function AppSettingsPanel({
     return (
       <section className="settings-layout account-only">
         <div className="settings-column">
-          <Panel className="account-settings-form form-grid compact-form settings-panel surface-card" as="div">
+          <Panel className="account-settings-form form-grid compact-form settings-panel" as="div">
             <Input label="New username" value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" />
             <Input label="Current password" type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" suffix={
               <button type="button" className="input-suffix-button" onClick={() => setShowCurrentPassword((v) => !v)} aria-label={showCurrentPassword ? "Hide password" : "Show password"}>
@@ -367,7 +367,7 @@ export function AppSettingsPanel({
           <div className="app-settings-actions">
             <Button variant="primary" disabled={busy} onClick={save} loading={busy} loadingText="Saving...">Save</Button>
           </div>
-          <Panel className="form-grid compact-form settings-panel surface-card">
+          <Panel className="form-grid compact-form settings-panel">
             <div className="settings-section">
               <h2 className="settings-section-header">Mod marketplace</h2>
               <Hint>Mod and plugin discovery currently uses Modrinth. CurseForge support is not available yet.</Hint>
@@ -432,7 +432,7 @@ export function AppSettingsPanel({
           <div className="app-settings-actions">
             <Button disabled={Boolean(javaBusy)} onClick={refreshJavaRuntimes}>{javaBusy === -1 ? "Refreshing..." : "Refresh"}</Button>
           </div>
-          <Panel className="form-grid compact-form settings-panel surface-card">
+          <Panel className="form-grid compact-form settings-panel">
             <div className="settings-section">
               <h2 className="settings-section-header">Java runtimes</h2>
               <div className="property-list">
@@ -468,7 +468,7 @@ export function AppSettingsPanel({
       )}
 
       {activeTab === "network" && (
-        <Panel className="form-grid compact-form settings-panel surface-card">
+        <Panel className="form-grid compact-form settings-panel">
           <div className="settings-section">
             <h2 className="settings-section-header">Paths</h2>
             <StatRow variant="stacked" items={[
@@ -515,7 +515,7 @@ export function AppSettingsPanel({
             <Button disabled={daemonLogsBusy} onClick={refreshDaemonLogs}>{daemonLogsBusy ? "Loading..." : "Refresh"}</Button>
             <Button disabled={daemonLogLines.length === 0} onClick={() => window.open(daemonLogsUrl(logMode === "full" ? "?full=1&download=1" : "?download=1"), "_blank")}><Download size={14} />Download</Button>
           </div>
-          <Panel className="form-grid compact-form settings-panel surface-card">
+          <Panel className="form-grid compact-form settings-panel">
             <div className="settings-section">
               <div className="settings-section-header-row">
                 <h2 className="settings-section-header">Daemon logs</h2>
@@ -538,7 +538,7 @@ export function AppSettingsPanel({
               {updateChecking ? "Checking..." : "Check for updates"}
             </Button>
           </div>
-          <Panel className="form-grid compact-form settings-panel surface-card">
+          <Panel className="form-grid compact-form settings-panel">
             <div className="settings-section">
               <h2 className="settings-section-header">Cliff updates</h2>
               {(() => {
