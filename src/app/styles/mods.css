@@ -67,10 +67,6 @@
   font-size: 12px;
 }
 
-.settings-column > .workspace-page-header {
-  margin-bottom: 16px;
-}
-
 .mods-page-header {
   display: flex;
   align-items: center;

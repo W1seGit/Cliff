@@ -171,6 +171,16 @@
   overflow-wrap: anywhere;
 }
 
+.kv-row dd:has(.kv-path) {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.kv-path {
+  flex: 1;
+  min-width: 0;
+}
+
 .kv-row dd.mono {
   font-family: var(--font-mono);
   font-weight: 400;

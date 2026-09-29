@@ -2,7 +2,7 @@
 
 /* ── Tablet: collapse sidebar to overlay ─────────────────────── */
 @media (max-width: 1100px) {
-  .grid-2, .players-layout, .activity-layout, .settings-layout, .app-settings-tabbed, .profile-version-strip, .server-type-presets, .preset-row > div, .metadata-loader-grid, .metadata-health-grid, .access-columns, .import-detection, .schedule-row {
+  .grid-2, .players-layout, .activity-layout, .profile-version-strip, .server-type-presets, .preset-row > div, .metadata-loader-grid, .metadata-health-grid, .access-columns, .import-detection, .schedule-row {
     grid-template-columns: 1fr;
   }
   .wizard-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -464,10 +464,6 @@
     margin: 8px -16px 0;
     padding: 12px 16px;
   }
-  .settings-panel {
-    padding: 16px;
-  }
-  .settings-panel-header,
   .tool-card-main {
     display: grid;
     grid-template-columns: 1fr;
@@ -482,12 +478,8 @@
   .mc-server-stats {
     font-size: 12px;
   }
-  .settings-panel-header button,
   .tool-card-main button {
     width: 100%;
-  }
-  .settings-toggle-grid {
-    grid-template-columns: 1fr;
   }
   .not-found-page {
     padding: 28px 18px;

@@ -381,7 +381,15 @@ export type UnsavedChangesRegistration = {
   saveLabel?: string;
   discardLabel?: string;
   canSave?: boolean;
+  /** True while a save is in flight; the save bar shows a spinner label. */
+  saving?: boolean;
+  /** Why Save is disabled; shown in the save bar. */
+  disabledReason?: string;
   onSave?: () => void | Promise<void>;
+  /** Reset the form to its saved values. */
+  onDiscard?: () => void;
+  /** Show the floating save bar for this form. Off for wizards and the file editor. */
+  showSaveBar?: boolean;
 };
 export type CommandPreset = { id: string; command: string; createdAt: string };
 

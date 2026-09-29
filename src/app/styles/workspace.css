@@ -20,11 +20,6 @@
   width: min(100%, 1040px);
 }
 
-.standalone-workspace > .settings-layout.account-only,
-.standalone-workspace > .app-settings-tabbed {
-  width: min(100%, 1040px);
-}
-
 .standalone-workspace > .utility-wizard-panel {
   width: min(100%, 1040px);
 }
@@ -50,10 +45,6 @@
   flex-direction: column;
   gap: 14px;
   min-width: 0;
-}
-
-.topbar-save-button {
-  margin-left: auto;
 }
 
 .utility-back-button {

@@ -17,6 +17,7 @@ import { OverviewPanel } from "./dashboard/panels/overview-panel";
 import { Button } from "./dashboard/components/ui/button";
 import { EmptyPanel } from "./dashboard/components/ui/empty-panel";
 import { Hint } from "./dashboard/components/ui/hint";
+import { SaveBar } from "./dashboard/components/ui/save-bar";
 
 const ConsolePanel = dynamic(() => import("./dashboard/panels/console-panel").then((mod) => mod.ConsolePanel), { loading: () => <DashboardSkeleton /> });
 const ModsPanel = dynamic(() => import("./dashboard/panels/mods-panel").then((mod) => mod.ModsPanel), { loading: () => <DashboardSkeleton /> });
@@ -787,11 +788,6 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
               <span className={`status ${isRunning ? selectedLifecycle === "running" ? "on" : "busy" : anotherServerRunning ? "busy" : ""}`}>{isRunning ? selectedLifecycle === "starting" ? "Starting" : selectedLifecycle === "stopping" ? "Stopping" : "Running" : anotherServerRunning ? "Blocked" : "Stopped"}</span>
               {anotherServerRunning && runningServer && <span className="status-detail">Blocked by {runningServer.name}</span>}
             </div>}
-            {tab === "account" && (
-              <Button variant="primary" disabled={!unsavedChange?.dirty || !unsavedChange?.canSave} onClick={() => unsavedChange?.onSave?.()} className="topbar-save-button">
-                {unsavedChange?.saveLabel ?? "Save"}
-              </Button>
-            )}
           </header>
         )}
 
@@ -826,6 +822,17 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
         {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
       </section>
+      {unsavedChange?.showSaveBar && (
+        <SaveBar
+          dirty={unsavedChange.dirty}
+          canSave={unsavedChange.canSave !== false && Boolean(unsavedChange.onSave)}
+          saving={unsavedChange.saving}
+          saveLabel={unsavedChange.saveLabel}
+          disabledReason={unsavedChange.disabledReason}
+          onSave={() => { void Promise.resolve(unsavedChange.onSave?.()).catch(() => undefined); }}
+          onDiscard={unsavedChange.onDiscard}
+        />
+      )}
       <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} containerStyle={{ zIndex: 9999 }} />
       <ConfirmDialog request={confirmRequest} onClose={() => setConfirmRequest(null)} />
       {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onMessage={setMessage} onSaved={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true })} />}

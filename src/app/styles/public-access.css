@@ -45,39 +45,6 @@
   min-width: 0;
 }
 
-.raw-property-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
-}
-
-.raw-property-grid label {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.34fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  margin: 0;
-}
-
-.raw-property-grid label > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-@media (max-width: 760px) {
-  .raw-property-grid label {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 6px;
-  }
-}
-
 .public-access-connection-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -435,113 +402,12 @@
 .dns-records.resolved > div {
   grid-template-columns: 78px minmax(0, 0.6fr) minmax(0, 1.4fr);
 }
-
-.settings-section .split-fields {
-  gap: 10px;
-}
-
-.settings-panel input,
-.settings-panel select {
-  min-height: 38px;
-  padding: 8px 10px;
-}
 .version-list h3 {
   margin: 6px 0 0;
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
-}
-
-.settings-panel input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  min-height: 16px;
-  padding: 0;
-}
-
-.settings-panel .server-type-presets {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.settings-panel .server-type-presets button {
-  min-height: 52px;
-}
-
-.profile-advanced {
-  padding: 0;
-  background: transparent;
-}
-
-.profile-advanced[open] {
-  background: transparent;
-}
-
-.profile-advanced summary {
-  min-height: 42px;
-  padding: 4px 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  box-shadow: none;
-}
-
-.profile-advanced summary:hover {
-  background: transparent;
-  color: var(--text);
-  box-shadow: none;
-}
-
-.profile-advanced[open] summary {
-  color: var(--text);
-  box-shadow: none;
-}
-
-.profile-advanced label {
-  margin-top: 12px;
-  padding: 12px;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  box-shadow: none;
-}
-
-.settings-toggle-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.settings-toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--radius-xs);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border-hairline);
-}
-
-.settings-toggle-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.settings-toggle-copy strong {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.settings-toggle-copy span {
-  font-size: 11px;
-  color: var(--text-secondary);
-}
-
-.eula-toggle-row {
-  grid-column: 1 / -1;
 }
 
 .tool-cards { display: grid; gap: 8px; }

@@ -17,13 +17,15 @@ export interface TabsProps {
   className?: string;
   /** When set, tabs get ids and aria-controls that match <TabPanel idPrefix=... />. */
   idPrefix?: string;
+  /** Vertical tabs use Up/Down arrows instead of Left/Right. */
+  orientation?: "horizontal" | "vertical";
 }
 
 /**
  * Tab strip with roving tabindex: only the active tab is in the tab order,
  * and Arrow/Home/End move between tabs (automatic activation).
  */
-export function Tabs({ items, activeId, onChange, ariaLabel, className = "", idPrefix }: TabsProps) {
+export function Tabs({ items, activeId, onChange, ariaLabel, className = "", idPrefix, orientation = "horizontal" }: TabsProps) {
   const classes = `tabs ${className}`.trim();
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -32,8 +34,10 @@ export function Tabs({ items, activeId, onChange, ariaLabel, className = "", idP
     if (enabled.length === 0) return;
     const currentIndex = enabled.findIndex((item) => item.id === activeId);
     let next = -1;
-    if (event.key === "ArrowRight") next = (currentIndex + 1) % enabled.length;
-    else if (event.key === "ArrowLeft") next = (currentIndex - 1 + enabled.length) % enabled.length;
+    const forwardKey = orientation === "vertical" ? "ArrowDown" : "ArrowRight";
+    const backKey = orientation === "vertical" ? "ArrowUp" : "ArrowLeft";
+    if (event.key === forwardKey) next = (currentIndex + 1) % enabled.length;
+    else if (event.key === backKey) next = (currentIndex - 1 + enabled.length) % enabled.length;
     else if (event.key === "Home") next = 0;
     else if (event.key === "End") next = enabled.length - 1;
     if (next < 0) return;
@@ -44,7 +48,7 @@ export function Tabs({ items, activeId, onChange, ariaLabel, className = "", idP
   }
 
   return (
-    <div className={classes} role="tablist" aria-label={ariaLabel} ref={listRef} onKeyDown={handleKeyDown}>
+    <div className={classes} role="tablist" aria-orientation={orientation} aria-label={ariaLabel} ref={listRef} onKeyDown={handleKeyDown}>
       {items.map((item) => {
         const selected = item.id === activeId;
         const itemClass = [selected ? "active" : "", item.extraClassName ?? ""].filter(Boolean).join(" ").trim();
@@ -82,7 +86,7 @@ export interface TabPanelProps {
 export function TabPanel({ idPrefix, id, activeId, className, children }: TabPanelProps) {
   if (id !== activeId) return null;
   return (
-    <div role="tabpanel" id={`${idPrefix}-panel-${id}`} aria-labelledby={`${idPrefix}-tab-${id}`} className={className} tabIndex={0}>
+    <div role="tabpanel" id={`${idPrefix}-panel-${id}`} aria-labelledby={`${idPrefix}-tab-${id}`} className={className}>
       {children}
     </div>
   );
