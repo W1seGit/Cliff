@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import toast, { Toaster } from "react-hot-toast";
 import { AlertCircle, ArrowLeft, CheckCircle2, Info, Menu, TriangleAlert } from "lucide-react";
-import { serverTypeSupportsContent, validPort } from "./dashboard/lib/utils";
+import { serverTypeSupportsContent } from "./dashboard/lib/utils";
 import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates } from "./dashboard/lib/runtime-client";
 import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
 import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
+import { CloneServerDialog } from "./dashboard/components/clone-server-dialog";
 import { EulaModal } from "./dashboard/components/eula-modal";
 import { UpdateModal } from "./dashboard/components/update-modal";
 import { Sidebar } from "./dashboard/components/sidebar";
@@ -18,6 +19,7 @@ import { Button } from "./dashboard/components/ui/button";
 import { EmptyPanel } from "./dashboard/components/ui/empty-panel";
 import { Hint } from "./dashboard/components/ui/hint";
 import { SaveBar } from "./dashboard/components/ui/save-bar";
+import { PromptDialog } from "./dashboard/components/ui/prompt-dialog";
 
 const ConsolePanel = dynamic(() => import("./dashboard/panels/console-panel").then((mod) => mod.ConsolePanel), { loading: () => <DashboardSkeleton /> });
 const ModsPanel = dynamic(() => import("./dashboard/panels/mods-panel").then((mod) => mod.ModsPanel), { loading: () => <DashboardSkeleton /> });
@@ -116,6 +118,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [metadataBusy, setMetadataBusy] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ServerRecord | null>(null);
+  const [cloneTarget, setCloneTarget] = useState<ServerRecord | null>(null);
   const [eulaModalOpen, setEulaModalOpen] = useState(false);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
@@ -160,12 +164,14 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     setUnsavedChange(activeChange);
   }, []);
 
-  const setMessage = useCallback((text: string) => {
+  const setMessage = useCallback((text: string, kind?: "success" | "error" | "warning" | "info") => {
     if (!text) return;
     const normalized = text.toLowerCase();
-    const isError = /(fail|failed|error|invalid|denied|missing|required|blocked|cannot|can't)/.test(normalized);
-    const isWarning = /(stop|warning|already|pending|first|before)/.test(normalized);
-    const icon = isError ? <AlertCircle size={18} /> : isWarning ? <TriangleAlert size={18} /> : /refresh|copied|saved|created|updated|installed|uploaded|deleted|removed|renamed|duplicated|imported|enabled|disabled|requested|active|success/.test(normalized) ? <CheckCircle2 size={18} /> : <Info size={18} />;
+    // An explicit kind wins; otherwise infer it from the wording as before.
+    const isError = kind ? kind === "error" : /(fail|failed|error|invalid|denied|missing|required|blocked|cannot|can't)/.test(normalized);
+    const isWarning = kind ? kind === "warning" : /(stop|warning|already|pending|first|before)/.test(normalized);
+    const isSuccess = kind ? kind === "success" : /refresh|copied|saved|created|updated|installed|uploaded|deleted|removed|renamed|duplicated|imported|enabled|disabled|requested|active|success/.test(normalized);
+    const icon = isError ? <AlertCircle size={18} /> : isWarning ? <TriangleAlert size={18} /> : isSuccess ? <CheckCircle2 size={18} /> : <Info size={18} />;
     toast.custom((t) => (
       <button
         className={`toast ${isError ? "error" : isWarning ? "warning" : "success"}`}
@@ -477,33 +483,34 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     finally { setQuickBusyAction(""); }
   }
 
-  async function renameSidebarServer(server: ServerRecord) {
-    const nextName = window.prompt("Rename server", server.name)?.trim();
+  function renameSidebarServer(server: ServerRecord) {
     setServerActionMenu("");
-    if (!nextName || nextName === server.name) return;
+    setRenameTarget(server);
+  }
+
+  async function submitRename(server: ServerRecord, nextName: string) {
+    if (nextName === server.name) return;
     try {
       await updateServerProfile(server.id, { name: nextName });
       await refresh();
       if (selected?.id === server.id) await refreshSelected(server.id);
-      setMessage("Renamed");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Rename failed"); }
+      setMessage("Renamed", "success");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Rename failed", "error"); }
   }
 
-  async function duplicateSidebarServer(server: ServerRecord) {
+  function duplicateSidebarServer(server: ServerRecord) {
     setServerActionMenu("");
-    if (runtimeForServer(runtime, server.id).runningServerId === server.id) { setMessage("Stop this server before cloning."); return; }
-    const cloneName = window.prompt("Clone server as", `${server.name} Copy`)?.trim();
-    if (!cloneName) return;
-    const portPrompt = window.prompt("Port for clone", String(server.port + 1));
-    if (portPrompt === null) return;
-    const portValue = Number(portPrompt);
-    if (!validPort(portValue)) { setMessage("Invalid port."); return; }
+    if (runtimeForServer(runtime, server.id).runningServerId === server.id) { setMessage("Stop this server before cloning.", "warning"); return; }
+    setCloneTarget(server);
+  }
+
+  async function submitClone(server: ServerRecord, cloneName: string, port: number) {
     try {
-      const data = await createServerProfile({ mode: "clone", sourceServerId: server.id, name: cloneName, port: portValue });
+      const data = await createServerProfile({ mode: "clone", sourceServerId: server.id, name: cloneName, port });
       await refresh();
       if (data.server) selectServer(data.server.id);
-      setMessage("Server cloned");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Clone failed"); }
+      setMessage("Server cloned", "success");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Clone failed", "error"); }
   }
 
   function deleteSidebarServer(server: ServerRecord) {
@@ -833,8 +840,18 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           onDiscard={unsavedChange.onDiscard}
         />
       )}
-      <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} containerStyle={{ zIndex: 9999 }} />
+      <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} containerStyle={{ zIndex: 1000 }} />
       <ConfirmDialog request={confirmRequest} onClose={() => setConfirmRequest(null)} />
+      <PromptDialog
+        isOpen={Boolean(renameTarget)}
+        title="Rename server"
+        label="Server name"
+        initialValue={renameTarget?.name ?? ""}
+        confirmLabel="Rename"
+        onSubmit={(name) => (renameTarget ? submitRename(renameTarget, name) : undefined)}
+        onClose={() => setRenameTarget(null)}
+      />
+      <CloneServerDialog server={cloneTarget} onSubmit={submitClone} onClose={() => setCloneTarget(null)} />
       {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onMessage={setMessage} onSaved={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true })} />}
       {updateCheck && updateCheck.updateAvailable && (
         <UpdateModal

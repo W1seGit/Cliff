@@ -14,6 +14,7 @@ import { Textarea } from "../components/ui/textarea";
 import { SelectionBar } from "../components/ui/selection-bar";
 import { FilterBar } from "../components/ui/filter-bar";
 import { Modal } from "../components/ui/modal";
+import { Menu, MenuItem } from "../components/ui/menu";
 
 export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { server: ServerRecord; onConfirm: (request: ConfirmRequest) => void; onMessage: (message: string) => void; onUnsavedChange: (change: UnsavedChangesRegistration | null) => void }) {
   const [listing, setListing] = useState<FileListing | null>(null);
@@ -24,12 +25,10 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [busy, setBusy] = useState("");
   const [query, setQuery] = useState("");
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [addModal, setAddModal] = useState<null | "upload" | "folder" | "file">(null);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const fileDirty = Boolean(openFile?.editable && content !== openFile.content);
   const saveFileRef = useRef<() => Promise<boolean>>(async () => false);
-  const addMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => { saveFileRef.current = saveFile; });
 
   useEffect(() => {
@@ -52,17 +51,6 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
     return () => onUnsavedChange(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileDirty, openFile?.path, openFile?.name, server.id, busy]);
-
-  useEffect(() => {
-    if (!addMenuOpen) return;
-    function handleClickOutside(event: MouseEvent) {
-      if (addMenuRef.current && !addMenuRef.current.contains(event.target as Node)) {
-        setAddMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [addMenuOpen]);
 
   async function loadPath(relativePath = "", force = false) {
     if (busy && !force) return;
@@ -242,16 +230,13 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
             },
           ]}
           actions={
-            <div className="more-menu-wrap" ref={addMenuRef}>
-              <Button variant="primary" onClick={() => setAddMenuOpen((v) => !v)}><Plus size={14} />Add</Button>
-              {addMenuOpen && (
-                <div className="more-menu files-add-menu" role="menu">
-                  <button type="button" role="menuitem" onClick={() => { setAddMenuOpen(false); setAddModal("upload"); }}><Upload size={15} />Upload file</button>
-                  <button type="button" role="menuitem" onClick={() => { setAddMenuOpen(false); setAddModal("folder"); }}><FolderPlus size={15} />New folder</button>
-                  <button type="button" role="menuitem" onClick={() => { setAddMenuOpen(false); setAddModal("file"); }}><FilePlus size={15} />New file</button>
-                </div>
-              )}
-            </div>
+            <Menu
+              trigger={<Button variant="primary"><Plus size={14} />Add</Button>}
+            >
+              <MenuItem icon={<Upload size={15} />} onSelect={() => setAddModal("upload")}>Upload file</MenuItem>
+              <MenuItem icon={<FolderPlus size={15} />} onSelect={() => setAddModal("folder")}>New folder</MenuItem>
+              <MenuItem icon={<FilePlus size={15} />} onSelect={() => setAddModal("file")}>New file</MenuItem>
+            </Menu>
           }
         />
 
