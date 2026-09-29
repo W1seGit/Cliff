@@ -47,6 +47,17 @@ function lanAddresses() {
     .map((address) => address.address);
 }
 
+// The Next.js dev server (npm run dev, port 3000) calls this daemon from a
+// different origin. The daemon rejects cross-origin browser requests unless the
+// origin is allowlisted, so allow the dev server by default when running from
+// source. Set CLIFF_ALLOWED_ORIGINS yourself to override.
+const devPort = process.env.PORT_DEV || "3000";
+const defaultAllowedOrigins = [
+  `http://localhost:${devPort}`,
+  `http://127.0.0.1:${devPort}`,
+  ...lanAddresses().map((address) => `http://${address}:${devPort}`),
+].join(",");
+
 const args = [
   "run",
   "./cmd/cliff",
@@ -78,6 +89,7 @@ const child = spawn("go", args, {
     CLIFF_WEB_DIR: webDir,
     CLIFF_HOST: host,
     CLIFF_PORT: String(port),
+    CLIFF_ALLOWED_ORIGINS: process.env.CLIFF_ALLOWED_ORIGINS ?? defaultAllowedOrigins,
   },
 });
 

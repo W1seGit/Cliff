@@ -44,6 +44,8 @@ npm run daemon:run
 
 Open `http://localhost:8080`.
 
+`npm run daemon:run` allows the Next.js dev server (`http://localhost:3000`, plus your LAN addresses on that port) to call the API cross-origin, so `npm run dev` works against it. The daemon rejects browser requests from any other origin. If your dev server runs on a different port or host, set `CLIFF_ALLOWED_ORIGINS` (comma-separated origins) before starting the daemon. The packaged `cliff` binary has no default allowlist.
+
 ### Both together (production-like)
 
 ```bash
