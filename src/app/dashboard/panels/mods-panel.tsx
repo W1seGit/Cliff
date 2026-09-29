@@ -89,7 +89,6 @@ type DiscoverFiltersState = {
   content: "mod" | "modpack" | "datapack" | "plugin";
   sort: string;
   side: SideFilter;
-  market: MarketFilter;
 };
 
 /** Shared filter form used by both the desktop sidebar and the mobile collapsible panel. */
