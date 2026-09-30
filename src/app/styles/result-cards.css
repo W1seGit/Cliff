@@ -46,13 +46,13 @@
 
 .import-upload-zone.selected {
   border-color: var(--accent);
-  background: rgba(91, 141, 239, 0.06);
+  background: rgba(4, 163, 251, 0.06);
 }
 
 .import-upload-zone.drag-active {
   border-color: var(--accent);
   border-style: solid;
-  background: rgba(91, 141, 239, 0.1);
+  background: rgba(4, 163, 251, 0.1);
   transform: scale(1.01);
 }
 

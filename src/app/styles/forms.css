@@ -157,7 +157,7 @@
 .server-type-presets button:hover:not(:disabled) { background: var(--surface-2); }
 .server-type-presets button.active {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(4, 163, 251, 0.4);
   color: var(--accent);
 }
 

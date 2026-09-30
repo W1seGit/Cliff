@@ -9,12 +9,12 @@
   --text: #f0f2f5;
   --text-secondary: #9ba3ad;
   --text-tertiary: #808896; /* >= 4.5:1 on --bg, --surface, --surface-2 */
-  --accent: #5b8def;
-  --accent-hover: #6e9cf7;
-  --primary: #2f62d0;
-  --primary-hover: #2857c0;
-  --on-primary: #ffffff;
-  --accent-soft: rgba(91, 141, 239, 0.12);
+  --accent: #04a3fb; /* Cliff logo blue */
+  --accent-hover: #38b6fc;
+  --primary: #04a3fb;
+  --primary-hover: #33b5fc;
+  --on-primary: #04121d;
+  --accent-soft: rgba(4, 163, 251, 0.12);
   --success: #8fb3ff;
   --success-bg: #17233a;
   --running: #6ee7a8;
@@ -27,11 +27,11 @@
   --radius-sm: 10px;
   --radius-xs: 7px;
   --border-soft: rgba(255, 255, 255, 0.06);
-  --chart-cpu: #5b8def;
+  --chart-cpu: #04a3fb;
   --chart-mem: #2dd4bf;
   --chart-players: #a78bfa;
   --chart-tps: #6ee7a8;
-  --accent-tint: rgba(91, 141, 239, 0.12);
+  --accent-tint: rgba(4, 163, 251, 0.12);
   --danger-hover: #4a2323;
 
   /* Spacing scale (4px base) */

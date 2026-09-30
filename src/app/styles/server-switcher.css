@@ -22,7 +22,7 @@
 
 .server-switcher:hover:not(:disabled) {
   background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.4);
+  box-shadow: inset 0 0 0 1px rgba(4, 163, 251, 0.4);
 }
 
 .server-switcher[aria-expanded="true"] {
@@ -140,7 +140,7 @@
 
 .switcher-server-row.active {
   background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(4, 163, 251, 0.35);
 }
 
 .switcher-server-row.running {
