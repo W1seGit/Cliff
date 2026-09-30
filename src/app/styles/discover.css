@@ -69,7 +69,9 @@
 
 .discover-search-icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
+  width: 16px;
+  height: 16px;
   color: var(--text-tertiary);
   pointer-events: none;
   z-index: 1;
@@ -77,13 +79,14 @@
 
 .discover-search-bar input {
   flex: 1;
-  padding: 12px 14px 12px 42px;
+  height: var(--control-h);
+  padding: 0 14px 0 38px;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   border: 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .discover-search-bar input:focus {
@@ -95,8 +98,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   overflow: hidden;
 }
 
@@ -151,7 +153,7 @@
   align-items: center;
   justify-content: center;
   width: 40px;
-  height: 44px;
+  height: var(--control-h);
   border: 0;
   background: transparent;
   color: var(--text-tertiary);
@@ -165,8 +167,8 @@
 
 .discover-marketplace-layout {
   display: grid;
-  grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
@@ -184,24 +186,101 @@
 
 .discover-filters {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  gap: var(--space-5);
 }
 
-.discover-filter-field {
+.discover-group {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
-.discover-filter-field span {
+.discover-group-label {
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* One filter choice: quiet text row, accent marker when selected */
+.discover-opt {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms) ease, color var(--dur-fast, 120ms) ease;
+}
+
+.discover-opt:hover { background: var(--surface); color: var(--text); }
+.discover-opt.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.discover-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.discover-opt-logo {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.discover-opt-glyph {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: 4px;
+  background: var(--surface-2);
   color: var(--text-secondary);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
 }
+
+svg.discover-opt-glyph { background: none; }
+
+.discover-sort { width: auto; min-width: 150px; }
+
+/* Removable chips for the filters that are switched on */
+.discover-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.discover-active .discover-group-label { margin: 0; }
+
+.discover-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.discover-chip svg { color: var(--text-tertiary); }
+.discover-chip:hover svg { color: var(--text); }
 
 
 /* Discover results */
@@ -246,15 +325,14 @@
 }
 
 .discover-card.list-view {
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   align-items: center;
-  padding: 10px 14px;
+  padding: 14px;
 }
 
 .discover-card:hover {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px rgba(4, 163, 251, 0.25);
-  border-color: rgba(4, 163, 251, 0.25);
+  border-color: var(--border-strong);
+  background: var(--surface);
 }
 
 .discover-card.clickable {
@@ -291,8 +369,9 @@
 
 .discover-card.list-view .discover-card-icon img,
 .discover-card.list-view .discover-card-icon .mod-icon-fallback {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
 }
 
 .discover-card-body {
@@ -335,7 +414,7 @@
 }
 
 .discover-card.list-view .discover-card-desc {
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
 }
 
 .discover-card.list-view .discover-card-body {
@@ -359,9 +438,6 @@
   margin-top: 0;
 }
 
-.discover-card.list-view .discover-card-tags {
-  display: none;
-}
 
 .discover-card-stats {
   display: flex;
@@ -385,8 +461,8 @@
 
 .discover-card-tag {
   font-size: 10px;
-  padding: 2px 7px;
-  border-radius: var(--radius-xs);
+  padding: 1px 8px;
+  border-radius: 999px;
   background: var(--surface-2);
   color: var(--text-secondary);
   white-space: nowrap;

@@ -222,8 +222,10 @@
     box-shadow: inset 0 0 0 1px var(--border);
   }
   .discover-filters {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    align-items: start;
   }
+  .discover-sort { min-width: 0; flex: 1 1 120px; }
   .discover-card.grid-view {
     grid-template-columns: 40px minmax(0, 1fr);
   }

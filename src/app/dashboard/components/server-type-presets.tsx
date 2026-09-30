@@ -5,24 +5,36 @@ import type { ServerType } from "../lib/types";
 type ServerTypePreset = { type: ServerType; label: string; logo: string; detail: string; recommended?: boolean };
 type DisabledPreset = { label: string; logo: string; detail: string };
 
+/** Logo for each platform, shared by the server type picker and the marketplace filters. */
+export const platformLogos: Record<string, string> = {
+  vanilla: "/assets/logos/vanilla.png",
+  paper: "/assets/logos/papermc.svg",
+  purpur: "/assets/logos/purpur.svg",
+  folia: "/assets/logos/folia.png",
+  spigot: "/assets/logos/spigot.png",
+  fabric: "/assets/logos/fabric.png",
+  forge: "/assets/logos/forge.svg",
+  neoforge: "/assets/logos/neoforge.png",
+};
+
 const pluginPresets: ServerTypePreset[] = [
-  { type: "paper", label: "Paper", logo: "/assets/logos/papermc.svg", detail: "High-performance plugin server", recommended: true },
-  { type: "purpur", label: "Purpur", logo: "/assets/logos/purpur.svg", detail: "Paper fork with extra customization" },
-  { type: "folia", label: "Folia", logo: "/assets/logos/folia.png", detail: "Regionized multithreaded Paper fork" },
+  { type: "paper", label: "Paper", logo: platformLogos.paper, detail: "High-performance plugin server", recommended: true },
+  { type: "purpur", label: "Purpur", logo: platformLogos.purpur, detail: "Paper fork with extra customization" },
+  { type: "folia", label: "Folia", logo: platformLogos.folia, detail: "Regionized multithreaded Paper fork" },
 ];
 
 const moddedPresets: ServerTypePreset[] = [
-  { type: "fabric", label: "Fabric", logo: "/assets/logos/fabric.png", detail: "Lightweight mod loader", recommended: true },
-  { type: "forge", label: "Forge", logo: "/assets/logos/forge.svg", detail: "Classic mod loader" },
-  { type: "neoforge", label: "NeoForge", logo: "/assets/logos/neoforge.png", detail: "Modern Forge fork" },
+  { type: "fabric", label: "Fabric", logo: platformLogos.fabric, detail: "Lightweight mod loader", recommended: true },
+  { type: "forge", label: "Forge", logo: platformLogos.forge, detail: "Classic mod loader" },
+  { type: "neoforge", label: "NeoForge", logo: platformLogos.neoforge, detail: "Modern Forge fork" },
 ];
 
 const vanillaPresets: ServerTypePreset[] = [
-  { type: "vanilla", label: "Vanilla", logo: "/assets/logos/vanilla.png", detail: "Mojang server jar" },
+  { type: "vanilla", label: "Vanilla", logo: platformLogos.vanilla, detail: "Mojang server jar" },
 ];
 
 const comingLaterPresets: DisabledPreset[] = [
-  { label: "Spigot", logo: "/assets/logos/spigot.png", detail: "Requires BuildTools compilation" },
+  { label: "Spigot", logo: platformLogos.spigot, detail: "Requires BuildTools compilation" },
 ];
 
 function PresetButton({ preset, active, onClick }: { preset: ServerTypePreset; active: boolean; onClick: () => void }) {
