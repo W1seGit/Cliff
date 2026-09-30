@@ -3,7 +3,8 @@
 
 /* Button sizes */
 .btn-sm {
-  padding: 6px 10px;
+  min-height: 28px;
+  padding: 0 10px;
   font-size: var(--text-xs);
 }
 
@@ -28,9 +29,16 @@
   width: 100%;
 }
 
+/* Buttons used as whole rows keep their own look. */
+.file-row, .file-open-button, .action-item, .table-load-more, .load-more-results {
+  min-height: 0;
+}
+
 /* Quiet destructive action for rows and tables: red on hover, not a solid block. */
 .danger-ghost {
+  min-height: var(--control-h);
   background: transparent;
+  box-shadow: none;
   color: var(--text-secondary);
 }
 
@@ -41,14 +49,27 @@
 
 /* Icon-only buttons */
 .icon-only {
-  width: 32px;
-  height: 32px;
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
+}
+
+/* Icon buttons are ghosts: no outline until hovered. */
+.icon-only:not(.primary):not(.danger-button) {
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+
+.icon-only:not(.primary):not(.danger-button):hover:not(:disabled) {
+  background: var(--surface-2);
+  box-shadow: none;
+  color: var(--text);
 }
 
 .icon-only-sm {
   width: 28px;
   height: 28px;
+  min-height: 28px;
 }
 
 /* Card */
@@ -315,7 +336,7 @@
 }
 
 .banner-info .banner-icon {
-  color: var(--accent);
+  color: var(--text-secondary);
 }
 
 .banner-warning {
@@ -334,6 +355,34 @@
 
 .banner-danger .banner-icon {
   color: var(--danger);
+}
+
+/* Page frame and anatomy: every page is header, tabs, toolbar, content. */
+.page-frame {
+  width: 100%;
+  max-width: var(--layout-max);
+  margin: 0 auto;
+}
+
+.page {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.page > .page-header {
+  margin-bottom: 0;
+}
+
+.page-tabs,
+.page-toolbar,
+.page-body {
+  min-width: 0;
+}
+
+.page-body {
+  display: grid;
+  gap: var(--space-5);
 }
 
 /* Page header */
@@ -371,7 +420,7 @@
 .page-header-icon {
   display: inline-grid;
   place-items: center;
-  color: var(--accent);
+  color: var(--icon);
 }
 
 .page-header-icon svg {
@@ -419,7 +468,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border-hairline);
-  color: var(--accent);
+  color: var(--icon);
 }
 
 @media (max-width: 900px) {
@@ -514,6 +563,7 @@
 
 .save-bar-actions button {
   border-radius: var(--radius-pill);
+  min-height: 28px;
 }
 
 @keyframes save-bar-in {

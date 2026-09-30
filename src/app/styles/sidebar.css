@@ -10,10 +10,12 @@
 }
 
 .sidebar-nav-item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 11px;
-  padding: 9px 10px;
+  min-height: 34px;
+  padding: 0 10px;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--text-secondary);
@@ -34,9 +36,29 @@
 }
 
 .sidebar-nav-item.active {
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: none;
+}
+
+.sidebar-nav-item.active::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.sidebar-nav-item .sidebar-nav-icon {
+  color: var(--icon);
+}
+
+.sidebar-nav-item:hover:not(:disabled) .sidebar-nav-icon,
+.sidebar-nav-item.active .sidebar-nav-icon {
+  color: var(--text);
 }
 
 .sidebar-nav-item.parent-active {
@@ -46,7 +68,10 @@
 /* When the group is open, the highlighted child carries the selection. */
 .sidebar-nav-group.expanded > .sidebar-nav-item.parent-active {
   background: transparent;
-  box-shadow: none;
+}
+
+.sidebar-nav-group.expanded > .sidebar-nav-item.parent-active::before {
+  display: none;
 }
 
 .sidebar-nav-item:disabled {

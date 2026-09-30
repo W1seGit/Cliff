@@ -266,12 +266,12 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
             </div>
           )}
           {listing?.parent !== undefined && listing.cwd && (
-            <Button className="file-row" disabled={Boolean(busy)} onClick={() => loadPath(listing.parent)}><span>..</span><small>parent</small></Button>
+            <Button plain className="file-row" disabled={Boolean(busy)} onClick={() => loadPath(listing.parent)}><span>..</span><small>parent</small></Button>
           )}
           {entries.map((entry) => (
             <div className="file-row file-row-actions" key={entry.path}>
               <Input type="checkbox" aria-label={`Select ${entry.name}`} checked={selectedPaths.includes(entry.path)} onChange={(event) => setSelectedPaths((current) => event.target.checked ? [...current, entry.path] : current.filter((item) => item !== entry.path))} />
-              <Button className="file-open-button" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
+              <Button plain className="file-open-button" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
                 <span>{entry.type === "directory" ? "📁" : entry.editable ? "📝" : "📄"} {entry.name}</span>
                 <small>{entry.type === "file" ? `${formatBytes(entry.size)}${entry.editable ? " · editable" : ""}` : "Folder"} · {shortDate(entry.updatedAt)}</small>
               </Button>

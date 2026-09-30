@@ -1130,7 +1130,7 @@ export function ModsPanel({
                 })}
                 {loadingMore && <div className="mods-empty mini"><strong>Loading more...</strong></div>}
                 {!searching && !loadingMore && hasMoreResults && visibleResults.length > 0 && (
-                  <Button className="load-more-results" type="button" onClick={loadMoreResults}>Load more</Button>
+                  <Button plain className="load-more-results" type="button" onClick={loadMoreResults}>Load more</Button>
                 )}
                 {!searching && !loadingMore && query.trim() && visibleResults.length === 0 && results.length === 0 && (
                   <div className="mods-empty">

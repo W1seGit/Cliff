@@ -176,20 +176,30 @@
 .muted { color: var(--text-secondary); }
 .block { display: block; }
 
+/* One neutral tag. Status variants only add a colored dot. */
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 2px 9px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-secondary);
   background: var(--surface-2);
 }
 
-.pill.success { color: var(--success); background: var(--success-bg); }
-.pill.warning { color: var(--warning); background: var(--warning-bg); }
-.pill.danger { color: var(--danger); background: var(--danger-bg); }
-.pill.accent { color: var(--accent); background: var(--accent-tint); }
+.pill.success::before,
+.pill.warning::before,
+.pill.danger::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.pill.success::before { background: var(--running); }
+.pill.warning::before { background: var(--warning); }
+.pill.danger::before { background: var(--danger); }
+.pill.success, .pill.warning, .pill.danger { color: var(--text); }
 

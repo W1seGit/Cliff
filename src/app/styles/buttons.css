@@ -22,7 +22,31 @@ button:hover:not(:disabled) {
 
 button:active:not(:disabled) {
   background: var(--surface-3);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* The standard action button: outlined, one height everywhere. The Button
+   component always adds .btn; raw header buttons opt in with .icon-button. */
+.btn,
+.icon-button:not(.icon-only) {
+  min-height: var(--control-h);
+  padding: 0 14px;
+}
+
+.btn:not(.primary):not(.danger-button):not(.danger-ghost),
+.icon-button:not(.icon-only):not(.primary):not(.danger-button) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.btn:not(.primary):not(.danger-button):not(.danger-ghost):hover:not(:disabled),
+.icon-button:not(.icon-only):not(.primary):not(.danger-button):hover:not(:disabled) {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.btn:not(.primary):not(.danger-button):not(.danger-ghost):active:not(:disabled),
+.icon-button:not(.icon-only):not(.primary):not(.danger-button):active:not(:disabled) {
+  background: var(--surface-2);
 }
 
 button:disabled {
@@ -32,12 +56,14 @@ button:disabled {
 
 .primary {
   background: var(--accent);
+  box-shadow: none;
   color: #0b0d10;
   font-weight: 600;
 }
 
 .primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  box-shadow: none;
 }
 
 .primary:active:not(:disabled) {
@@ -55,18 +81,20 @@ button:disabled {
   background: var(--accent-tint);
 }
 
+/* Destructive: outlined red, never a solid block. */
 .danger-button {
-  background: var(--danger-bg);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
   color: var(--danger);
 }
 
 .danger-button:hover:not(:disabled) {
-  background: var(--danger-hover);
+  background: var(--danger-bg);
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 .danger-button:active:not(:disabled) {
   background: var(--danger-hover);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .icon-button {

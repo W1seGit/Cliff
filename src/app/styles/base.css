@@ -72,7 +72,10 @@
   --radius-pill: 999px;
 
   /* Layout */
-  --layout-max: 1040px;
+  --layout-max: 1120px;
+  --control-h: 36px;
+  --row-h: 40px;
+  --icon: var(--text-tertiary);
   --sidebar-w: 232px;
 
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;

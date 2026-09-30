@@ -13,7 +13,7 @@
 }
 
 .tabs.settings-tabs button.active svg {
-  color: var(--accent);
+  color: var(--text);
 }
 
 .settings-nav-label {

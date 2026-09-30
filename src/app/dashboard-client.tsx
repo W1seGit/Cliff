@@ -763,7 +763,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         onDelete={deleteSidebarServer}
         loading={initialLoading}
       />
-      {!sidebarCollapsed && <Button className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
+      {!sidebarCollapsed && <Button plain className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
       <section className="workspace" ref={workspaceRef}>
         {serverContext && selected && !initialLoading ? (
           <ServerHeader
@@ -783,36 +783,38 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           <PageBand icon={bandIcon} title={pageTitle} subtitle={pageSubtitle} onOpenSidebar={() => setSidebarCollapsed(false)} />
         )}
 
-        {metadataError && (
-          <Hint variant="source" warn>
-            <span>Version metadata failed: {metadataError}</span>
-            <Button disabled={metadataBusy} onClick={refreshVersionMetadata}>{metadataBusy ? "Refreshing..." : "Refresh"}</Button>
-          </Hint>
-        )}
+        <div className="page-frame">
+          {metadataError && (
+            <Hint variant="source" warn>
+              <span>Version metadata failed: {metadataError}</span>
+              <Button disabled={metadataBusy} onClick={refreshVersionMetadata}>{metadataBusy ? "Refreshing..." : "Refresh"}</Button>
+            </Hint>
+          )}
 
-        {initialLoading && <DashboardSkeleton />}
-        {!initialLoading && tab === "overview" && <OverviewPanel selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
-        {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} onAcceptEula={() => setEulaModalOpen(true)} />}
-        {!initialLoading && tab === "console" && !selected && <EmptyPanel title="No server selected" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
-        {!initialLoading && isModsTab(tab) && !selected && <EmptyPanel title="No mods to show" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "players" && selected && <PlayersPanel server={selected} onMessage={setMessage} />}
-        {!initialLoading && tab === "players" && !selected && <EmptyPanel title="No player lists" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "worlds" && selected && <WorldsPanel server={selected} isRunning={isRunning} onMessage={setMessage} onConfirm={setConfirmRequest} />}
-        {!initialLoading && tab === "worlds" && !selected && <EmptyPanel title="No worlds to show" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "backups" && selected && <BackupsPanel server={selected} backups={backups} isRunning={isRunning} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} />}
-        {!initialLoading && tab === "backups" && !selected && <EmptyPanel title="No backups yet" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "files" && selected && <FilesPanel server={selected} onConfirm={setConfirmRequest} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-        {!initialLoading && tab === "files" && !selected && <EmptyPanel title="No files yet" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "public-access" && selected && <PublicAccessPanel key={selected.id} server={selected} onConfigure={() => setTab("public-access/setup", selected.id)} onMessage={setMessage} />}
-        {!initialLoading && tab === "public-access/setup" && selected && <PublicAccessPanel key={`${selected.id}:setup`} mode="setup" server={selected} onBack={() => setTab("public-access", selected.id)} onMessage={setMessage} />}
-        {!initialLoading && tab === "public-access" && !selected && <EmptyPanel title="No public access setup" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-        {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
-        {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
-        {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-        {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {initialLoading && <DashboardSkeleton />}
+          {!initialLoading && tab === "overview" && <OverviewPanel selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
+          {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} onAcceptEula={() => setEulaModalOpen(true)} />}
+          {!initialLoading && tab === "console" && !selected && <EmptyPanel title="No server selected" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
+          {!initialLoading && isModsTab(tab) && !selected && <EmptyPanel title="No mods to show" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "players" && selected && <PlayersPanel server={selected} onMessage={setMessage} />}
+          {!initialLoading && tab === "players" && !selected && <EmptyPanel title="No player lists" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "worlds" && selected && <WorldsPanel server={selected} isRunning={isRunning} onMessage={setMessage} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tab === "worlds" && !selected && <EmptyPanel title="No worlds to show" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "backups" && selected && <BackupsPanel server={selected} backups={backups} isRunning={isRunning} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tab === "backups" && !selected && <EmptyPanel title="No backups yet" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "files" && selected && <FilesPanel server={selected} onConfirm={setConfirmRequest} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "files" && !selected && <EmptyPanel title="No files yet" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "public-access" && selected && <PublicAccessPanel key={selected.id} server={selected} onConfigure={() => setTab("public-access/setup", selected.id)} onMessage={setMessage} />}
+          {!initialLoading && tab === "public-access/setup" && selected && <PublicAccessPanel key={`${selected.id}:setup`} mode="setup" server={selected} onBack={() => setTab("public-access", selected.id)} onMessage={setMessage} />}
+          {!initialLoading && tab === "public-access" && !selected && <EmptyPanel title="No public access setup" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
+          {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
+          {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+        </div>
       </section>
       {unsavedChange?.showSaveBar && (
         <SaveBar

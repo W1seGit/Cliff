@@ -12,6 +12,8 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   loading?: boolean;
   loadingText?: string;
   href?: string;
+  /** Skip the standard button styling, for buttons that style themselves (rows, backdrops). */
+  plain?: boolean;
 }
 
 export function Button({
@@ -22,6 +24,7 @@ export function Button({
   loading,
   loadingText,
   href,
+  plain,
   className = "",
   disabled,
   children,
@@ -29,6 +32,7 @@ export function Button({
 }: ButtonProps & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const getClassName = () => {
     const classes: string[] = [];
+    if (!plain && variant !== "link") classes.push("btn");
     if (variant === "primary") classes.push("primary");
     else if (variant === "danger") classes.push("danger-button");
     else if (variant === "danger-ghost") classes.push("danger-ghost");

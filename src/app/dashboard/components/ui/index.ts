@@ -50,6 +50,8 @@ export { IconButton } from "./icon-button";
 export type { IconButtonProps } from "./icon-button";
 export { Menu, MenuItem, MenuLabel, MenuSeparator } from "./menu";
 export type { MenuProps, MenuItemProps } from "./menu";
+export { Page } from "./page-layout";
+export type { PageProps } from "./page-layout";
 export { PageHeader } from "./page-header";
 export type { PageHeaderProps } from "./page-header";
 export { PasswordInput } from "./password-input";

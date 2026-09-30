@@ -43,20 +43,28 @@
 
 .spread { justify-content: space-between; }
 
+/* Status is a dot plus text, never a filled badge. */
 .status {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 11px;
-  border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-secondary);
-  background: var(--surface);
 }
 
-.status.on { color: var(--success); background: var(--success-bg); }
-.status.busy { color: var(--accent); background: var(--accent-tint); }
+.status::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+}
+
+.status.on { color: var(--text); }
+.status.on::before { background: var(--running); }
+.status.busy { color: var(--text); }
+.status.busy::before { background: var(--warning); animation: status-dot-pulse 1.4s ease-in-out infinite; }
 
 /* Controls */
 .control-strip {

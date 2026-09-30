@@ -3,7 +3,8 @@ input, select, textarea {
   width: 100%;
   border: 0;
   border-radius: var(--radius-xs);
-  padding: 8px 12px;
+  min-height: var(--control-h);
+  padding: 0 12px;
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border-hairline);
   outline: none;
@@ -17,12 +18,14 @@ input:focus, select:focus, textarea:focus {
 
 textarea {
   min-height: 82px;
+  padding: 8px 12px;
   resize: vertical;
 }
 
 input[type="checkbox"] {
   width: 16px;
   height: 16px;
+  min-height: 0;
   min-width: 16px;
   margin: 0;
   padding: 0;

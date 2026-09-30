@@ -289,7 +289,7 @@ export function OverviewPanel({
           </div>
           <div className="action-list">
             {attentionChecks.map((check) => (
-              <Button key={check.id} className={`action-item ${check.state}`} onClick={() => check.id === "eula" ? onAcceptEula() : setTab(["launch", "java", "properties", "memory", "port"].includes(check.id) ? "settings" : "overview")}>
+              <Button plain key={check.id} className={`action-item ${check.state}`} onClick={() => check.id === "eula" ? onAcceptEula() : setTab(["launch", "java", "properties", "memory", "port"].includes(check.id) ? "settings" : "overview")}>
                 <span>
                   <strong>{check.label}</strong>
                   <small>{check.detail}</small>
