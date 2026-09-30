@@ -2,6 +2,8 @@ param(
   [string]$Package = "",
   [string]$Manifest = "",
   [string]$InstallDir = "",
+  [string]$DataDir = "",
+  [string]$ServerRoot = "",
   [Alias("p")]
   [int]$Port = 8080,
   [switch]$Start,
@@ -204,11 +206,18 @@ try {
   # Anything else in the way is left alone: this script never deletes a folder
   # that is not a Cliff install.
   $Upgrade = $false
+  $ReusedData = $false
   if (Test-Path $InstallDir) {
+    # What is left after `cliff uninstall --keep-data`: only a data and a servers folder.
+    $Leftovers = @(Get-ChildItem -LiteralPath $InstallDir -Force)
+    $OnlyUserData = ($Leftovers.Count -gt 0) -and -not ($Leftovers | Where-Object { $_.Name -notin @("data", "servers") })
     if (Test-Path (Join-Path $InstallDir "package-manifest.json")) {
       $Upgrade = $true
-    } elseif (-not (Get-ChildItem -LiteralPath $InstallDir -Force | Select-Object -First 1)) {
+    } elseif ($Leftovers.Count -eq 0) {
       Remove-Item -LiteralPath $InstallDir -Force
+    } elseif ($OnlyUserData) {
+      $Upgrade = $true
+      $ReusedData = $true
     } else {
       throw "Refusing to install into $InstallDir because it exists and is not a Cliff install. Choose another folder with -InstallDir, or remove it yourself."
     }
@@ -225,9 +234,25 @@ try {
       if ($_.Name -in @("data", "servers") -and (Test-Path $Target)) { return }
       Move-Item -LiteralPath $_.FullName -Destination $Target
     }
-    Write-Host "Upgraded Cliff in $InstallDir (your data and servers were kept)."
+    if ($ReusedData) {
+      Write-Host "Installed Cliff in $InstallDir and kept the data and servers already there."
+    } else {
+      Write-Host "Upgraded Cliff in $InstallDir (your data and servers were kept)."
+    }
   } else {
     Move-Item -LiteralPath $ExtractedPackage -Destination $InstallDir
+  }
+
+  # Remember a custom data or servers folder. A folder that already holds Cliff
+  # data is reused as it is; one that does not exist yet is created.
+  if ($DataDir -or $ServerRoot) {
+    $ConfigureArgs = @("configure")
+    if ($DataDir) { $ConfigureArgs += @("--data-dir", $DataDir) }
+    if ($ServerRoot) { $ConfigureArgs += @("--server-root", $ServerRoot) }
+    & $CliffExe @ConfigureArgs
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "Could not save the data and server folders; start Cliff with --data-dir and --server-root instead."
+    }
   }
 
   # Add the install directory to the user's PATH so `cliff` is available in new terminals.

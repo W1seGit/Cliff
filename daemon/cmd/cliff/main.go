@@ -50,6 +50,9 @@ func main() {
 	case "logs":
 		runLogs(os.Args[2:])
 		return
+	case "configure":
+		runConfigure(os.Args[2:])
+		return
 	case "update":
 		runUpdate(os.Args[2:])
 		return
@@ -167,6 +170,7 @@ func runDaemon() {
 		os.Exit(1)
 	}
 	defer closeLog()
+	closeCrashReports := startCrashReports(filepath.Dir(logFile))
 
 	slog.Info("daemon starting", "version", buildinfo.Current().Version, "pid", os.Getpid(), "logFile", logFile, "logLevel", logLevel)
 
@@ -192,6 +196,7 @@ func runDaemon() {
 	manager := process.NewManager(cfg.DataDir)
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
+	startRuntimeGuard(daemonCtx)
 
 	// Initialize the auto-updater.
 	binaryPath, _ := os.Executable()
@@ -226,6 +231,9 @@ func runDaemon() {
 		Addr:              net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port)),
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		// Panics in a request handler are recovered by net/http; log them here
+		// so they reach daemon.log with the stack instead of only stderr.
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 	}
 
 	listener, err := net.Listen("tcp", server.Addr)
@@ -260,6 +268,7 @@ func runDaemon() {
 	}
 	manager.Shutdown(25 * time.Second)
 	slog.Info("daemon stopped")
+	closeCrashReports()
 }
 
 func printVersion() {
@@ -278,6 +287,7 @@ Usage:
   cliff update           Check for and apply updates
   cliff rollback         Go back to the version before the last update
   cliff cleanup          Delete the copies kept for undoing an update
+  cliff configure        Choose where Cliff keeps its data and servers
   cliff uninstall        Remove Cliff from this machine
   cliff version          Print version information
   cliff daemon [flags]   Run the daemon in the foreground (for debugging)

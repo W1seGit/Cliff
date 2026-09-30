@@ -1,4 +1,4 @@
-import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LastUpdateResult, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo, UploadResult, User, WorldsPayload } from "./types";
+import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LastUpdateResult, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, OperationSnapshot, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RunningServer, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo, UploadResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -428,8 +428,23 @@ export async function checkForUpdates(force = false): Promise<UpdateCheckResult>
   return daemonApi<UpdateCheckResult>(path);
 }
 
-export async function applyUpdate(): Promise<UpdateApplyResult> {
-  return daemonApi<UpdateApplyResult>("/api/updates/apply", { method: "POST" });
+export async function applyUpdate(confirmStopServers = false): Promise<UpdateApplyResult> {
+  return daemonApi<UpdateApplyResult>("/api/updates/apply", { method: "POST", body: JSON.stringify({ confirmStopServers }) });
+}
+
+/** The servers an update would stop, so the warning can name them. */
+export async function fetchUpdateServers(): Promise<RunningServer[]> {
+  const payload = await daemonApi<{ servers: RunningServer[] | null }>("/api/updates/servers");
+  return payload.servers ?? [];
+}
+
+export async function fetchCreateProgress(progressId: string): Promise<OperationSnapshot> {
+  return daemonApi<OperationSnapshot>(`/api/create-progress/${encodeURIComponent(progressId)}`);
+}
+
+/** Stops or restarts Cliff itself. Servers that are running stop too, so the caller must confirm. */
+export async function controlDaemon(action: "stop" | "restart", confirmStopServers: boolean): Promise<{ ok: boolean; message: string }> {
+  return daemonApi(`/api/daemon/${action}`, { method: "POST", body: JSON.stringify({ confirmStopServers }) });
 }
 
 export async function fetchUpdateProgress(): Promise<UpdateProgress> {

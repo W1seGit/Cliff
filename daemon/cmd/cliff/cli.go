@@ -85,7 +85,7 @@ func installRoot() string {
 
 // defaultDataDir returns the default data directory relative to the install root.
 func defaultDataDir() string {
-	return resolveCLIPath(os.Getenv("CLIFF_DATA_DIR"), filepath.Join(installRoot(), "data"))
+	return resolveCLIPath(os.Getenv("CLIFF_DATA_DIR"), dataDirFallback(installRoot()))
 }
 
 func resolveCLIPath(value string, fallback string) string {
@@ -165,8 +165,8 @@ func runStart(args []string) {
 	root := installRoot()
 
 	// Resolve defaults relative to the install root.
-	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
-	serverRoot = resolveCLIPath(serverRoot, filepath.Join(root, "servers"))
+	dataDir = resolveCLIPath(dataDir, dataDirFallback(root))
+	serverRoot = resolveCLIPath(serverRoot, serverRootFallback(root))
 	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
 
 	logFile := filepath.Join(dataDir, "logs", "cliff.log")

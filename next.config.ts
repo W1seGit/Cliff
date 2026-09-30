@@ -33,7 +33,6 @@ const allowedDevOrigins = [
 
 const nextConfig: NextConfig = {
   allowedDevOrigins,
-  cacheMaxMemorySize: 10 * 1024 * 1024,
   experimental: {
     cpus: Number(process.env.NEXT_BUILD_WORKERS ?? 4),
   },

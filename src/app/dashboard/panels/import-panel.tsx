@@ -13,6 +13,8 @@ import { Input } from "../components/ui/input";
 import { Panel } from "../components/ui/panel";
 import { Hint } from "../components/ui/hint";
 import { Banner } from "../components/ui/banner";
+import { OperationProgress, newProgressId, useOperationProgress } from "../components/operation-progress";
+import { ServerModeSwitch } from "../components/server-mode-switch";
 import { KeyValueList } from "../components/ui/setting-row";
 import { WizardTabs, WizardActions } from "../components/ui/wizard";
 import { FieldGrid } from "../components/ui/field-grid";
@@ -91,9 +93,11 @@ export function ImportPanel({
   onImported,
   onMessage,
   onUnsavedChange,
+  onSwitchMode,
 }: {
   metadata: MinecraftMetadata | null;
   metadataError: string;
+  onSwitchMode: (mode: "create") => void;
   onImported: (serverId?: string) => void;
   onMessage: (message: string) => void;
   onUnsavedChange: (change: UnsavedChangesRegistration | null) => void;
@@ -114,6 +118,8 @@ export function ImportPanel({
   const [javaPath, setJavaPath] = useState("auto");
   const [extraArgs, setExtraArgs] = useState("nogui");
   const [busy, setBusy] = useState(false);
+  const [importError, setImportError] = useState("");
+  const operation = useOperationProgress();
   const [dragActive, setDragActive] = useState(false);
   const [progress, setProgress] = useState<{ kind: ImportProgressKind; index: number } | null>(null);
 
@@ -124,7 +130,8 @@ export function ImportPanel({
   const needsLoader = serverTypeNeedsLoader(type);
   const memoryValid = validMemoryRange(minMemoryMb, maxMemoryMb);
   const portValid = validPort(effectivePort);
-  const canImport = Boolean(detection?.token && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion) && memoryValid && portValid && !busy);
+  const importFormValid = Boolean(detection?.token && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion) && memoryValid && portValid);
+  const canImport = importFormValid && !busy;
   const importStepValid = [
     Boolean(detection),
     Boolean(detection && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion)),
@@ -277,7 +284,10 @@ export function ImportPanel({
   async function importServer() {
     if (!canImport || !detection?.token) return;
     setBusy(true);
+    setImportError("");
     setProgress({ kind: "import", index: 0 });
+    const progressId = newProgressId();
+    operation.start(progressId);
     try {
       const data = await importStagedServer({
         mode: "import-staged",
@@ -292,6 +302,7 @@ export function ImportPanel({
         maxMemoryMb,
         port: effectivePort,
         launchJar,
+        progressId,
       });
       finishProgress("import");
       await onImported(data.server?.id);
@@ -299,14 +310,18 @@ export function ImportPanel({
       onMessage("Server imported");
     } catch (error) {
       setProgress(null);
-      onMessage(error instanceof Error ? error.message : "Import failed");
+      const message = error instanceof Error ? error.message : "Import failed";
+      setImportError(message);
+      onMessage(message);
     } finally {
+      operation.stop();
       setBusy(false);
     }
   }
 
   return (
     <Panel className="form-grid utility-wizard-panel wizard-panel">
+      <ServerModeSwitch mode="import" onChange={(mode) => { if (mode === "create") onSwitchMode("create"); }} />
       <div className="wizard-header">
         <WizardTabs
           steps={importSteps}
@@ -331,7 +346,11 @@ export function ImportPanel({
         />
       </div>
 
-      {currentProgress && (
+      {busy && progress?.kind === "import" && (
+        <OperationProgress title={`Importing ${name.trim() || "your server"}`} snapshot={operation.snapshot} waitingLabel="Starting" />
+      )}
+
+      {currentProgress && !(busy && progress?.kind === "import") && (
         <div className="import-progress" role="status" aria-live="polite">
           <div className="import-progress-copy">
             {currentProgress.percent >= 100 ? <CheckCircle2 size={18} /> : <LoaderCircle size={18} className="spin-icon" />}
@@ -424,8 +443,9 @@ export function ImportPanel({
         </div>
       )}
 
-      {step === 3 && detection && (
+      {step === 3 && detection && !(busy && progress?.kind === "import") && (
         <div className="review-step">
+          {importError && <Banner variant="danger" title="The server was not imported">{importError} Nothing was left behind. You can change something and try again.</Banner>}
           <KeyValueList
             items={[
               { key: "type", label: "Type", value: type },
@@ -437,7 +457,7 @@ export function ImportPanel({
               { key: "launch", label: "Launch target", value: launchJar || "Detected", mono: true },
             ]}
           />
-          {!canImport && <Banner variant="warning">Review the detected profile and resources before importing.</Banner>}
+          {!importFormValid && <Banner variant="warning">Review the detected profile and resources before importing.</Banner>}
         </div>
       )}
     </Panel>

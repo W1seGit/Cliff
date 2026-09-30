@@ -2,9 +2,10 @@
 
 import { ExternalLink, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { formatBytes } from "../../lib/utils";
-import type { UpdateCheckResult, UpdateProgress, UpdateSafetyInfo } from "../../lib/types";
+import type { RunningServer, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo } from "../../lib/types";
 import { Banner, Button, Card, KeyValueList, StatusDot, type KeyValueItem } from "../../components/ui";
 import { UpdateProgressList } from "../../components/update-progress";
+import { stoppingNames } from "../../components/update-modal";
 
 type FailedStage = Exclude<UpdateProgress["stage"], "" | "failed"> | null;
 
@@ -15,6 +16,7 @@ export function UpdatesTab({
   progress,
   installError,
   failedStage,
+  runningServers,
   safety,
   clearing,
   onCheck,
@@ -27,6 +29,7 @@ export function UpdatesTab({
   progress: UpdateProgress;
   installError: string;
   failedStage: FailedStage;
+  runningServers: RunningServer[];
   safety: UpdateSafetyInfo | null;
   clearing: boolean;
   onCheck: () => void;
@@ -48,6 +51,7 @@ export function UpdatesTab({
         progress={progress}
         installError={installError}
         failedStage={failedStage}
+        runningServers={runningServers}
         onInstall={onInstall}
       />
       <SafetyCard safety={safety} busy={clearing || installing} onClear={onClearSafety} />
@@ -62,6 +66,7 @@ function UpdateCard({
   progress,
   installError,
   failedStage,
+  runningServers,
   onInstall,
 }: {
   check: UpdateCheckResult | null;
@@ -70,6 +75,7 @@ function UpdateCard({
   progress: UpdateProgress;
   installError: string;
   failedStage: FailedStage;
+  runningServers: RunningServer[];
   onInstall: () => void;
 }) {
   if (!check) {
@@ -111,18 +117,27 @@ function UpdateCard({
           title={`Version ${check.latestVersion} is available`}
           action={
             <Button variant="primary" disabled={installing} loading={installing} loadingText="Updating..." onClick={onInstall}>
-              {installError ? "Try again" : "Install update"}
+              {installError ? "Try again" : runningServers.length > 0 ? "Stop server and update" : "Install update"}
             </Button>
           }
         >
           Before installing, Cliff copies its settings database and keeps the current version
           {check.safetyCopyBytes ? ` (about ${formatBytes(check.safetyCopyBytes)})`  : ""}. If the new version does not start, Cliff puts the
-          old one back automatically. A running Minecraft server is stopped and its world saved first.
+          old one back automatically.
         </Banner>
       ) : (
         <p className="update-status">
           <StatusDot tone="running" /> Cliff is up to date.
         </p>
+      )}
+      {check.updateAvailable && (
+        runningServers.length > 0 ? (
+          <Banner variant="warning" title={`${stoppingNames(runningServers)} will be stopped during the update`}>
+            Its world is saved first, and Cliff starts it again afterwards. Players are disconnected for about a minute.
+          </Banner>
+        ) : (
+          <p className="muted">No Minecraft server is running, so nothing will be interrupted.</p>
+        )
       )}
       {showProgress && <UpdateProgressList progress={progress} error={installError} failedStage={failedStage} />}
       <KeyValueList items={items} />

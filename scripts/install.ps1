@@ -2,6 +2,8 @@ param(
   [string]$Manifest = "",
   [string]$Package = "",
   [string]$InstallDir = "",
+  [string]$DataDir = "",
+  [string]$ServerRoot = "",
   [Alias("p")]
   [int]$Port = 8080,
   [switch]$NoStart,
@@ -46,6 +48,8 @@ try {
     $InstallerArgs += @("-Manifest", $Manifest)
   }
   if ($InstallDir) { $InstallerArgs += @("-InstallDir", $InstallDir) }
+  if ($DataDir) { $InstallerArgs += @("-DataDir", $DataDir) }
+  if ($ServerRoot) { $InstallerArgs += @("-ServerRoot", $ServerRoot) }
   if (-not $NoStart) { $InstallerArgs += "-Start" }
   if ($Force) { $InstallerArgs += "-Force" }
   if ($SkipChecksum) { $InstallerArgs += "-SkipChecksum" }

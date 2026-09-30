@@ -104,7 +104,14 @@ func scheduleSelfDelete(root string, keep []string) bool {
 		return false
 	}
 	target := fmt.Sprintf(`rmdir /s /q "%s"`, root)
-	if len(keep) > 0 {
+	keptInside := false
+	for _, path := range keep {
+		if pathInside(path, root) {
+			keptInside = true
+		}
+	}
+	if keptInside {
+		// Something the user wants to keep lives here, so only the program goes.
 		target = fmt.Sprintf(`del /f /q "%s"`, self)
 	}
 	command := fmt.Sprintf(`/d /c ping 127.0.0.1 -n 3 >nul & %s`, target)

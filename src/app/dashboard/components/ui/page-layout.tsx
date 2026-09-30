@@ -9,6 +9,8 @@ export interface PageProps {
   icon?: React.ReactNode;
   /** The page's single primary action, aligned right of the title. */
   actions?: React.ReactNode;
+  /** A small link above the title, such as "Back to files". */
+  back?: React.ReactNode;
   /** A <Tabs> row (section switcher) shown under the header. */
   tabs?: React.ReactNode;
   /** Search, filters and secondary actions, in one row above the content. */
@@ -28,10 +30,10 @@ export interface PageProps {
  * Width and padding come from the surrounding `.page-frame`, so a page never
  * sets its own.
  */
-export function Page({ title, description, icon, actions, tabs, toolbar, className = "", children }: PageProps) {
+export function Page({ title, description, icon, actions, back, tabs, toolbar, className = "", children }: PageProps) {
   return (
     <section className={`page ${className}`.trim()}>
-      {title && <PageHeader title={title} description={description} icon={icon} actions={actions} />}
+      {title && <PageHeader title={title} description={description} icon={icon} actions={actions} back={back} />}
       {tabs && <div className="page-tabs">{tabs}</div>}
       {toolbar && <div className="page-toolbar">{toolbar}</div>}
       <div className="page-body">{children}</div>

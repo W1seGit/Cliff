@@ -400,6 +400,38 @@
   margin-bottom: var(--space-5);
 }
 
+/* "Back to ..." link above a page title */
+.page-header-back {
+  display: flex;
+  min-width: 0;
+}
+
+.page-header-back .btn,
+.page-header-back button {
+  min-height: 28px;
+  padding-inline: var(--space-2);
+  margin-left: calc(var(--space-2) * -1);
+  color: var(--text-secondary);
+}
+
+.page-header-back .btn:hover:not(:disabled),
+.page-header-back button:hover:not(:disabled) {
+  color: var(--text);
+}
+
+/* Quiet text link: the shared link-button fill is too heavy for a back link */
+.page-header-back .button-link,
+.page-header-back .button-link:hover:not(.disabled) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-header-back .button-link:hover:not(.disabled) {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .page-header-row {
   display: flex;
   align-items: flex-start;
@@ -708,4 +740,91 @@
 
 [aria-invalid="true"] {
   box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+/* Create or import: a switch between the two, above the wizard steps */
+.server-mode-switch {
+  margin-bottom: var(--space-2);
+}
+
+/* What Cliff is doing while it creates or imports a server */
+.operation-progress {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+}
+
+.operation-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.operation-progress-head strong {
+  font-size: 14px;
+}
+
+.operation-steps {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operation-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 2px;
+  color: var(--text-tertiary);
+}
+
+.operation-step-icon {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 20px;
+  place-items: center;
+}
+
+.operation-step-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.operation-step-text strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.operation-step-text small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.operation-steps li.done { color: var(--text-secondary); }
+.operation-steps li.done .operation-step-icon { color: var(--running); }
+.operation-steps li.active { color: var(--text); }
+.operation-steps li.active .operation-step-icon { color: var(--accent); }
+.operation-steps li.active .operation-step-text strong { font-weight: 600; }
+.operation-steps li.failed { color: var(--danger); }
+
+/* Inline code inside running text stays on the line instead of becoming a block */
+.setting-row-description code,
+.banner-copy code,
+.card-description code {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  box-shadow: none;
+  font-size: 12px;
+  white-space: nowrap;
 }

@@ -24,17 +24,26 @@ func requestFromLoopback(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// shutdownDaemon lets `cliff stop` ask the daemon to shut down cleanly (saving
-// worlds and stopping Minecraft servers) on every platform. It only answers a
-// local caller that holds the token file written when the daemon started.
-func (h apiHandler) shutdownDaemon(w http.ResponseWriter, r *http.Request) {
-	if h.shutdown == nil || h.shutdownToken == "" || !requestFromLoopback(r) {
+// authorizeInternal admits only a local caller that holds the token file
+// written when the daemon started. It answers the refusal itself.
+func (h apiHandler) authorizeInternal(w http.ResponseWriter, r *http.Request) bool {
+	if h.shutdownToken == "" || !requestFromLoopback(r) {
 		writeError(w, http.StatusNotFound, "Not found")
-		return
+		return false
 	}
 	given := r.Header.Get(ShutdownTokenHeader)
 	if subtle.ConstantTimeCompare([]byte(given), []byte(h.shutdownToken)) != 1 {
 		writeError(w, http.StatusForbidden, "Forbidden")
+		return false
+	}
+	return true
+}
+
+// shutdownDaemon lets `cliff stop` ask the daemon to shut down cleanly (saving
+// worlds and stopping Minecraft servers) on every platform. It only answers a
+// local caller that holds the token file written when the daemon started.
+func (h apiHandler) shutdownDaemon(w http.ResponseWriter, r *http.Request) {
+	if !h.authorizeInternal(w, r) || h.shutdown == nil {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"ok": true, "message": "Shutting down"})

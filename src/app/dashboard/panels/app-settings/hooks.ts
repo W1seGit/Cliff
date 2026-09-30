@@ -4,18 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { copyTextToClipboard } from "../../lib/clipboard";
 import { formatBytes } from "../../lib/utils";
 import { useUpdateInstaller } from "../../components/update-progress";
+import { stoppingNames } from "../../components/update-modal";
 import {
   checkForUpdates,
   clearUpdateSafety,
+  controlDaemon,
   fetchDaemonLogs,
   fetchDaemonLogsFull,
   fetchJavaRuntimes,
   fetchTypeVersions,
   fetchUpdateSafety,
+  fetchUpdateServers,
+  reloadAfterDaemonRestart,
   installJavaRuntime,
   uninstallJavaRuntime,
 } from "../../lib/runtime-client";
-import type { JavaRuntimeInfo, ServerType, UpdateCheckResult, UpdateSafetyInfo } from "../../lib/types";
+import type { ConfirmRequest, JavaRuntimeInfo, ServerType, UpdateCheckResult, UpdateSafetyInfo } from "../../lib/types";
 
 type Notify = (message: string) => void;
 
@@ -180,6 +184,11 @@ export function useUpdates(initial: UpdateCheckResult | null | undefined, onMess
   const installer = useUpdateInstaller(onMessage);
   const [safety, setSafety] = useState<UpdateSafetyInfo | null>(null);
   const [clearing, setClearing] = useState(false);
+  const { refreshRunningServers } = installer;
+
+  useEffect(() => {
+    void refreshRunningServers();
+  }, [refreshRunningServers]);
 
   useEffect(() => {
     let alive = true;
@@ -225,8 +234,54 @@ export function useUpdates(initial: UpdateCheckResult | null | undefined, onMess
     installError: installer.error,
     failedStage: installer.failedStage,
     install: installer.install,
+    runningServers: installer.runningServers,
     safety,
     clearing,
     clearSafety,
   };
+}
+
+/** Restart or stop Cliff from the dashboard, asking first when a server would be stopped. */
+export function useDaemonControl(onMessage: Notify, onConfirm: (request: ConfirmRequest) => void) {
+  const [busy, setBusy] = useState<"" | "restart" | "stop">("");
+  const [stopped, setStopped] = useState(false);
+
+  const run = useCallback(async (action: "restart" | "stop") => {
+    setBusy(action);
+    try {
+      await controlDaemon(action, true);
+      if (action === "restart") {
+        onMessage("Restarting Cliff...");
+        await reloadAfterDaemonRestart();
+      } else {
+        setStopped(true);
+      }
+    } catch (error) {
+      onMessage(error instanceof Error ? error.message : `Could not ${action} Cliff`);
+    } finally {
+      setBusy("");
+    }
+  }, [onMessage]);
+
+  const ask = useCallback(async (action: "restart" | "stop") => {
+    let running: { name: string }[] = [];
+    try {
+      running = await fetchUpdateServers();
+    } catch {
+      // The daemon asks again when the request arrives.
+    }
+    const servers = running.length > 0 ? stoppingNames(running) : "";
+    const consequence = action === "restart"
+      ? (servers ? `${servers} will be stopped and started again afterwards. Players are disconnected for about a minute.` : "Cliff restarts and this page reloads. No server is running.")
+      : (servers ? `${servers} will be stopped and its world saved. Cliff then stops, and this page stops working until you run "cliff start" on the host machine.` : "Cliff stops and this page stops working until you run \"cliff start\" on the host machine. No server is running.");
+    onConfirm({
+      title: action === "restart" ? "Restart Cliff?" : "Stop Cliff?",
+      message: consequence,
+      confirmLabel: action === "restart" ? "Restart Cliff" : "Stop Cliff",
+      dangerous: action === "stop" || running.length > 0,
+      onConfirm: () => run(action),
+    });
+  }, [onConfirm, run]);
+
+  return { busy, stopped, restart: () => void ask("restart"), stop: () => void ask("stop") };
 }

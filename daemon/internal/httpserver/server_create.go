@@ -40,6 +40,8 @@ type serverCreateInput struct {
 	Port             int    `json:"port"`
 	LaunchJar        string `json:"launchJar"`
 	ExtraArgs        string `json:"extraArgs"`
+	// ProgressID lets the dashboard follow this operation step by step.
+	ProgressID string `json:"progressId"`
 }
 
 type importDetection struct {
@@ -113,6 +115,13 @@ func (h apiHandler) createServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h apiHandler) createServerFromInput(r *http.Request, input serverCreateInput) (store.Server, string, error) {
+	progress := h.createProgress.begin(input.ProgressID, createSteps(input))
+	server, note, err := h.dispatchCreate(withProgress(r, progress), input)
+	progress.finish(err)
+	return server, note, err
+}
+
+func (h apiHandler) dispatchCreate(r *http.Request, input serverCreateInput) (store.Server, string, error) {
 	mode := strings.TrimSpace(input.Mode)
 	if mode == "" {
 		mode = "create"
@@ -237,6 +246,7 @@ func (h apiHandler) createManagedServer(r *http.Request, input serverCreateInput
 		return store.Server{}, "", err
 	}
 	name := displayName(input.Name, "New server")
+	progressFrom(r).start("prepare")
 	target, err := availableManagedPath(r, h, settings.ServerRoot, name)
 	if err != nil {
 		return store.Server{}, "", err
@@ -254,6 +264,7 @@ func (h apiHandler) createManagedServer(r *http.Request, input serverCreateInput
 		_ = os.RemoveAll(target)
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("save")
 	created, err := h.store.CreateServer(r.Context(), server)
 	if err != nil {
 		_ = os.RemoveAll(target)
@@ -285,6 +296,7 @@ func (h apiHandler) cloneServer(r *http.Request, input serverCreateInput) (store
 	if err != nil {
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("copy")
 	if err := copyDirectory(source.Path, target); err != nil {
 		_ = os.RemoveAll(target)
 		return store.Server{}, "", err
@@ -301,11 +313,13 @@ func (h apiHandler) cloneServer(r *http.Request, input serverCreateInput) (store
 	server.Port = port
 	server.CreatedAt = ""
 	server.UpdatedAt = ""
+	progressFrom(r).start("save")
 	created, err := h.store.CreateServer(r.Context(), server)
 	if err != nil {
 		_ = os.RemoveAll(target)
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("properties")
 	properties := readServerPropertiesPayload(created)
 	if err := writeServerPropertiesFile(created, map[string]any{
 		"motd":               properties.Editable.MOTD,
@@ -329,6 +343,7 @@ func (h apiHandler) cloneServer(r *http.Request, input serverCreateInput) (store
 }
 
 func (h apiHandler) importServerPath(r *http.Request, input serverCreateInput) (store.Server, string, error) {
+	progressFrom(r).start("check")
 	source, err := filepath.Abs(strings.TrimSpace(input.Path))
 	if err != nil || source == "" {
 		return store.Server{}, "", errors.New("Server path is required")
@@ -345,10 +360,12 @@ func (h apiHandler) importServerPath(r *http.Request, input serverCreateInput) (
 	if err != nil {
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("copy")
 	if err := copyDirectory(source, target); err != nil {
 		_ = os.RemoveAll(target)
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("detect")
 	server, err := h.serverRecordFromInput(r, input, target, name)
 	if err != nil {
 		_ = os.RemoveAll(target)
@@ -357,6 +374,7 @@ func (h apiHandler) importServerPath(r *http.Request, input serverCreateInput) (
 	if server.LaunchJar == "" {
 		server.LaunchJar = detectLaunchJar(target, server.Type)
 	}
+	progressFrom(r).start("save")
 	created, err := h.store.CreateServer(r.Context(), server)
 	if err != nil {
 		_ = os.RemoveAll(target)
@@ -366,6 +384,7 @@ func (h apiHandler) importServerPath(r *http.Request, input serverCreateInput) (
 }
 
 func (h apiHandler) importStagedServer(r *http.Request, input serverCreateInput) (store.Server, string, error) {
+	progressFrom(r).start("check")
 	token := strings.TrimSpace(input.Token)
 	if !importTokenPattern.MatchString(token) {
 		return store.Server{}, "", errors.New("Invalid import session")
@@ -387,10 +406,12 @@ func (h apiHandler) importStagedServer(r *http.Request, input serverCreateInput)
 	if err != nil {
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("copy")
 	if err := copyDirectory(stagedPath, target); err != nil {
 		_ = os.RemoveAll(target)
 		return store.Server{}, "", err
 	}
+	progressFrom(r).start("detect")
 	server, err := h.serverRecordFromInput(r, input, target, name)
 	if err != nil {
 		_ = os.RemoveAll(target)
@@ -399,6 +420,7 @@ func (h apiHandler) importStagedServer(r *http.Request, input serverCreateInput)
 	if server.LaunchJar == "" {
 		server.LaunchJar = detectLaunchJar(target, server.Type)
 	}
+	progressFrom(r).start("save")
 	created, err := h.store.CreateServer(r.Context(), server)
 	if err != nil {
 		_ = os.RemoveAll(target)
@@ -1684,6 +1706,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 			return "", err
 		}
 		server.LaunchJar = "server.jar"
+		progressFrom(r).start("settings")
 		if err := writeDefaultServerFiles(*server); err != nil {
 			return "", err
 		}
@@ -1698,6 +1721,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 			return "", err
 		}
 		server.LaunchJar = "server.jar"
+		progressFrom(r).start("settings")
 		if err := writeDefaultServerFiles(*server); err != nil {
 			return "", err
 		}
@@ -1713,6 +1737,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 			return "", err
 		}
 		server.LaunchJar = "server.jar"
+		progressFrom(r).start("settings")
 		if err := writeDefaultServerFiles(*server); err != nil {
 			return "", err
 		}
@@ -1728,6 +1753,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 			return "", err
 		}
 		server.LaunchJar = "server.jar"
+		progressFrom(r).start("settings")
 		if err := writeDefaultServerFiles(*server); err != nil {
 			return "", err
 		}
@@ -1744,6 +1770,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 			return "", err
 		}
 		server.LaunchJar = "fabric-server-launch.jar"
+		progressFrom(r).start("settings")
 		if err := writeDefaultServerFiles(*server); err != nil {
 			return "", err
 		}
@@ -1771,6 +1798,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 }
 
 func (h apiHandler) provisionInstallerServer(r *http.Request, server *store.Server, installerName string, loaderName string) (string, error) {
+	progressFrom(r).start("settings")
 	if err := writeDefaultServerFiles(*server); err != nil {
 		return "", err
 	}
@@ -1792,10 +1820,12 @@ func (h apiHandler) provisionInstallerServer(r *http.Request, server *store.Serv
 }
 
 func (h apiHandler) runLoaderInstaller(r *http.Request, server store.Server, installerName string) error {
+	progressFrom(r).start("java")
 	javaPath, err := (javamanager.Resolver{DataDir: h.config.DataDir}).Resolve(r.Context(), server.JavaPath, server.MinecraftVersion)
 	if err != nil {
 		return fmt.Errorf("managed Java setup failed: %w", err)
 	}
+	progressFrom(r).start("install")
 
 	cmd := exec.CommandContext(r.Context(), javaPath, "-jar", installerName, "--installServer")
 	cmd.Dir = server.Path
@@ -1847,6 +1877,7 @@ func (h apiHandler) vanillaServerDownload(r *http.Request, minecraftVersion stri
 	SHA1 string `json:"sha1"`
 	Size int64  `json:"size"`
 }, error) {
+	progressFrom(r).start("lookup")
 	metadata, err := h.getMinecraftMetadata(r, false)
 	if err != nil {
 		return nil, err
@@ -1867,6 +1898,7 @@ func (h apiHandler) vanillaServerDownload(r *http.Request, minecraftVersion stri
 }
 
 func (h apiHandler) paperServerDownload(r *http.Request, minecraftVersion string) (string, error) {
+	progressFrom(r).start("lookup")
 	var builds []paperBuild
 	requestURL := "https://fill.papermc.io/v3/projects/paper/versions/" + url.PathEscape(minecraftVersion) + "/builds"
 	if err := fetchJSON(r, requestURL, &builds); err != nil {
@@ -1889,6 +1921,7 @@ func (h apiHandler) paperServerDownload(r *http.Request, minecraftVersion string
 }
 
 func (h apiHandler) purpurServerDownload(r *http.Request, minecraftVersion string) (string, error) {
+	progressFrom(r).start("lookup")
 	var info purpurVersionInfo
 	requestURL := "https://api.purpurmc.org/v2/purpur/" + url.PathEscape(minecraftVersion)
 	if err := fetchJSON(r, requestURL, &info); err != nil {
@@ -1906,6 +1939,7 @@ func (h apiHandler) purpurServerDownload(r *http.Request, minecraftVersion strin
 }
 
 func (h apiHandler) foliaServerDownload(r *http.Request, minecraftVersion string) (string, error) {
+	progressFrom(r).start("lookup")
 	var builds []paperBuild
 	requestURL := "https://fill.papermc.io/v3/projects/folia/versions/" + url.PathEscape(minecraftVersion) + "/builds"
 	if err := fetchJSON(r, requestURL, &builds); err != nil {
@@ -1928,6 +1962,7 @@ func (h apiHandler) foliaServerDownload(r *http.Request, minecraftVersion string
 }
 
 func (h apiHandler) latestFabricInstaller(r *http.Request) (string, error) {
+	progressFrom(r).start("lookup")
 	var installers []fabricInstaller
 	if err := fetchJSON(r, "https://meta.fabricmc.net/v2/versions/installer", &installers); err != nil {
 		return "", err
@@ -2013,7 +2048,9 @@ func downloadFile(r *http.Request, requestURL string, destination string) error 
 	if err != nil {
 		return err
 	}
-	copyErr := copyBoundedDownload(output, response.Body, maxArtifactDownloadBytes)
+	progress := progressFrom(r)
+	progress.start("download")
+	copyErr := copyBoundedDownload(output, &progressReader{reader: response.Body, progress: progress, total: response.ContentLength}, maxArtifactDownloadBytes)
 	closeErr := output.Close()
 	if copyErr != nil {
 		_ = os.Remove(destination)

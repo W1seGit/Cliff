@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, File as FileIcon, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Plus, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, File as FileIcon, FilePlus, FileText, Folder, FolderInput, FolderOpen, FolderPlus, Lock, Pencil, Plus, ShieldCheck, ShieldOff, Trash2, Upload } from "lucide-react";
 import { formatBytes, shortDate } from "../lib/utils";
 import { fetchServerFile, runFileAction, uploadServerFile } from "../lib/runtime-client";
 import type { ConfirmRequest, FileListing, FilePayload, ServerRecord, UnsavedChangesRegistration } from "../lib/types";
@@ -14,7 +14,21 @@ import { CodeEditor, languageForFile } from "../components/ui/code-editor";
 import { SelectionBar } from "../components/ui/selection-bar";
 import { FilterBar } from "../components/ui/filter-bar";
 import { Modal } from "../components/ui/modal";
+import { IconButton } from "../components/ui/icon-button";
 import { Menu, MenuItem } from "../components/ui/menu";
+import { MoveDialog } from "./files/move-dialog";
+
+const safeModeKey = "cliff.files.safeMode";
+
+/** Safe mode is on unless the user turned it off in this browser. */
+function readSafeMode() {
+  try {
+    return window.localStorage.getItem(safeModeKey) !== "off";
+  } catch {
+    return true;
+  }
+}
+
 
 export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { server: ServerRecord; onConfirm: (request: ConfirmRequest) => void; onMessage: (message: string) => void; onUnsavedChange: (change: UnsavedChangesRegistration | null) => void }) {
   const [listing, setListing] = useState<FileListing | null>(null);
@@ -27,6 +41,12 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
   const [query, setQuery] = useState("");
   const [addModal, setAddModal] = useState<null | "upload" | "folder" | "file">(null);
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
+  const [safeMode, setSafeMode] = useState(() => (typeof window === "undefined" ? true : readSafeMode()));
+  const [renameTarget, setRenameTarget] = useState<FileListing["entries"][number] | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [moveCandidates, setMoveCandidates] = useState<string[]>([]);
+  const [dragPaths, setDragPaths] = useState<string[]>([]);
+  const [dropTarget, setDropTarget] = useState("");
   const fileDirty = Boolean(openFile?.editable && content !== openFile.content);
   const saveFileRef = useRef<() => Promise<boolean>>(async () => false);
   const discardEditsRef = useRef<() => void>(() => undefined);
@@ -151,7 +171,7 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
     if (busy) return;
     setBusy(`delete:${targetPath}`);
     try {
-      await runFileAction(server.id, { action: "delete", path: targetPath });
+      await runFileAction(server.id, { action: "delete", path: targetPath, safeMode });
       if (openFile?.path === targetPath) { setOpenFile(null); setContent(""); }
       await loadPath(listing?.cwd ?? "", true);
     } catch (error) { onMessage(error instanceof Error ? error.message : `Delete ${targetName} failed`); }
@@ -162,12 +182,75 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
     if (busy || selectedPaths.length === 0) return;
     setBusy("delete-selected");
     try {
-      await runFileAction(server.id, { action: "delete-selected", paths: selectedPaths });
+      await runFileAction(server.id, { action: "delete-selected", paths: selectedPaths, safeMode });
       if (openFile && selectedPaths.includes(openFile.path)) { setOpenFile(null); setContent(""); }
       setSelectedPaths([]);
       await loadPath(listing?.cwd ?? "", true);
     } catch (error) { onMessage(error instanceof Error ? error.message : "Delete selected failed"); }
     finally { setBusy(""); }
+  }
+
+  function changeSafeMode(next: boolean) {
+    const apply = () => {
+      setSafeMode(next);
+      try {
+        window.localStorage.setItem(safeModeKey, next ? "on" : "off");
+      } catch {
+        // Not remembered, but it still applies for this visit.
+      }
+      onMessage(next ? "Safe mode is on" : "Safe mode is off");
+    };
+    if (next) {
+      apply();
+      return;
+    }
+    onConfirm({
+      title: "Turn off Safe mode?",
+      message: "Safe mode stops you from moving, renaming or deleting the files a server needs to start, such as run.bat, server jars, eula.txt, server.properties, libraries, and the world folder. Without it, one wrong move can stop the server from starting.",
+      confirmLabel: "Turn off Safe mode",
+      dangerous: true,
+      onConfirm: apply,
+    });
+  }
+
+  function startRename(entry: FileListing["entries"][number]) {
+    setRenameTarget(entry);
+    setRenameValue(entry.name);
+  }
+
+  async function submitRename() {
+    if (!renameTarget || busy) return;
+    const name = renameValue.trim();
+    if (!name || name === renameTarget.name) { setRenameTarget(null); return; }
+    setBusy("rename");
+    try {
+      await runFileAction(server.id, { action: "rename", path: renameTarget.path, newName: name, safeMode });
+      setRenameTarget(null);
+      await loadPath(listing?.cwd ?? "", true);
+      onMessage(`Renamed to ${name}`);
+    } catch (error) { onMessage(error instanceof Error ? error.message : "Rename failed"); }
+    finally { setBusy(""); }
+  }
+
+  async function moveItems(paths: string[], destination: string) {
+    if (busy || paths.length === 0) return;
+    setBusy("move");
+    try {
+      await runFileAction(server.id, { action: "move", paths, destination, safeMode });
+      setMoveCandidates([]);
+      setSelectedPaths([]);
+      await loadPath(listing?.cwd ?? "", true);
+      const where = destination ? destination : "the server folder";
+      onMessage(paths.length === 1 ? `Moved to ${where}` : `Moved ${paths.length} items to ${where}`);
+    } catch (error) { onMessage(error instanceof Error ? error.message : "Move failed"); }
+    finally { setBusy(""); setDragPaths([]); setDropTarget(""); }
+  }
+
+  /** Whether the dragged items may be dropped into this folder. */
+  function canDropInto(folderPath: string) {
+    return dragPaths.length > 0
+      && !dragPaths.includes(folderPath)
+      && !dragPaths.some((path) => folderPath.startsWith(`${path}/`));
   }
 
   async function doOpenEntry(entry: FileListing["entries"][number]) {
@@ -197,31 +280,52 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
   const allEntriesSelected = entries.length > 0 && entries.every((entry) => selectedPaths.includes(entry.path));
   const cwdParts = (listing?.cwd ?? "").split(/[\\/]/).filter(Boolean);
   const crumbs = [
-    { label: "Server files", onClick: cwdParts.length > 0 ? () => loadPath("") : undefined },
-    ...cwdParts.map((part, index) => ({
-      label: part,
-      onClick: index < cwdParts.length - 1 ? () => loadPath(cwdParts.slice(0, index + 1).join("/")) : undefined,
-    })),
+    {
+      label: "Server files",
+      onClick: cwdParts.length > 0 ? () => loadPath("") : undefined,
+      onDrop: cwdParts.length > 0 && dragPaths.length > 0 ? () => { void moveItems(dragPaths, ""); } : undefined,
+    },
+    ...cwdParts.map((part, index) => {
+      const crumbPath = cwdParts.slice(0, index + 1).join("/");
+      return {
+        label: part,
+        onClick: index < cwdParts.length - 1 ? () => loadPath(crumbPath) : undefined,
+        onDrop: index < cwdParts.length - 1 && dragPaths.length > 0 ? () => { void moveItems(dragPaths, crumbPath); } : undefined,
+      };
+    }),
   ];
+  const protectedSelected = safeMode && listing ? selectedPaths.some((path) => listing.entries.find((entry) => entry.path === path)?.protected) : false;
 
   if (openFile) {
     const fileCrumbs = openFile.path.split(/[\\/]/).filter(Boolean);
+    const openFileEntry = listing?.entries.find((entry) => entry.path === openFile.path);
+    const openFileLocked = safeMode ? openFileEntry?.protected ?? "" : "";
     return (
       <Page
         className="file-editor-page"
+        back={
+          <Button variant="link" iconLeft={<ArrowLeft size={14} />} disabled={Boolean(busy)} onClick={() => guardFileDiscard(() => { setOpenFile(null); setContent(""); })}>
+            Back to files
+          </Button>
+        }
         title={openFile.name}
         description={`${formatBytes(openFile.size)}${fileCrumbs.length > 1 ? ` · ${fileCrumbs.slice(0, -1).join("/")}` : ""}${openFile.editable ? "" : " · read-only"}`}
         icon={<FileText size={20} />}
         actions={
-          <>
-            <Button iconLeft={<ArrowLeft size={14} />} disabled={Boolean(busy)} onClick={() => guardFileDiscard(() => { setOpenFile(null); setContent(""); })}>
-              Back to files
-            </Button>
-            <Button variant="danger-ghost" aria-label={`Delete ${openFile.name}`} title="Delete file" disabled={Boolean(busy)} onClick={() => onConfirm({
+          <Button
+            variant="danger-ghost"
+            aria-label={`Delete ${openFile.name}`}
+            title={openFileLocked ? `Protected by Safe mode (${openFileLocked.toLowerCase()})` : "Delete file"}
+            disabled={Boolean(busy) || Boolean(openFileLocked)}
+            onClick={() => onConfirm({
               title: "Delete file", message: `${openFile.name} will be removed.`, confirmLabel: "Delete", dangerous: true,
               onConfirm: () => deletePath(openFile.path, openFile.name),
-            })} loading={busy === `delete:${openFile.path}`} loadingText="Deleting..."><Trash2 size={15} /></Button>
-          </>
+            })}
+            loading={busy === `delete:${openFile.path}`}
+            loadingText="Deleting..."
+          >
+            <Trash2 size={15} />
+          </Button>
         }
       >
         <CodeEditor tall value={content} onChange={setContent} language={languageForFile(openFile.name)} disabled={!openFile.editable} ariaLabel={`Contents of ${openFile.name}`} />
@@ -248,6 +352,15 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
             },
           ]}
           actions={
+            <>
+            <Button
+              iconLeft={safeMode ? <ShieldCheck size={14} /> : <ShieldOff size={14} />}
+              aria-pressed={safeMode}
+              title={safeMode ? "Safe mode protects launcher scripts, server jars and other files a server needs. Click to turn it off." : "Safe mode is off. Click to protect the files a server needs."}
+              onClick={() => changeSafeMode(!safeMode)}
+            >
+              Safe mode: {safeMode ? "On" : "Off"}
+            </Button>
             <Menu
               trigger={<Button variant="primary" iconLeft={<Plus size={14} />}>Add</Button>}
             >
@@ -255,6 +368,7 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
               <MenuItem icon={<FolderPlus size={15} />} onSelect={() => setAddModal("folder")}>New folder</MenuItem>
               <MenuItem icon={<FilePlus size={15} />} onSelect={() => setAddModal("file")}>New file</MenuItem>
             </Menu>
+            </>
           }
         />
       }
@@ -266,9 +380,14 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
             selectedCount={selectedPaths.length}
             actions={[
               {
+                label: "Move to...",
+                disabled: Boolean(busy) || protectedSelected,
+                onClick: () => setMoveCandidates(selectedPaths),
+              },
+              {
                 label: "Delete selected",
                 variant: "danger",
-                disabled: Boolean(busy),
+                disabled: Boolean(busy) || protectedSelected,
                 onClick: () => onConfirm({
                   title: "Delete selected entries",
                   message: `${selectedPaths.length} selected file entr${selectedPaths.length === 1 ? "y" : "ies"} will be removed.`,
@@ -295,7 +414,12 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
         </thead>
         <tbody>
           {listing?.parent !== undefined && listing.cwd && (
-            <tr>
+            <tr
+              className={dropTarget === "::parent" ? "drop-target" : undefined}
+              onDragOver={dragPaths.length > 0 ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget("::parent"); } : undefined}
+              onDragLeave={dragPaths.length > 0 ? () => setDropTarget("") : undefined}
+              onDrop={dragPaths.length > 0 ? (event) => { event.preventDefault(); void moveItems(dragPaths, listing.parent); } : undefined}
+            >
               <td className="col-check" />
               <td colSpan={4}>
                 <Button plain className="cell-link" disabled={Boolean(busy)} onClick={() => loadPath(listing.parent)}>
@@ -304,29 +428,53 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
               </td>
             </tr>
           )}
-          {entries.map((entry) => (
-            <tr key={entry.path}>
-              <td className="col-check">
-                <Input type="checkbox" aria-label={`Select ${entry.name}`} checked={selectedPaths.includes(entry.path)} onChange={(event) => setSelectedPaths((current) => event.target.checked ? [...current, entry.path] : current.filter((item) => item !== entry.path))} />
-              </td>
-              <td>
-                <Button plain className="cell-link" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
-                  {entry.type === "directory" ? <Folder size={16} /> : entry.editable ? <FileText size={16} /> : <FileIcon size={16} />}
-                  <span className="cell-link-name">{entry.name}</span>
-                </Button>
-              </td>
-              <td className="col-num">{entry.type === "file" ? formatBytes(entry.size) : "—"}</td>
-              <td className="col-num">{shortDate(entry.updatedAt)}</td>
-              <td className="col-actions">
-                <span className="row-actions">
-                  {selectedPaths.length === 0 && <Button variant="danger-ghost" size="sm" aria-label={`Delete ${entry.name}`} title="Delete" disabled={Boolean(busy)} onClick={() => onConfirm({
-                    title: entry.type === "directory" ? "Delete folder" : "Delete file", message: `${entry.name} will be removed.${entry.type === "directory" ? " This also removes everything inside it." : ""}`, confirmLabel: "Delete", dangerous: true,
-                    onConfirm: () => deletePath(entry.path, entry.name),
-                  })} loading={busy === `delete:${entry.path}`} loadingText="..."><Trash2 size={15} /></Button>}
-                </span>
-              </td>
-            </tr>
-          ))}
+          {entries.map((entry) => {
+            const lock = safeMode ? entry.protected ?? "" : "";
+            const isFolder = entry.type === "directory";
+            const dropping = dropTarget === entry.path;
+            return (
+              <tr
+                key={entry.path}
+                draggable={!busy && !lock}
+                className={[dropping ? "drop-target" : "", dragPaths.includes(entry.path) ? "dragging" : ""].filter(Boolean).join(" ") || undefined}
+                onDragStart={(event) => {
+                  const paths = selectedPaths.includes(entry.path) ? selectedPaths : [entry.path];
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", paths.join("\n"));
+                  setDragPaths(paths);
+                }}
+                onDragEnd={() => { setDragPaths([]); setDropTarget(""); }}
+                onDragOver={isFolder && canDropInto(entry.path) ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget(entry.path); } : undefined}
+                onDragLeave={isFolder ? () => setDropTarget((current) => (current === entry.path ? "" : current)) : undefined}
+                onDrop={isFolder && canDropInto(entry.path) ? (event) => { event.preventDefault(); void moveItems(dragPaths, entry.path); } : undefined}
+              >
+                <td className="col-check">
+                  <Input type="checkbox" aria-label={`Select ${entry.name}`} checked={selectedPaths.includes(entry.path)} onChange={(event) => setSelectedPaths((current) => event.target.checked ? [...current, entry.path] : current.filter((item) => item !== entry.path))} />
+                </td>
+                <td>
+                  <Button plain className="cell-link" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
+                    {isFolder ? <Folder size={16} /> : entry.editable ? <FileText size={16} /> : <FileIcon size={16} />}
+                    <span className="cell-link-name">{entry.name}</span>
+                    {lock && <Lock size={12} className="file-lock" aria-label={`Protected by Safe mode: ${lock}`}><title>{`Protected by Safe mode: ${lock}`}</title></Lock>}
+                  </Button>
+                </td>
+                <td className="col-num">{entry.type === "file" ? formatBytes(entry.size) : "—"}</td>
+                <td className="col-num">{shortDate(entry.updatedAt)}</td>
+                <td className="col-actions">
+                  {selectedPaths.length === 0 && (
+                    <span className="row-actions">
+                      <IconButton size="sm" aria-label={`Rename ${entry.name}`} title={lock ? `Protected by Safe mode (${lock.toLowerCase()})` : "Rename"} disabled={Boolean(busy) || Boolean(lock)} onClick={() => startRename(entry)}><Pencil size={15} /></IconButton>
+                      <IconButton size="sm" aria-label={`Move ${entry.name}`} title={lock ? `Protected by Safe mode (${lock.toLowerCase()})` : "Move to a folder"} disabled={Boolean(busy) || Boolean(lock)} onClick={() => setMoveCandidates([entry.path])}><FolderInput size={15} /></IconButton>
+                      <Button variant="danger-ghost" size="sm" aria-label={`Delete ${entry.name}`} title={lock ? `Protected by Safe mode (${lock.toLowerCase()})` : "Delete"} disabled={Boolean(busy) || Boolean(lock)} onClick={() => onConfirm({
+                        title: isFolder ? "Delete folder" : "Delete file", message: `${entry.name} will be removed.${isFolder ? " This also removes everything inside it." : ""}`, confirmLabel: "Delete", dangerous: true,
+                        onConfirm: () => deletePath(entry.path, entry.name),
+                      })} loading={busy === `delete:${entry.path}`} loadingText="..."><Trash2 size={15} /></Button>
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
           {entries.length === 0 && listing && (
             <tr><td colSpan={5} className="table-empty">{query.trim() ? "No files match your filter." : "This folder is empty."}</td></tr>
           )}
@@ -371,6 +519,34 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
       >
         <Input label="File name" disabled={Boolean(busy)} placeholder="new-file.txt" value={newFileName} onChange={(event) => setNewFileName(event.target.value)} autoFocus />
       </Modal>
+      <Modal
+        isOpen={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title={renameTarget?.type === "directory" ? "Rename folder" : "Rename file"}
+        description="Enter a new name. It stays in the same folder."
+        confirmLabel="Rename"
+        confirmDisabled={!renameValue.trim() || renameValue.trim() === renameTarget?.name || Boolean(busy)}
+        confirmLoading={busy === "rename"}
+        onConfirm={submitRename}
+      >
+        <Input
+          label="Name"
+          autoFocus
+          disabled={Boolean(busy)}
+          value={renameValue}
+          onChange={(event) => setRenameValue(event.target.value)}
+          onKeyDown={(event) => { if (event.key === "Enter") void submitRename(); }}
+        />
+      </Modal>
+
+      <MoveDialog
+        serverId={server.id}
+        paths={moveCandidates}
+        startPath={listing?.cwd ?? ""}
+        busy={busy === "move"}
+        onClose={() => setMoveCandidates([])}
+        onMove={(destination) => { void moveItems(moveCandidates, destination); }}
+      />
     </Page>
   );
 }

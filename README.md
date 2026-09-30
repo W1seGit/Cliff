@@ -85,6 +85,28 @@ irm getcliff.dev/install.ps1 | iex -- -p 8081
 curl -fsSL getcliff.dev/install.sh | sh -s -- -p 8081
 ```
 
+### Keeping data and servers somewhere else
+
+By default Cliff keeps its settings and servers inside its install folder (`data/` and `servers/`). To put them elsewhere, pass the folders to the installer:
+
+```powershell
+irm getcliff.dev/install.ps1 | iex -- -DataDir D:\cliff\data -ServerRoot D:\minecraft
+```
+```bash
+curl -fsSL getcliff.dev/install.sh | sh -s -- --data-dir /srv/cliff/data --server-root /srv/minecraft
+```
+
+A folder that already holds Cliff data is reused as it is, a missing one is created, and the choice is remembered (change it later with `cliff configure`).
+
+### Uninstalling
+
+`cliff uninstall` asks what to do with your data:
+
+1. **Keep my data**: removes Cliff itself, but leaves your servers, worlds and settings. Installing Cliff again in the same folder (or pointing the installer at those folders) picks them up again.
+2. **Delete everything**: also deletes all servers, worlds, backups and settings. This cannot be undone, so you must type `delete` to confirm.
+
+For scripts, use `cliff uninstall --keep-data --yes` or `cliff uninstall --delete-data --yes`.
+
 ### From a prebuilt package
 
 Download a `cliff-<version>-<platform>-<arch>.zip` from [releases](https://github.com/W1seGit/Cliff/releases), extract it, and run:
@@ -106,7 +128,8 @@ After installing, `cliff` is available in your terminal:
 | `cliff update` | Check for and apply updates |
 | `cliff rollback` | Go back to the version you had before the last update |
 | `cliff cleanup` | Delete the previous version and database copies kept for undoing an update |
-| `cliff uninstall` | Remove Cliff from this machine (`--keep-data` keeps your servers and settings) |
+| `cliff configure` | Choose where Cliff keeps its data and servers (`--data-dir`, `--server-root`, `--show`, `--clear`) |
+| `cliff uninstall` | Remove Cliff. It asks whether to keep your servers and settings or delete everything (`--keep-data` / `--delete-data` skip the question) |
 | `cliff version` | Print version information |
 | `cliff help` | Show all commands and flags |
 

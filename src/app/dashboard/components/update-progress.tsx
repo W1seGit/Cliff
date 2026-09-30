@@ -2,8 +2,9 @@
 
 import { useCallback, useRef, useState } from "react";
 import { AlertTriangle, Check, Circle, Loader2 } from "lucide-react";
-import { applyUpdate, fetchUpdateProgress, reloadAfterDaemonRestart } from "../lib/runtime-client";
-import type { UpdateProgress } from "../lib/types";
+import { applyUpdate, fetchUpdateProgress, fetchUpdateServers, reloadAfterDaemonRestart } from "../lib/runtime-client";
+import { ApiError } from "../lib/utils";
+import type { RunningServer, UpdateProgress } from "../lib/types";
 
 type Stage = Exclude<UpdateProgress["stage"], "" | "failed">;
 
@@ -30,8 +31,32 @@ export function useUpdateInstaller(onMessage: (message: string) => void) {
   const [error, setError] = useState("");
   const lastStage = useRef<Stage>("downloading");
   const [failedStage, setFailedStage] = useState<Stage | null>(null);
+  /** The servers the update will stop, as last shown to the user. */
+  const [runningServers, setRunningServers] = useState<RunningServer[]>([]);
+
+  const refreshRunningServers = useCallback(async () => {
+    try {
+      setRunningServers(await fetchUpdateServers());
+    } catch {
+      // Not critical: the daemon asks again when the update starts.
+    }
+  }, []);
 
   const install = useCallback(async () => {
+    // A server that started since the warning was shown needs its own warning first.
+    let current: RunningServer[] = runningServers;
+    try {
+      current = await fetchUpdateServers();
+    } catch {
+      // Fall back to what was shown; the daemon refuses if it is out of date.
+    }
+    const shown = new Set(runningServers.map((server) => server.id));
+    setRunningServers(current);
+    if (current.some((server) => !shown.has(server.id))) {
+      onMessage("A server is running. Read the warning, then press the button again.");
+      return;
+    }
+
     setInstalling(true);
     setError("");
     setFailedStage(null);
@@ -54,7 +79,7 @@ export function useUpdateInstaller(onMessage: (message: string) => void) {
     }, 600);
 
     try {
-      const result = await applyUpdate();
+      const result = await applyUpdate(current.length > 0);
       if (result.success) {
         lastStage.current = "restarting";
         setProgress({
@@ -74,6 +99,9 @@ export function useUpdateInstaller(onMessage: (message: string) => void) {
         onMessage(message);
       }
     } catch (failure) {
+      if (failure instanceof ApiError && failure.code === "servers_running") {
+        void refreshRunningServers();
+      }
       const message = failure instanceof Error ? failure.message : "Update failed";
       setFailedStage(lastStage.current);
       setError(message);
@@ -83,9 +111,9 @@ export function useUpdateInstaller(onMessage: (message: string) => void) {
       window.clearInterval(poll);
       setInstalling(false);
     }
-  }, [onMessage]);
+  }, [onMessage, refreshRunningServers, runningServers]);
 
-  return { installing, progress, error, failedStage, install };
+  return { installing, progress, error, failedStage, install, runningServers, refreshRunningServers };
 }
 
 /** The step list shown while an update runs, or after it stopped. */

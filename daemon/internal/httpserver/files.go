@@ -24,6 +24,8 @@ type fileEntry struct {
 	Size      int64  `json:"size"`
 	UpdatedAt string `json:"updatedAt"`
 	Editable  bool   `json:"editable"`
+	// Protected says why Safe mode keeps this from being moved, renamed or deleted.
+	Protected string `json:"protected,omitempty"`
 }
 
 type filePayload struct {
@@ -74,6 +76,10 @@ func (h apiHandler) files(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		items := serverProtections(server)
+		for index := range listing.Entries {
+			listing.Entries[index].Protected = protectionReason(items, listing.Entries[index].Path)
+		}
 		writeJSON(w, http.StatusOK, listing)
 		return
 	}
@@ -114,10 +120,14 @@ func (h apiHandler) fileAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Action  string   `json:"action"`
-		Path    string   `json:"path"`
-		Content string   `json:"content"`
-		Paths   []string `json:"paths"`
+		Action      string   `json:"action"`
+		Path        string   `json:"path"`
+		Content     string   `json:"content"`
+		Paths       []string `json:"paths"`
+		NewName     string   `json:"newName"`
+		Destination string   `json:"destination"`
+		// SafeMode protects launch-critical files. It is on unless the caller turns it off.
+		SafeMode *bool `json:"safeMode"`
 	}
 	if err := readJSON(r, &input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid file action body")
@@ -147,13 +157,39 @@ func (h apiHandler) fileAction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case "rename":
+		if refuseProtected(w, server, input.SafeMode, "renamed", input.Path) {
+			return
+		}
+		renamed, err := renameManagedPath(server.Path, target, input.NewName)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "path": renamed})
+	case "move":
+		if refuseProtected(w, server, input.SafeMode, "moved", input.Paths...) {
+			return
+		}
+		moved, err := moveManagedPaths(server.Path, input.Paths, input.Destination)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "moved": moved})
 	case "delete":
+		if refuseProtected(w, server, input.SafeMode, "deleted", input.Path) {
+			return
+		}
 		if err := deleteManagedPath(server.Path, target); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 	case "delete-selected":
+		if refuseProtected(w, server, input.SafeMode, "deleted", input.Paths...) {
+			return
+		}
 		deleted, err := deleteSelectedManagedPaths(server.Path, input.Paths)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())

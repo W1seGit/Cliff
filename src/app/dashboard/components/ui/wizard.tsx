@@ -80,7 +80,7 @@ export function WizardActions({
   return (
     <div className="wizard-actions">
       <Button disabled={currentStep === 0 || busy} onClick={onBack}>
-        Back
+        Previous step
       </Button>
       {isLastStep ? (
         <Button

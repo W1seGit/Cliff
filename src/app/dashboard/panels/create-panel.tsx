@@ -13,6 +13,8 @@ import { Input } from "../components/ui/input";
 import { Panel } from "../components/ui/panel";
 import { Hint } from "../components/ui/hint";
 import { Banner } from "../components/ui/banner";
+import { OperationProgress, newProgressId, useOperationProgress } from "../components/operation-progress";
+import { ServerModeSwitch } from "../components/server-mode-switch";
 import { KeyValueList } from "../components/ui/setting-row";
 import { WizardTabs, WizardActions } from "../components/ui/wizard";
 import { FieldGrid } from "../components/ui/field-grid";
@@ -33,9 +35,11 @@ export function CreatePanel({
   onCreated,
   onMessage,
   onUnsavedChange,
+  onSwitchMode,
 }: {
   metadata: MinecraftMetadata | null;
   metadataError: string;
+  onSwitchMode: (mode: "import") => void;
   onCreated: (serverId?: string) => void;
   onMessage: (message: string) => void;
   onUnsavedChange: (change: UnsavedChangesRegistration | null) => void;
@@ -51,6 +55,8 @@ export function CreatePanel({
   const [extraArgs, setExtraArgs] = useState("");
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
+  const [createError, setCreateError] = useState("");
+  const operation = useOperationProgress();
 
   const submittingLabel = type === "forge" || type === "neoforge"
     ? `Installing ${type === "neoforge" ? "NeoForge" : "Forge"}...`
@@ -59,7 +65,8 @@ export function CreatePanel({
   const needsLoader = serverTypeNeedsLoader(type);
   const memoryValid = validMemoryRange(minMemoryMb, maxMemoryMb);
   const portValid = validPort(port);
-  const canSubmit = Boolean(metadata && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion) && memoryValid && portValid && !busy);
+  const formValid = Boolean(metadata && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion) && memoryValid && portValid);
+  const canSubmit = formValid && !busy;
   const createSteps = ["Type", "Version", "Resources", "Review"];
   const createStepIcons = [<Layers key="type" size={14} />, <Tag key="version" size={14} />, <Cpu key="resources" size={14} />, <ClipboardCheck key="review" size={14} />];
   const createStepValid = [
@@ -101,17 +108,25 @@ export function CreatePanel({
   async function submit() {
     if (!canSubmit) return;
     setBusy(true);
+    setCreateError("");
+    const progressId = newProgressId();
+    operation.start(progressId);
     try {
-      const data = await createServerProfile({ mode: "create", name, type, minecraftVersion: effectiveMinecraftVersion, loaderVersion: needsLoader ? loaderVersion : "", minMemoryMb, maxMemoryMb, port, javaPath, extraArgs });
+      const data = await createServerProfile({ mode: "create", name, type, minecraftVersion: effectiveMinecraftVersion, loaderVersion: needsLoader ? loaderVersion : "", minMemoryMb, maxMemoryMb, port, javaPath, extraArgs, progressId });
       await onCreated(data.server?.id);
       onUnsavedChange(null);
       onMessage(data.note ?? "Server created");
-    } catch (error) { onMessage(error instanceof Error ? error.message : "Create failed"); }
-    finally { setBusy(false); }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Create failed";
+      setCreateError(message);
+      onMessage(message);
+    }
+    finally { operation.stop(); setBusy(false); }
   }
 
   return (
     <Panel className="form-grid utility-wizard-panel wizard-panel">
+      <ServerModeSwitch mode="create" onChange={(mode) => { if (mode === "import") onSwitchMode("import"); }} />
       <div className="wizard-header">
         <WizardTabs
           steps={createSteps}
@@ -185,8 +200,17 @@ export function CreatePanel({
         </div>
       )}
 
-      {step === 3 && (
+      {step === 3 && busy && (
+        <OperationProgress
+          title={`Creating ${name.trim() || "your server"}`}
+          snapshot={operation.snapshot}
+          waitingLabel="Starting"
+        />
+      )}
+
+      {step === 3 && !busy && (
         <div className="review-step">
+          {createError && <Banner variant="danger" title="The server was not created">{createError} Nothing was left behind. You can change something and try again.</Banner>}
           <KeyValueList
             items={[
               { key: "type", label: "Type", value: type },
@@ -196,7 +220,7 @@ export function CreatePanel({
               { key: "memory", label: "Memory", value: `${minMemoryMb} MB min, ${maxMemoryMb} MB max` },
             ]}
           />
-          {!canSubmit && <Banner variant="warning">Complete the previous steps to create the server.</Banner>}
+          {!formValid && <Banner variant="warning">Complete the previous steps to create the server.</Banner>}
         </div>
       )}
     </Panel>

@@ -23,7 +23,7 @@ func Restart(binaryPath string, args []string) error {
 		}
 	}
 
-	slog.Info("restarting daemon after update", "binary", binaryPath)
+	slog.Info("restarting daemon", "binary", binaryPath)
 
 	if runtime.GOOS != "windows" {
 		// On Unix, syscall.Exec replaces the process in-place.

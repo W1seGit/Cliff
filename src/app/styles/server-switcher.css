@@ -170,6 +170,17 @@
 
 .switcher-server-row:hover:not(.active) { background: var(--surface-3); }
 
+/* The row shows the hover, so the inner button must not draw its own. */
+.switcher-server-row .switcher-server-pick,
+.switcher-server-row .switcher-server-pick:hover,
+.switcher-server-row .switcher-server-pick:active,
+.switcher-server-row .switcher-server-pick:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  border: 0;
+}
+
 .switcher-server-avatar {
   grid-row: 1 / -1;
   width: 28px;

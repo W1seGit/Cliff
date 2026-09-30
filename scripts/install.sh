@@ -7,6 +7,8 @@ MANIFEST="${CLIFF_RELEASE_MANIFEST:-$DEFAULT_MANIFEST}"
 PACKAGE=""
 INSTALL_DIR="${CLIFF_INSTALL_DIR:-}"
 PORT="${PORT:-8080}"
+DATA_DIR_OPT=""
+SERVER_ROOT_OPT=""
 START=1
 FORCE=0
 SKIP_CHECKSUM=0
@@ -25,11 +27,13 @@ while [ "$#" -gt 0 ]; do
     --package) require_arg "$1" "${2:-}"; PACKAGE="$2"; shift 2 ;;
     --install-dir) require_arg "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;
     -p|--port) require_arg "$1" "${2:-}"; PORT="$2"; shift 2 ;;
+    --data-dir) require_arg "$1" "${2:-}"; DATA_DIR_OPT="$2"; shift 2 ;;
+    --server-root) require_arg "$1" "${2:-}"; SERVER_ROOT_OPT="$2"; shift 2 ;;
     --no-start) START=0; shift ;;
     --force) FORCE=1; shift ;;
     --skip-checksum) SKIP_CHECKSUM=1; shift ;;
     -h|--help)
-      echo "Usage: sh install.sh [--manifest json-or-url] [--package zip-or-url] [--install-dir path] [-p 8080|--port 8080] [--no-start] [--force] [--skip-checksum]"
+      echo "Usage: sh install.sh [--manifest json-or-url] [--package zip-or-url] [--install-dir path] [--data-dir path] [--server-root path] [-p 8080|--port 8080] [--no-start] [--force] [--skip-checksum]"
       echo ""
       echo "After install, run: cliff start -p 8080"
       exit 0
@@ -75,6 +79,12 @@ if [ -n "$INSTALL_DIR" ]; then
   set -- "$@" --install-dir "$INSTALL_DIR"
 fi
 set -- "$@" --port "$PORT"
+if [ -n "$DATA_DIR_OPT" ]; then
+  set -- "$@" --data-dir "$DATA_DIR_OPT"
+fi
+if [ -n "$SERVER_ROOT_OPT" ]; then
+  set -- "$@" --server-root "$SERVER_ROOT_OPT"
+fi
 if [ "$START" = "1" ]; then
   set -- "$@" --start
 fi

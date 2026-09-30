@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Download, RefreshCw, ShieldCheck } from "lucide-react";
 import { Modal } from "./ui/modal";
 import { UpdateProgressList, useUpdateInstaller } from "./update-progress";
 import { dismissLastUpdateResult, fetchUpdateSafety } from "../lib/runtime-client";
@@ -38,7 +38,13 @@ export function UpdateModal({
   onMessage: (message: string) => void;
 }) {
   const installer = useUpdateInstaller(onMessage);
+  const { refreshRunningServers } = installer;
   const [skipThisUpdate, setSkipThisUpdate] = useState(false);
+  const stopping = installer.runningServers;
+
+  useEffect(() => {
+    if (isOpen) void refreshRunningServers();
+  }, [isOpen, refreshRunningServers]);
   const busy = installer.installing;
   const started = installer.installing || Boolean(installer.error);
 
@@ -61,7 +67,7 @@ export function UpdateModal({
           </span>
         )
       }
-      confirmLabel={installer.installing ? "Updating..." : installer.error ? "Try again" : "Install now"}
+      confirmLabel={installer.installing ? "Updating..." : installer.error ? "Try again" : stopping.length > 0 ? "Stop server and update" : "Install now"}
       confirmVariant="primary"
       confirmDisabled={busy}
       confirmLoading={busy}
@@ -108,14 +114,24 @@ export function UpdateModal({
               <p>
                 Before installing, Cliff copies its own settings database (a few KB) and keeps the current version
                 {update.safetyCopyBytes ? ` (about ${formatSize(update.safetyCopyBytes)} of disk)` : ""}. If the new version does not start,
-                Cliff puts the old one back automatically. Your servers and worlds are never copied or changed. You can delete the
+                Cliff puts the old one back automatically. Your worlds are never copied or changed. You can delete the
                 kept copies in App Settings &gt; Updates.
               </p>
             </div>
           </div>
-          <p className="update-modal-hint muted">
-            A running Minecraft server is stopped and its world saved as part of the update.
-          </p>
+          {stopping.length > 0 ? (
+            <div className="update-stop-warning" role="alert">
+              <AlertTriangle size={16} aria-hidden="true" />
+              <div>
+                <strong>{stoppingNames(stopping)} will be stopped during the update</strong>
+                <p>
+                  Its world is saved first, and Cliff starts it again afterwards. Players are disconnected for about a minute.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="update-modal-hint muted">No Minecraft server is running, so nothing will be interrupted.</p>
+          )}
           <label className="update-skip">
             <input
               type="checkbox"
@@ -181,6 +197,13 @@ export function UpdateResultModal({ result, onDone }: { result: LastUpdateResult
       )}
     </Modal>
   );
+}
+
+/** "Survival World", "A and B", or "A, B and C". */
+export function stoppingNames(servers: { name: string }[]): string {
+  const names = servers.map((server) => `"${server.name}"`);
+  if (names.length <= 1) return names[0] ?? "A server";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
 export function formatSize(bytes: number): string {
