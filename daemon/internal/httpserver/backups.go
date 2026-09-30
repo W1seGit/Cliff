@@ -154,14 +154,6 @@ func (h apiHandler) createBackup(ctx context.Context, server store.Server, reaso
 	return h.createSmartBackup(ctx, server, reason)
 }
 
-func (h apiHandler) createAutoSnapshot(ctx context.Context, server store.Server, reason string) error {
-	if !server.SnapshotsEnabled {
-		return nil
-	}
-	_, err := h.createBackup(ctx, server, reason)
-	return err
-}
-
 func (h apiHandler) restoreBackup(r *http.Request, server store.Server, backupID string) error {
 	backup, err := h.safeBackup(r, server, backupID)
 	if err != nil {

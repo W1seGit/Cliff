@@ -6,6 +6,25 @@ import { Modal } from "./ui/modal";
 import { applyUpdate, reloadAfterDaemonRestart } from "../lib/runtime-client";
 import type { UpdateCheckResult } from "../lib/types";
 
+const skippedUpdateKey = "cliff.skippedUpdateVersion";
+
+/** The version the user chose to skip, so the pop-up stays quiet until a newer one ships. */
+export function skippedUpdateVersion(): string {
+  try {
+    return window.localStorage.getItem(skippedUpdateKey) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function rememberSkippedUpdate(version: string) {
+  try {
+    window.localStorage.setItem(skippedUpdateKey, version);
+  } catch {
+    // Storage can be blocked; the pop-up then simply comes back next visit.
+  }
+}
+
 export function UpdateModal({
   update,
   isOpen,
@@ -19,7 +38,13 @@ export function UpdateModal({
 }) {
   const [applying, setApplying] = useState(false);
   const [waitingForRestart, setWaitingForRestart] = useState(false);
+  const [skipThisUpdate, setSkipThisUpdate] = useState(false);
   const busy = applying || waitingForRestart;
+
+  function close() {
+    if (skipThisUpdate) rememberSkippedUpdate(update.latestVersion);
+    onClose();
+  }
 
   async function handleApply() {
     setApplying(true);
@@ -47,7 +72,7 @@ export function UpdateModal({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={close}
       title="Update available"
       description={
         <span>
@@ -59,7 +84,7 @@ export function UpdateModal({
       confirmDisabled={busy}
       confirmLoading={busy}
       onConfirm={handleApply}
-      onCancel={onClose}
+      onCancel={close}
       cancelLabel="Later"
       busy={busy}
       form
@@ -91,16 +116,25 @@ export function UpdateModal({
         )}
       </div>
       <p className="update-modal-hint muted">
-        Running servers are stopped gracefully during the update. Server data, worlds, and settings are not changed.
+        Running servers are stopped gracefully during the update. Server data, worlds, and settings are not changed. Cliff keeps a copy of its database and the previous version, so &quot;cliff rollback&quot; can undo the update.
       </p>
       {waitingForRestart && (
         <p className="update-modal-status">
           Waiting for the restarted daemon, then this page will refresh.
         </p>
       )}
-      <div className="update-modal-later muted">
-        App Settings &gt; Updates keeps this available later.
-      </div>
+      <label className="update-skip">
+        <input
+          type="checkbox"
+          checked={skipThisUpdate}
+          disabled={busy}
+          onChange={(event) => setSkipThisUpdate(event.target.checked)}
+        />
+        <span>
+          Skip v{update.latestVersion}
+          <small>Don&apos;t show this pop-up again until the next version. You can still install it from App Settings &gt; Updates.</small>
+        </span>
+      </label>
     </Modal>
   );
 }

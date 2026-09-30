@@ -47,7 +47,6 @@ export function BackupsPanel({
   const [expandedBackup, setExpandedBackup] = useState("");
   const [diff, setDiff] = useState<BackupDiff | null>(null);
   const [diffLoading, setDiffLoading] = useState("");
-  const [snapshotOverride, setSnapshotOverride] = useState<{ serverId: string; enabled: boolean } | null>(null);
   const [scheduleOverride, setScheduleOverride] = useState<{ serverId: string; enabled: boolean; interval: number } | null>(null);
   const [scheduleDraft, setScheduleDraft] = useState(() => ({ serverId: server.id, ...intervalParts(server.snapshotIntervalMinutes) }));
 
@@ -59,7 +58,6 @@ export function BackupsPanel({
     .toSorted((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const allFilteredSelected = filteredBackups.length > 0 && filteredBackups.every((backup) => selectedBackups.includes(backup.id));
-  const snapshotsEnabled = snapshotOverride?.serverId === server.id ? snapshotOverride.enabled : server.snapshotsEnabled;
   const scheduledSnapshotsEnabled = scheduleOverride?.serverId === server.id ? scheduleOverride.enabled : server.scheduledSnapshotsEnabled;
   const snapshotIntervalMinutes = scheduleOverride?.serverId === server.id ? scheduleOverride.interval : server.snapshotIntervalMinutes;
   const currentScheduleDraft = scheduleDraft.serverId === server.id ? scheduleDraft : { serverId: server.id, ...intervalParts(snapshotIntervalMinutes) };
@@ -126,22 +124,6 @@ export function BackupsPanel({
     }
   }
 
-  async function toggleAutoSnapshots(nextValue: boolean) {
-    if (busyAction) return;
-    setSnapshotOverride({ serverId: server.id, enabled: nextValue });
-    setBusyAction("snapshots-toggle");
-    try {
-      await updateServerProfile(server.id, { snapshotsEnabled: nextValue });
-      await onRefresh();
-      onMessage(nextValue ? "Auto snapshots enabled" : "Auto snapshots disabled");
-    } catch (error) {
-      setSnapshotOverride({ serverId: server.id, enabled: !nextValue });
-      onMessage(error instanceof Error ? error.message : "Snapshot setting failed");
-    } finally {
-      setBusyAction("");
-    }
-  }
-
   async function saveSchedule(enabled: boolean, interval: number) {
     if (busyAction) return;
     const nextInterval = Math.max(0, Math.floor(interval));
@@ -188,7 +170,7 @@ export function BackupsPanel({
         ]}
         actions={
           <>
-            <Button className="backups-settings-action" iconLeft={<CalendarClock size={14} />} onClick={() => setShowSettings(true)}>Auto backups</Button>
+            <Button className="backups-settings-action" iconLeft={<CalendarClock size={14} />} onClick={() => setShowSettings(true)}>Scheduled snapshots</Button>
             <Button disabled={Boolean(busyAction) || isRunning} iconLeft={<Download size={14} />} onClick={() => window.open(backupUrl(server.id, "?current=1"), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download the current server folder as a zip"}>Download server</Button>
             <Button variant="primary" disabled={Boolean(busyAction)} iconLeft={<Camera size={14} />} onClick={() => setShowCreateSnapshot(true)}>Create snapshot</Button>
           </>
@@ -220,22 +202,15 @@ export function BackupsPanel({
       <Modal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
-        title="Auto backups"
+        title="Scheduled snapshots"
         cancelLabel="Close"
-        description="Configure automatic and scheduled snapshots for this server."
+        description="Save a snapshot of this server on a regular interval. Old snapshots stay until you delete them."
         busy={Boolean(busyAction)}
       >
         <div className="snapshot-settings">
           <ToggleRow
-            label="Auto snapshots"
-            description="Create a snapshot before mod or datapack add/remove."
-            checked={snapshotsEnabled}
-            disabled={Boolean(busyAction)}
-            onChange={toggleAutoSnapshots}
-          />
-          <ToggleRow
-            label="Scheduled snapshots"
-            description="Automatically create snapshots at a regular interval."
+            label="Take snapshots on a schedule"
+            description="Creates a snapshot every interval while Cliff is running."
             checked={scheduledSnapshotsEnabled}
             disabled={Boolean(busyAction)}
             onChange={(checked) => saveSchedule(checked, snapshotIntervalMinutes || 360)}

@@ -104,6 +104,7 @@ After installing, `cliff` is available in your terminal:
 | `cliff status` | Show daemon status (URL, uptime, PID) |
 | `cliff logs` | Print recent daemon logs (`-f` keeps following) |
 | `cliff update` | Check for and apply updates |
+| `cliff rollback` | Go back to the version you had before the last update |
 | `cliff uninstall` | Remove Cliff from this machine (`--keep-data` keeps your servers and settings) |
 | `cliff version` | Print version information |
 | `cliff help` | Show all commands and flags |

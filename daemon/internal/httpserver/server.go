@@ -186,7 +186,6 @@ type settingsResponse struct {
 	ServerRoot       string        `json:"serverRoot"`
 	DataDir          string        `json:"dataDir"`
 	LogFile          string        `json:"logFile"`
-	SnapshotsEnabled bool          `json:"snapshotsEnabled"`
 	CurseForgeAPIKey string        `json:"curseForgeApiKey"`
 	Storage          *storageUsage `json:"storage,omitempty"`
 	Access           accessInfo    `json:"access"`
@@ -264,7 +263,6 @@ func (h apiHandler) settings(w http.ResponseWriter, r *http.Request) {
 		ServerRoot:       settings.ServerRoot,
 		DataDir:          h.config.DataDir,
 		LogFile:          filepath.Join(h.config.DataDir, "logs", "daemon.log"),
-		SnapshotsEnabled: settings.SnapshotsEnabled,
 		CurseForgeAPIKey: settings.CurseForgeAPIKey,
 		Access:           h.accessInfo(),
 	}
@@ -628,9 +626,6 @@ func (h apiHandler) updateServer(w http.ResponseWriter, r *http.Request) {
 	}
 	if value, ok := numberValue(raw["port"]); ok {
 		next.Port = value
-	}
-	if value, ok := raw["snapshotsEnabled"].(bool); ok {
-		next.SnapshotsEnabled = value
 	}
 	if value, ok := raw["scheduledSnapshotsEnabled"].(bool); ok {
 		next.ScheduledSnapshotsEnabled = value

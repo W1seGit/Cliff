@@ -12,7 +12,7 @@ import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
 import { PageBand } from "./dashboard/components/page-band";
 import { CloneServerDialog } from "./dashboard/components/clone-server-dialog";
 import { EulaModal } from "./dashboard/components/eula-modal";
-import { UpdateModal } from "./dashboard/components/update-modal";
+import { UpdateModal, skippedUpdateVersion } from "./dashboard/components/update-modal";
 import { Sidebar } from "./dashboard/components/sidebar";
 import { ServerHeader } from "./dashboard/components/server-header";
 import { OverviewPanel } from "./dashboard/panels/overview-panel";
@@ -592,7 +592,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         .then((result) => {
           if (!alive) return;
           setUpdateCheck(result);
-          if (result.updateAvailable && !updateDismissed) {
+          if (result.updateAvailable && !updateDismissed && skippedUpdateVersion() !== result.latestVersion) {
             setUpdateModalOpen(true);
           }
         })

@@ -225,10 +225,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case "delete":
-		if err := h.createAutoSnapshot(r.Context(), server, "before deleting "+safeBaseName(input.FileName)); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		if err := deleteModFile(server, input.FileName, truthy(input.Enabled)); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -249,10 +245,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": files})
 	case "delete-selected":
-		if err := h.createAutoSnapshot(r.Context(), server, "before deleting selected mods"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := deleteSelectedMods(server, input.Mods)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -274,10 +266,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"dependencies": dependencies})
 	case "install-modrinth":
-		if err := h.createAutoSnapshot(r.Context(), server, "before install-modrinth"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		includeDependencies := input.IncludeDependencies == nil || *input.IncludeDependencies
 		files, err := h.installModrinth(r, input.ProjectID, server, input.VersionID, includeDependencies, input.DependencyWarnings)
 		if err != nil {
@@ -286,10 +274,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": files})
 	case "install-modrinth-modpack":
-		if err := h.createAutoSnapshot(r.Context(), server, "before installing modpack"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := h.installModrinthModpack(r, input.ProjectID, server, input.VersionID)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -297,10 +281,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": files})
 	case "install-modrinth-dependencies":
-		if err := h.createAutoSnapshot(r.Context(), server, "before installing mod dependencies"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := h.installModrinthDependencies(r, input.Dependencies, server)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -538,10 +518,6 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 			}
 			safeName, err := uniqueModFileName(server, part.FileName())
 			if err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			if err := h.createAutoSnapshot(r.Context(), server, "before uploading "+safeName); err != nil {
 				writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}

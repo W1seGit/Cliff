@@ -1,12 +1,36 @@
 package httpserver
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
 
+	"github.com/W1seGit/Cliff/daemon/internal/buildinfo"
 	"github.com/W1seGit/Cliff/daemon/internal/updater"
 )
+
+// preUpdateBackupsToKeep is how many database copies from before an update are retained.
+const preUpdateBackupsToKeep = 3
+
+// prepareForUpdate runs once the new version is downloaded and verified, and
+// just before its files replace the current ones. It copies the database first,
+// so a problem there stops the update with nothing changed, then stops any
+// running Minecraft servers so their worlds are saved.
+func (h apiHandler) prepareForUpdate(ctx context.Context) error {
+	if h.store != nil {
+		backup := updater.PreUpdateBackupPath(h.config.DataDir, buildinfo.Version)
+		if err := h.store.BackupTo(ctx, backup); err != nil {
+			return fmt.Errorf("could not back up the database (nothing was changed): %w", err)
+		}
+		updater.PruneBackups(updater.PreUpdateBackupDir(h.config.DataDir), preUpdateBackupsToKeep)
+	}
+	if h.process != nil {
+		h.process.Shutdown(25 * time.Second)
+	}
+	return nil
+}
 
 // updatesCheck returns the current update status. If force=1 is passed,
 // it fetches a fresh manifest instead of returning the cached result.
@@ -38,12 +62,7 @@ func (h apiHandler) updatesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stop any running Minecraft servers before applying.
-	if h.process != nil {
-		h.process.Shutdown(15 * time.Second)
-	}
-
-	result, err := h.updater.Apply(r.Context())
+	result, err := h.updater.Apply(r.Context(), updater.ApplyHooks{BeforeSwap: h.prepareForUpdate})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return

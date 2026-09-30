@@ -171,15 +171,6 @@ type uploadSession struct {
 	ctx         context.Context
 	server      store.Server
 	worldName   string
-	snapshotted bool
-}
-
-func (u *uploadSession) snapshot(reason string) error {
-	if u.snapshotted {
-		return nil
-	}
-	u.snapshotted = true
-	return u.h.createAutoSnapshot(u.ctx, u.server, reason)
 }
 
 func (u *uploadSession) activeWorld() string {
@@ -250,9 +241,6 @@ func (u *uploadSession) place(tempPath string, name string, source string) []upl
 		if !strings.HasSuffix(lower, ".zip") {
 			return skip("Datapacks must be .zip files.")
 		}
-		if err := u.snapshot("before uploading " + name); err != nil {
-			return skip(err.Error())
-		}
 		file, err := os.Open(tempPath)
 		if err != nil {
 			return skip(err.Error())
@@ -275,9 +263,6 @@ func (u *uploadSession) place(tempPath string, name string, source string) []upl
 }
 
 func (u *uploadSession) installJar(tempPath string, name string, kind uploadKind, source string) []uploadResult {
-	if err := u.snapshot("before uploading " + name); err != nil {
-		return []uploadResult{{Name: name, Kind: kind, Status: "skipped", Source: source, Message: err.Error()}}
-	}
 	safeName, err := uniqueModFileName(u.server, name)
 	if err != nil {
 		return []uploadResult{{Name: name, Kind: kind, Status: "skipped", Source: source, Message: err.Error()}}

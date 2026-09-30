@@ -494,7 +494,6 @@ func (h apiHandler) serverRecordFromInput(r *http.Request, input serverCreateInp
 		Port:             port,
 		LaunchJar:        strings.TrimSpace(input.LaunchJar),
 		ExtraArgs:        strings.TrimSpace(input.ExtraArgs),
-		SnapshotsEnabled: true,
 	}, nil
 }
 

@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,7 +29,6 @@ type User struct {
 
 type Settings struct {
 	ServerRoot       string `json:"serverRoot"`
-	SnapshotsEnabled bool   `json:"snapshotsEnabled"`
 	CurseForgeAPIKey string `json:"curseForgeApiKey"`
 }
 
@@ -57,7 +58,6 @@ type Server struct {
 	Port                      int    `json:"port"`
 	LaunchJar                 string `json:"launchJar"`
 	ExtraArgs                 string `json:"extraArgs"`
-	SnapshotsEnabled          bool   `json:"snapshotsEnabled"`
 	ScheduledSnapshotsEnabled bool   `json:"scheduledSnapshotsEnabled"`
 	SnapshotIntervalMinutes   int    `json:"snapshotIntervalMinutes"`
 	LastScheduledSnapshotAt   string `json:"lastScheduledSnapshotAt"`
@@ -146,6 +146,16 @@ func (s *Store) Close() error {
 	return s.db.Close()
 }
 
+// BackupTo writes a consistent copy of the database to dest while it is in use.
+func (s *Store) BackupTo(ctx context.Context, dest string) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	_ = os.Remove(dest)
+	_, err := s.db.ExecContext(ctx, `VACUUM INTO ?`, dest)
+	return err
+}
+
 func (s *Store) migrate(defaultServerRoot string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -181,7 +191,6 @@ func (s *Store) migrate(defaultServerRoot string) error {
 			port INTEGER NOT NULL,
 			launch_jar TEXT NOT NULL,
 			extra_args TEXT NOT NULL,
-			snapshots_enabled TEXT NOT NULL DEFAULT 'true',
 			created_at TEXT NOT NULL,
 			updated_at TEXT NOT NULL
 		)`,
@@ -227,9 +236,6 @@ func (s *Store) migrate(defaultServerRoot string) error {
 	}
 
 	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO settings (key, value) VALUES ('serverRoot', ?)`, defaultServerRoot); err != nil {
-		return err
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO settings (key, value) VALUES ('snapshotsEnabled', 'true')`); err != nil {
 		return err
 	}
 	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO settings (key, value) VALUES ('curseForgeApiKey', '')`); err != nil {
@@ -287,7 +293,6 @@ func (s *Store) Settings(ctx context.Context) (Settings, error) {
 
 	return Settings{
 		ServerRoot:       values["serverRoot"],
-		SnapshotsEnabled: values["snapshotsEnabled"] != "false",
 		CurseForgeAPIKey: values["curseForgeApiKey"],
 	}, nil
 }
@@ -450,7 +455,7 @@ func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT
 		id, name, path, type, minecraft_version, loader_version, java_path,
 		min_memory_mb, max_memory_mb, port, launch_jar, extra_args,
-		snapshots_enabled, scheduled_snapshots_enabled, snapshot_interval_minutes, last_scheduled_snapshot_at, created_at, updated_at
+		scheduled_snapshots_enabled, snapshot_interval_minutes, last_scheduled_snapshot_at, created_at, updated_at
 		FROM servers ORDER BY updated_at DESC`)
 	if err != nil {
 		return nil, err
@@ -460,7 +465,6 @@ func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 	servers := []Server{}
 	for rows.Next() {
 		var server Server
-		var snapshotsEnabled string
 		var scheduledSnapshotsEnabled string
 		if err := rows.Scan(
 			&server.ID,
@@ -475,7 +479,6 @@ func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 			&server.Port,
 			&server.LaunchJar,
 			&server.ExtraArgs,
-			&snapshotsEnabled,
 			&scheduledSnapshotsEnabled,
 			&server.SnapshotIntervalMinutes,
 			&server.LastScheduledSnapshotAt,
@@ -484,7 +487,6 @@ func (s *Store) ListServers(ctx context.Context) ([]Server, error) {
 		); err != nil {
 			return nil, err
 		}
-		server.SnapshotsEnabled = snapshotsEnabled != "false"
 		server.ScheduledSnapshotsEnabled = scheduledSnapshotsEnabled == "true"
 		servers = append(servers, server)
 	}
@@ -530,9 +532,6 @@ func (s *Store) CreateServer(ctx context.Context, input Server) (Server, error) 
 		server.CreatedAt = now
 	}
 	server.UpdatedAt = now
-	if !server.SnapshotsEnabled {
-		server.SnapshotsEnabled = true
-	}
 	if server.SnapshotIntervalMinutes < 0 {
 		server.SnapshotIntervalMinutes = 0
 	}
@@ -542,8 +541,8 @@ func (s *Store) CreateServer(ctx context.Context, input Server) (Server, error) 
 	_, err := s.db.ExecContext(ctx, `INSERT INTO servers (
 		id, name, path, type, minecraft_version, loader_version, java_path,
 		min_memory_mb, max_memory_mb, port, launch_jar, extra_args,
-		snapshots_enabled, scheduled_snapshots_enabled, snapshot_interval_minutes, last_scheduled_snapshot_at, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		scheduled_snapshots_enabled, snapshot_interval_minutes, last_scheduled_snapshot_at, created_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		server.ID,
 		server.Name,
 		server.Path,
@@ -556,7 +555,6 @@ func (s *Store) CreateServer(ctx context.Context, input Server) (Server, error) 
 		server.Port,
 		server.LaunchJar,
 		server.ExtraArgs,
-		boolText(server.SnapshotsEnabled),
 		boolText(server.ScheduledSnapshotsEnabled),
 		server.SnapshotIntervalMinutes,
 		server.LastScheduledSnapshotAt,
@@ -618,11 +616,10 @@ func (s *Store) GetServer(ctx context.Context, id string) (Server, bool, error) 
 	row := s.db.QueryRowContext(ctx, `SELECT
 		id, name, path, type, minecraft_version, loader_version, java_path,
 		min_memory_mb, max_memory_mb, port, launch_jar, extra_args,
-		snapshots_enabled, scheduled_snapshots_enabled, snapshot_interval_minutes, last_scheduled_snapshot_at, created_at, updated_at
+		scheduled_snapshots_enabled, snapshot_interval_minutes, last_scheduled_snapshot_at, created_at, updated_at
 		FROM servers WHERE id = ?`, id)
 
 	var server Server
-	var snapshotsEnabled string
 	var scheduledSnapshotsEnabled string
 	if err := row.Scan(
 		&server.ID,
@@ -637,7 +634,6 @@ func (s *Store) GetServer(ctx context.Context, id string) (Server, bool, error) 
 		&server.Port,
 		&server.LaunchJar,
 		&server.ExtraArgs,
-		&snapshotsEnabled,
 		&scheduledSnapshotsEnabled,
 		&server.SnapshotIntervalMinutes,
 		&server.LastScheduledSnapshotAt,
@@ -649,7 +645,6 @@ func (s *Store) GetServer(ctx context.Context, id string) (Server, bool, error) 
 		}
 		return Server{}, false, err
 	}
-	server.SnapshotsEnabled = snapshotsEnabled != "false"
 	server.ScheduledSnapshotsEnabled = scheduledSnapshotsEnabled == "true"
 	return server, true, nil
 }
@@ -695,7 +690,6 @@ func (s *Store) UpdateServer(ctx context.Context, id string, input Server) (Serv
 	if input.ExtraArgs != "" {
 		next.ExtraArgs = input.ExtraArgs
 	}
-	next.SnapshotsEnabled = input.SnapshotsEnabled
 	next.ScheduledSnapshotsEnabled = input.ScheduledSnapshotsEnabled
 	next.SnapshotIntervalMinutes = input.SnapshotIntervalMinutes
 	next.LastScheduledSnapshotAt = input.LastScheduledSnapshotAt
@@ -710,7 +704,7 @@ func (s *Store) UpdateServer(ctx context.Context, id string, input Server) (Serv
 	_, err = s.db.ExecContext(ctx, `UPDATE servers SET
 		name = ?, type = ?, minecraft_version = ?, loader_version = ?, java_path = ?,
 		min_memory_mb = ?, max_memory_mb = ?, port = ?, launch_jar = ?, extra_args = ?,
-		snapshots_enabled = ?, scheduled_snapshots_enabled = ?, snapshot_interval_minutes = ?, last_scheduled_snapshot_at = ?, updated_at = ?
+		scheduled_snapshots_enabled = ?, snapshot_interval_minutes = ?, last_scheduled_snapshot_at = ?, updated_at = ?
 		WHERE id = ?`,
 		next.Name,
 		next.Type,
@@ -722,7 +716,6 @@ func (s *Store) UpdateServer(ctx context.Context, id string, input Server) (Serv
 		next.Port,
 		next.LaunchJar,
 		next.ExtraArgs,
-		boolText(next.SnapshotsEnabled),
 		boolText(next.ScheduledSnapshotsEnabled),
 		next.SnapshotIntervalMinutes,
 		next.LastScheduledSnapshotAt,

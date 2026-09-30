@@ -219,7 +219,7 @@ func (m *Manager) IsApplying() bool {
 
 // Apply downloads the latest release, verifies it, and swaps the binary + web assets.
 // On success, the daemon will restart itself.
-func (m *Manager) Apply(ctx context.Context) (ApplyResult, error) {
+func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, error) {
 	m.mu.Lock()
 	if m.applying {
 		m.mu.Unlock()
@@ -291,6 +291,15 @@ func (m *Manager) Apply(ctx context.Context) (ApplyResult, error) {
 	if err != nil {
 		os.RemoveAll(extractDir)
 		return ApplyResult{}, fmt.Errorf("find extracted assets: %w", err)
+	}
+
+	// Everything is downloaded, verified and unpacked. Only now does the caller
+	// stop servers and back up data, so a failed download changes nothing.
+	if hooks.BeforeSwap != nil {
+		if err := hooks.BeforeSwap(ctx); err != nil {
+			os.RemoveAll(extractDir)
+			return ApplyResult{}, fmt.Errorf("prepare for update: %w", err)
+		}
 	}
 
 	// Swap the binary and web assets.
@@ -378,8 +387,8 @@ func (m *Manager) swapAssets(newBinary, newWebDir string) error {
 	if newBinary != "" && m.binaryPath != "" {
 		if runtime.GOOS == "windows" {
 			// On Windows, we can't overwrite a running .exe.
-			// Move the old binary aside, then move the new one in.
-			oldBackup := m.binaryPath + ".old"
+			// Move the old binary aside (kept as .previous for `cliff rollback`), then move the new one in.
+			oldBackup := m.binaryPath + previousSuffix
 			os.Remove(oldBackup)
 			if err := os.Rename(m.binaryPath, oldBackup); err != nil {
 				return fmt.Errorf("rename old binary: %w", err)
@@ -389,7 +398,14 @@ func (m *Manager) swapAssets(newBinary, newWebDir string) error {
 				return fmt.Errorf("copy new binary: %w", err)
 			}
 		} else {
-			// On Unix, we can rename over a running binary.
+			// On Unix, we can rename over a running binary. Keep a copy of the
+			// current one first so `cliff rollback` can put it back.
+			previous := m.binaryPath + previousSuffix
+			if err := copyFile(m.binaryPath, previous); err != nil {
+				slog.Warn("could not keep the previous binary for rollback", "error", err)
+			} else {
+				_ = os.Chmod(previous, 0o755)
+			}
 			if err := os.Rename(newBinary, m.binaryPath); err != nil {
 				return fmt.Errorf("rename new binary: %w", err)
 			}
@@ -401,18 +417,23 @@ func (m *Manager) swapAssets(newBinary, newWebDir string) error {
 
 	// Swap the web directory.
 	if newWebDir != "" && m.webDir != "" {
-		webBackup := m.webDir + ".old"
+		webBackup := m.webDir + previousSuffix
 		os.RemoveAll(webBackup)
+		backedUp := true
 		if err := os.Rename(m.webDir, webBackup); err != nil {
-			slog.Warn("could not backup old web dir", "error", err)
+			backedUp = false
+			slog.Warn("could not keep the previous dashboard files for rollback", "error", err)
 		}
 		if err := os.Rename(newWebDir, m.webDir); err != nil {
 			// Try copy as fallback (cross-device).
 			if err := copyDir(newWebDir, m.webDir); err != nil {
+				if backedUp {
+					os.RemoveAll(m.webDir)
+					os.Rename(webBackup, m.webDir)
+				}
 				return fmt.Errorf("move new web dir: %w", err)
 			}
 		}
-		os.RemoveAll(webBackup)
 	}
 
 	return nil

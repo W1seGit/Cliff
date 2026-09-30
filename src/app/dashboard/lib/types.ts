@@ -21,7 +21,6 @@ export type Settings = {
   serverRoot: string;
   dataDir?: string;
   logFile?: string;
-  snapshotsEnabled: boolean;
   curseForgeApiKey: string;
   storage?: StorageUsage;
   access?: AccessInfo;
@@ -100,7 +99,6 @@ export type ServerRecord = {
   port: number;
   launchJar: string;
   extraArgs: string;
-  snapshotsEnabled: boolean;
   scheduledSnapshotsEnabled: boolean;
   snapshotIntervalMinutes: number;
   lastScheduledSnapshotAt: string;

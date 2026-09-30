@@ -145,6 +145,14 @@ func TestProcessAliveForSelfAndInvalid(t *testing.T) {
 	}
 }
 
+// isolateFromRealDaemon stops tests from finding a Cliff that happens to run on this machine.
+func isolateFromRealDaemon(t *testing.T) {
+	t.Helper()
+	previous := defaultProbePorts
+	defaultProbePorts = nil
+	t.Cleanup(func() { defaultProbePorts = previous })
+}
+
 func healthServer(t *testing.T, pid int, daemon string) int {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +169,7 @@ func healthServer(t *testing.T, pid int, daemon string) int {
 }
 
 func TestFindDaemonUsesHealthWhenFilesAreMissing(t *testing.T) {
+	isolateFromRealDaemon(t)
 	port := healthServer(t, os.Getpid(), "cliff")
 	t.Setenv("CLIFF_PORT", strconv.Itoa(port))
 	dataDir := t.TempDir()
@@ -175,6 +184,7 @@ func TestFindDaemonUsesHealthWhenFilesAreMissing(t *testing.T) {
 }
 
 func TestFindDaemonIgnoresOtherServices(t *testing.T) {
+	isolateFromRealDaemon(t)
 	port := healthServer(t, os.Getpid(), "not-cliff")
 	t.Setenv("CLIFF_PORT", strconv.Itoa(port))
 	if info := findDaemon(t.TempDir()); info != nil && info.Port == port {
@@ -183,6 +193,7 @@ func TestFindDaemonIgnoresOtherServices(t *testing.T) {
 }
 
 func TestFindDaemonClearsStaleFiles(t *testing.T) {
+	isolateFromRealDaemon(t)
 	dataDir := t.TempDir()
 	t.Setenv("CLIFF_PORT", "1")
 	// A state file that points at a dead PID and a closed port.

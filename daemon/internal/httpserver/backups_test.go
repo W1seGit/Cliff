@@ -181,7 +181,6 @@ func TestSmartBackupCreateDiffDownloadRestoreAndGC(t *testing.T) {
 		MaxMemoryMB:      1024,
 		Port:             25565,
 		LaunchJar:        "server.jar",
-		SnapshotsEnabled: true,
 	})
 	if err != nil {
 		t.Fatal(err)

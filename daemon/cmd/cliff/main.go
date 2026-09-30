@@ -53,6 +53,9 @@ func main() {
 	case "update":
 		runUpdate(os.Args[2:])
 		return
+	case "rollback":
+		runRollback(os.Args[2:])
+		return
 	case "uninstall":
 		runUninstall(os.Args[2:])
 		return
@@ -267,6 +270,7 @@ Usage:
   cliff status           Show daemon status (URL, uptime, PID)
   cliff logs [flags]     Print the current daemon log
   cliff update           Check for and apply updates
+  cliff rollback         Go back to the version before the last update
   cliff uninstall        Remove Cliff from this machine
   cliff version          Print version information
   cliff daemon [flags]   Run the daemon in the foreground (for debugging)
