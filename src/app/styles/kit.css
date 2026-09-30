@@ -456,35 +456,59 @@
   font-weight: 600;
 }
 
-/* Server state on the header: a blue dot grid that breathes while starting and holds steady once running. */
-.server-header::before {
+/* Server state on the header: a dot grid behind the content, held to the centre.
+   Starting: a soft band of light travels through the dots so they brighten one after another.
+   Running: the dots stay lit and still. */
+.server-header::before,
+.server-header::after {
   content: "";
   position: absolute;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   opacity: 0;
-  background-image: radial-gradient(circle, var(--accent) 1.3px, transparent 2px);
+  background-image: radial-gradient(circle, var(--accent) 1.2px, transparent 1.9px);
   background-size: 14px 14px;
   background-position: 7px 7px;
-  -webkit-mask-image: linear-gradient(to right, transparent 15%, #000 85%);
-  mask-image: linear-gradient(to right, transparent 15%, #000 85%);
   transition: opacity var(--dur-base) var(--ease);
 }
 
-.server-header.is-running::before { opacity: 0.6; }
-.server-header.is-running { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); }
-
-.server-header.is-starting::before { animation: header-breathe 2.6s ease-in-out infinite; }
-.server-header.is-starting { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 25%, transparent); }
-
-@keyframes header-breathe {
-  0%, 100% { opacity: 0.08; }
-  50% { opacity: 0.85; }
+/* Base layer: the whole grid, faint, only in the middle of the bar */
+.server-header::before {
+  -webkit-mask-image: radial-gradient(ellipse 30% 95% at 50% 50%, #000 0%, transparent 100%);
+  mask-image: radial-gradient(ellipse 30% 95% at 50% 50%, #000 0%, transparent 100%);
 }
 
+/* Wave layer: the same grid, bright, revealed only inside a moving band */
+.server-header::after {
+  -webkit-mask-image: radial-gradient(ellipse 30% 95% at 50% 50%, #000 0%, transparent 100%), linear-gradient(100deg, transparent 38%, #000 50%, transparent 62%);
+  mask-image: radial-gradient(ellipse 30% 95% at 50% 50%, #000 0%, transparent 100%), linear-gradient(100deg, transparent 38%, #000 50%, transparent 62%);
+  -webkit-mask-size: 100% 100%, 300% 100%;
+  mask-size: 100% 100%, 300% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.server-header.is-running::before { opacity: 0.55; }
+.server-header.is-running { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+
+.server-header.is-starting::before { opacity: 0.16; }
+.server-header.is-starting::after { opacity: 0.95; animation: header-wave 3.4s ease-in-out infinite; }
+.server-header.is-starting { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 25%, transparent); }
+
+@keyframes header-wave {
+  from { -webkit-mask-position: 0 0, 100% 0; mask-position: 0 0, 100% 0; }
+  to { -webkit-mask-position: 0 0, 0% 0; mask-position: 0 0, 0% 0; }
+}
+
+/* Buttons sit on top of the effect, never in it */
+.server-header-actions button:not(.primary) { background-color: var(--bg); }
+
 @media (prefers-reduced-motion: reduce) {
-  .server-header.is-starting::before { animation: none; opacity: 0.3; }
+  .server-header.is-starting::after { animation: none; opacity: 0; }
+  .server-header.is-starting::before { opacity: 0.4; }
 }
 
 /* Icon tile used by PageBand in place of a server avatar */
