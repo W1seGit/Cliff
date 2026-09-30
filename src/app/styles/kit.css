@@ -815,3 +815,16 @@
 .operation-steps li.active .operation-step-icon { color: var(--accent); }
 .operation-steps li.active .operation-step-text strong { font-weight: 600; }
 .operation-steps li.failed { color: var(--danger); }
+
+/* Inline code inside running text stays on the line instead of becoming a block */
+.setting-row-description code,
+.banner-copy code,
+.card-description code {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  box-shadow: none;
+  font-size: 12px;
+  white-space: nowrap;
+}
