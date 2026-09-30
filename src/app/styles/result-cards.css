@@ -248,7 +248,7 @@
 }
 
 .utility-wizard-panel {
-  width: min(100%, 1040px);
+  width: 100%;
   max-width: none;
 }
 

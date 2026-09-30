@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  CheckCircle2, Clipboard, Download, Link2, Loader2, RadioTower, Waypoints, XCircle,
+  ArrowLeft, CheckCircle2, Clipboard, Download, Link2, Loader2, RadioTower, Waypoints, XCircle,
 } from "lucide-react";
 import {
   checkPlayitDeps as checkPlayitDepsAction,
@@ -32,6 +32,7 @@ import { JoinAddress } from "../components/ui/join-address";
 import { ConsoleView } from "../components/ui/console-view";
 import { Skeleton } from "../components/ui/skeleton";
 import { EmptyState } from "../components/ui/empty-state";
+import { Page } from "../components/ui/page-layout";
 
 type InstallState = "not-installed" | "installing" | "installed" | "failed";
 type ClaimState = "starting-agent" | "waiting-for-claim-link" | "claim-link-ready" | "waiting-for-user-to-claim" | "claimed" | "failed";
@@ -833,7 +834,13 @@ export function PublicAccessPanel({
 
   if (setupActive) {
     return (
-      <section className="public-access-setup-view">
+      <Page
+        className="public-access-setup-view"
+        title="Set up Public Access"
+        description={`Let friends join ${server.name} from anywhere, with no router setup.`}
+        icon={<RadioTower size={20} />}
+        actions={mode === "setup" && onBack ? <Button iconLeft={<ArrowLeft size={14} />} onClick={onBack}>Back to Public Access</Button> : undefined}
+        tabs={
         <Tabs
           ariaLabel="Public access setup steps"
           items={flowSteps.map((label, index) => ({
@@ -846,6 +853,8 @@ export function PublicAccessPanel({
           activeId={String(setupStep)}
           onChange={(id) => goToSetupStep(Number(id))}
         />
+        }
+      >
 
         {setupStep === 0 && (
           <div className="form-section">
@@ -995,7 +1004,7 @@ export function PublicAccessPanel({
           </div>
         )}
 
-      </section>
+      </Page>
     );
   }
 
