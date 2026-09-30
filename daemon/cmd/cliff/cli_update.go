@@ -180,7 +180,7 @@ func runUpdate(args []string) {
 	root := installRoot()
 	dataDirProvided := dataDir != ""
 	webDirProvided := webDir != ""
-	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
+	dataDir = resolveCLIPath(dataDir, dataDirFallback(root))
 	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
 	info := findDaemon(dataDir)
 	var state *cliffState
@@ -234,7 +234,7 @@ func runUpdate(args []string) {
 		Host:        "0.0.0.0",
 		Port:        8080,
 		DataDir:     dataDir,
-		ServerRoot:  resolveCLIPath(os.Getenv("CLIFF_SERVER_ROOT"), filepath.Join(root, "servers")),
+		ServerRoot:  resolveCLIPath(os.Getenv("CLIFF_SERVER_ROOT"), serverRootFallback(root)),
 		WebDir:      webDir,
 		FromVersion: buildinfo.Current().Version,
 	}
@@ -386,7 +386,7 @@ func runRollback(args []string) {
 	fs.Parse(args)
 
 	root := installRoot()
-	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
+	dataDir = resolveCLIPath(dataDir, dataDirFallback(root))
 	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
 	self, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
@@ -443,7 +443,7 @@ func runCleanup(args []string) {
 	fs.Parse(args)
 
 	root := installRoot()
-	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
+	dataDir = resolveCLIPath(dataDir, dataDirFallback(root))
 	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
 	self, _ := os.Executable()
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {

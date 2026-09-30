@@ -6,6 +6,8 @@ PACKAGE=""
 MANIFEST=""
 INSTALL_DIR="${CLIFF_INSTALL_DIR:-$HOME/.cliff}"
 PORT="${PORT:-8080}"
+DATA_DIR_OPT=""
+SERVER_ROOT_OPT=""
 START=0
 FORCE=0
 SKIP_CHECKSUM=0
@@ -26,12 +28,17 @@ while [ "$#" -gt 0 ]; do
     --manifest) require_arg "$1" "${2:-}"; MANIFEST="$2"; shift 2 ;;
     --install-dir) require_arg "$1" "${2:-}"; INSTALL_DIR="$2"; shift 2 ;;
     -p|--port) require_arg "$1" "${2:-}"; PORT="$2"; shift 2 ;;
+    --data-dir) require_arg "$1" "${2:-}"; DATA_DIR_OPT="$2"; shift 2 ;;
+    --server-root) require_arg "$1" "${2:-}"; SERVER_ROOT_OPT="$2"; shift 2 ;;
     --start) START=1; shift ;;
     --force) FORCE=1; shift ;;
     --skip-checksum) SKIP_CHECKSUM=1; shift ;;
     -h|--help)
-      echo "Usage: sh scripts/install-package.sh [--package zip-or-url] [--manifest json-or-url] [--install-dir path] [-p 8080|--port 8080] [--start] [--force] [--skip-checksum]
-  Re-running over an existing Cliff install upgrades it and keeps data and servers. --force is no longer needed."
+      echo "Usage: sh scripts/install-package.sh [--package zip-or-url] [--manifest json-or-url] [--install-dir path] [--data-dir path] [--server-root path] [-p 8080|--port 8080] [--start] [--skip-checksum]"
+      echo "  --data-dir     Where Cliff keeps its settings and database (default: <install-dir>/data)"
+      echo "  --server-root  Where your Minecraft servers live (default: <install-dir>/servers)"
+      echo "  An existing folder is reused as it is; a missing one is created."
+      echo "  Re-running over an existing Cliff install upgrades it and keeps data and servers."
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -233,12 +240,29 @@ fi
 # An existing Cliff install is upgraded in place and keeps its data and servers.
 # Anything else in the way is left alone: this script never deletes a folder
 # that is not a Cliff install.
+only_user_data() {
+  # True for a folder that holds nothing but a Cliff data and servers folder,
+  # which is what is left after `cliff uninstall --keep-data`.
+  for item in "$1"/* "$1"/.[!.]*; do
+    [ -e "$item" ] || continue
+    case "$(basename "$item")" in
+      data|servers) ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
 UPGRADE=0
+REUSED_DATA=0
 if [ -e "$INSTALL_DIR" ]; then
   if [ -f "$INSTALL_DIR/package-manifest.json" ]; then
     UPGRADE=1
   elif [ -d "$INSTALL_DIR" ] && [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
     rmdir "$INSTALL_DIR"
+  elif [ -d "$INSTALL_DIR" ] && only_user_data "$INSTALL_DIR"; then
+    UPGRADE=1
+    REUSED_DATA=1
   else
     echo "Refusing to install into $INSTALL_DIR: it exists and is not a Cliff install." >&2
     echo "Choose another folder with --install-dir, or remove it yourself." >&2
@@ -266,13 +290,26 @@ if [ "$UPGRADE" = "1" ]; then
     esac
     mv "$entry" "$INSTALL_DIR/$name"
   done
-  echo "Upgraded Cliff in $INSTALL_DIR (your data and servers were kept)."
+  if [ "$REUSED_DATA" = "1" ]; then
+    echo "Installed Cliff in $INSTALL_DIR and kept the data and servers already there."
+  else
+    echo "Upgraded Cliff in $INSTALL_DIR (your data and servers were kept)."
+  fi
 else
   mv "$TEMP_ROOT/cliff" "$INSTALL_DIR"
 fi
 
 # Make the binary executable.
 chmod +x "$INSTALL_DIR/cliff" 2>/dev/null || true
+
+# Remember a custom data or servers folder. A folder that already holds Cliff
+# data is reused as it is; one that does not exist yet is created.
+if [ -n "$DATA_DIR_OPT" ] || [ -n "$SERVER_ROOT_OPT" ]; then
+  set -- configure
+  if [ -n "$DATA_DIR_OPT" ]; then set -- "$@" --data-dir "$DATA_DIR_OPT"; fi
+  if [ -n "$SERVER_ROOT_OPT" ]; then set -- "$@" --server-root "$SERVER_ROOT_OPT"; fi
+  "$INSTALL_DIR/cliff" "$@" || echo "Warning: could not save the data and server folders; start Cliff with --data-dir and --server-root instead." >&2
+fi
 
 path_contains() {
   case ":$PATH:" in

@@ -50,6 +50,9 @@ func main() {
 	case "logs":
 		runLogs(os.Args[2:])
 		return
+	case "configure":
+		runConfigure(os.Args[2:])
+		return
 	case "update":
 		runUpdate(os.Args[2:])
 		return
@@ -278,6 +281,7 @@ Usage:
   cliff update           Check for and apply updates
   cliff rollback         Go back to the version before the last update
   cliff cleanup          Delete the copies kept for undoing an update
+  cliff configure        Choose where Cliff keeps its data and servers
   cliff uninstall        Remove Cliff from this machine
   cliff version          Print version information
   cliff daemon [flags]   Run the daemon in the foreground (for debugging)

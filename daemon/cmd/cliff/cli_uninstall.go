@@ -145,21 +145,85 @@ func removePathLinks(installedBinary string) []string {
 }
 
 func confirmPrompt(question string) bool {
-	fmt.Print(question)
-	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-	return strings.EqualFold(strings.TrimSpace(line), "yes")
+	return strings.EqualFold(strings.TrimSpace(readLine(question)), "yes")
 }
 
 // ---- cliff uninstall ----
+
+// countServerFolders counts the folders directly inside the servers folder.
+func countServerFolders(serverRoot string) int {
+	entries, err := os.ReadDir(serverRoot)
+	if err != nil {
+		return 0
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() {
+			count++
+		}
+	}
+	return count
+}
+
+// askAboutData makes the user choose what happens to their servers and
+// settings. It returns keep=true to leave them alone, and ok=false to cancel.
+func askAboutData(root string, dataPaths []string, serverRoot string) (keep bool, ok bool) {
+	fmt.Println()
+	fmt.Println("Your servers, worlds and settings are stored here:")
+	fmt.Printf("  Data and settings:   %s\n", dataPaths[0])
+	fmt.Printf("  Minecraft servers:   %s\n", dataPaths[1])
+	fmt.Printf("The Cliff program itself lives in %s\n", root)
+	fmt.Println()
+	fmt.Println("What should happen to your servers and settings?")
+	fmt.Println()
+	fmt.Println("  [1] Keep them. Remove only the Cliff program and its dashboard.")
+	fmt.Println("      Your servers, worlds and settings stay exactly where they are.")
+	fmt.Println("      Install Cliff again later and it can use them as they are.")
+	fmt.Println()
+	fmt.Println("  [2] Delete everything, including all servers and worlds.")
+	fmt.Println("      Nothing is left behind. This cannot be undone.")
+	fmt.Println()
+	fmt.Println("  [3] Cancel.")
+	fmt.Println()
+	switch strings.TrimSpace(readLine("Choose 1, 2 or 3: ")) {
+	case "1":
+		return true, true
+	case "2":
+		count := countServerFolders(serverRoot)
+		fmt.Printf("\nThis permanently deletes %d server folder(s), their worlds, and Cliff's settings and database.\n", count)
+		if strings.TrimSpace(readLine("Type 'delete' to confirm: ")) != "delete" {
+			return false, false
+		}
+		return false, true
+	}
+	return false, false
+}
+
+// stdinReader is shared so answers typed or piped one after another are not
+// lost between prompts.
+var stdinReader = bufio.NewReader(os.Stdin)
+
+func readLine(prompt string) string {
+	fmt.Print(prompt)
+	line, _ := stdinReader.ReadString('\n')
+	return line
+}
 
 func runUninstall(args []string) {
 	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
 	var yes bool
 	var keepData bool
-	fs.BoolVar(&yes, "yes", false, "skip confirmation prompt")
-	fs.BoolVar(&yes, "y", false, "skip confirmation prompt (shorthand)")
-	fs.BoolVar(&keepData, "keep-data", false, "keep servers, worlds and settings; remove only the program")
+	var deleteData bool
+	fs.BoolVar(&yes, "yes", false, "skip the confirmation prompts (needs --keep-data or --delete-data)")
+	fs.BoolVar(&yes, "y", false, "skip the confirmation prompts (shorthand)")
+	fs.BoolVar(&keepData, "keep-data", false, "remove only the program; keep servers, worlds and settings")
+	fs.BoolVar(&deleteData, "delete-data", false, "also delete all servers, worlds and settings")
 	fs.Parse(args)
+
+	if keepData && deleteData {
+		fmt.Fprintln(os.Stderr, "Choose one: --keep-data keeps your servers, --delete-data removes them.")
+		os.Exit(1)
+	}
 
 	root := installRoot()
 	self, _ := os.Executable()
@@ -176,7 +240,7 @@ func runUninstall(args []string) {
 
 	dataDir := defaultDataDir()
 	info := findDaemon(dataDir)
-	serverRoot := resolveCLIPath(os.Getenv("CLIFF_SERVER_ROOT"), filepath.Join(root, "servers"))
+	serverRoot := resolveCLIPath(os.Getenv("CLIFF_SERVER_ROOT"), serverRootFallback(root))
 	if info != nil && info.State != nil {
 		if info.State.DataDir != "" {
 			dataDir = resolveCLIPath(info.State.DataDir, dataDir)
@@ -195,27 +259,47 @@ func runUninstall(args []string) {
 		}
 	}
 
-	fmt.Println("This will remove Cliff:")
-	fmt.Printf("  Program:  %s\n", root)
-	if keepData {
-		fmt.Println("  Your data will be kept:")
-		for _, path := range dataPaths {
-			fmt.Printf("    %s\n", path)
+	// A script has to say what it means; only a person at the keyboard is asked.
+	if !keepData && !deleteData {
+		if yes {
+			fmt.Fprintln(os.Stderr, "Say what should happen to your servers and settings:")
+			fmt.Fprintln(os.Stderr, "  --keep-data     remove only the program, keep servers, worlds and settings")
+			fmt.Fprintln(os.Stderr, "  --delete-data   also delete all servers, worlds and settings")
+			os.Exit(1)
 		}
-	} else {
-		fmt.Printf("  This deletes all servers, worlds and settings in:\n")
-		for _, path := range dataPaths {
-			fmt.Printf("    %s\n", path)
+		keep, ok := askAboutData(root, dataPaths, serverRoot)
+		if !ok {
+			fmt.Println("Uninstall cancelled. Nothing was changed.")
+			return
 		}
-		fmt.Println("  Tip: run 'cliff uninstall --keep-data' to remove only the program.")
-	}
-	if info != nil {
-		fmt.Println("  Cliff is running and will be stopped first.")
+		keepData, deleteData = keep, !keep
+		yes = true // the choice above already was the confirmation
 	}
 
-	if !yes && !confirmPrompt("Type 'yes' to continue: ") {
-		fmt.Println("Uninstall cancelled. Nothing was changed.")
-		return
+	if keepData {
+		fmt.Println("Removing the Cliff program. Your servers, worlds and settings will be kept:")
+		for _, path := range dataPaths {
+			fmt.Printf("  %s\n", path)
+		}
+	} else {
+		fmt.Println("Removing Cliff and ALL of its data, including servers and worlds:")
+		for _, path := range dataPaths {
+			fmt.Printf("  %s\n", path)
+		}
+	}
+	if info != nil {
+		fmt.Println("Cliff is running and will be stopped first.")
+	}
+	if !yes {
+		prompt := "Type 'yes' to continue: "
+		if deleteData {
+			prompt = "Type 'delete' to delete everything: "
+		}
+		answer := strings.TrimSpace(readLine(prompt))
+		if (deleteData && answer != "delete") || (keepData && answer != "yes") {
+			fmt.Println("Uninstall cancelled. Nothing was changed.")
+			return
+		}
 	}
 
 	if info != nil {
@@ -268,20 +352,32 @@ func runUninstall(args []string) {
 			fmt.Printf("Cliff has been uninstalled, but %s could not be deleted automatically. Delete it yourself.\n", root)
 		}
 	} else if failures == 0 {
-		if !keepData {
-			_ = os.Remove(root)
-		}
+		// Removes the folder only when nothing was kept inside it.
+		_ = os.Remove(root)
 		fmt.Println("Cliff has been uninstalled.")
 	} else {
 		fmt.Fprintf(os.Stderr, "Some files could not be removed. Delete manually: %s\n", root)
 		os.Exit(1)
 	}
 	if keepData {
-		fmt.Println("Your servers and settings were left in place.")
+		printKeptData(root, dataDir, serverRoot)
 	}
 	if runtime.GOOS != "windows" {
 		fmt.Println("Open a new terminal so the PATH change takes effect.")
 	}
+}
+
+// printKeptData says what was left behind and how to use it again.
+func printKeptData(root string, dataDir string, serverRoot string) {
+	fmt.Println()
+	fmt.Println("Your servers, worlds and settings were kept:")
+	fmt.Printf("  Data and settings:   %s\n", dataDir)
+	fmt.Printf("  Minecraft servers:   %s\n", serverRoot)
+	fmt.Println("To use them again, install Cliff and either:")
+	if pathInside(dataDir, root) && pathInside(serverRoot, root) {
+		fmt.Printf("  - install into the same folder (%s), and Cliff picks them up by itself, or\n", root)
+	}
+	fmt.Printf("  - install anywhere and add:  --data-dir \"%s\" --server-root \"%s\"\n", dataDir, serverRoot)
 }
 
 // removeInstallEntries deletes everything in root except the running binary on
