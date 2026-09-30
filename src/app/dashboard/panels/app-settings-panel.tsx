@@ -105,7 +105,25 @@ function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCh
         />
       </SettingsSectionPanel>
       <SettingsSectionPanel idPrefix={idPrefix} id="updates" activeId={section}>
-        <UpdatesTab check={updates.check} checking={updates.checking} installing={updates.installing} onCheck={updates.checkNow} onInstall={updates.install} />
+        <UpdatesTab
+          check={updates.check}
+          checking={updates.checking}
+          installing={updates.installing}
+          progress={updates.progress}
+          installError={updates.installError}
+          failedStage={updates.failedStage}
+          safety={updates.safety}
+          clearing={updates.clearing}
+          onCheck={updates.checkNow}
+          onInstall={updates.install}
+          onClearSafety={() => onConfirm({
+            title: "Delete the update safety copies?",
+            message: "This removes the previous version and the database copies Cliff kept from before updates. You will no longer be able to undo the last update. Your servers, worlds and settings are not touched.",
+            confirmLabel: "Delete safety copies",
+            dangerous: true,
+            onConfirm: updates.clearSafety,
+          })}
+        />
       </SettingsSectionPanel>
     </SettingsLayout>
   );

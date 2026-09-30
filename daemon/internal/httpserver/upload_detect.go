@@ -167,10 +167,10 @@ func serverAcceptsPlugin(serverType string) (bool, string) {
 }
 
 type uploadSession struct {
-	h           apiHandler
-	ctx         context.Context
-	server      store.Server
-	worldName   string
+	h         apiHandler
+	ctx       context.Context
+	server    store.Server
+	worldName string
 }
 
 func (u *uploadSession) activeWorld() string {

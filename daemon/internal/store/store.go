@@ -43,6 +43,7 @@ var dummyPasswordHash = func() string {
 	hash, _ := hashPassword("cliff-dummy-password", "0000000000000000")
 	return hash
 }()
+
 const sessionDays = 14
 
 type Server struct {

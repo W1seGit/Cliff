@@ -11,7 +11,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -57,25 +59,27 @@ type ReleaseCommands struct {
 
 // CheckResult is what the API returns to the frontend.
 type CheckResult struct {
-	CurrentVersion string         `json:"currentVersion"`
-	CurrentCommit  string         `json:"currentCommit"`
-	LatestVersion  string         `json:"latestVersion"`
-	LatestCommit   string         `json:"latestCommit"`
-	UpdateAvailable bool          `json:"updateAvailable"`
-	ReleaseURL     string         `json:"releaseUrl,omitempty"`
-	ArchiveName    string         `json:"archiveName,omitempty"`
-	ArchiveSize    int64          `json:"archiveSize,omitempty"`
-	BuiltAt        string         `json:"builtAt,omitempty"`
-	CheckedAt      string         `json:"checkedAt"`
-	Error          string         `json:"error,omitempty"`
+	CurrentVersion  string `json:"currentVersion"`
+	CurrentCommit   string `json:"currentCommit"`
+	LatestVersion   string `json:"latestVersion"`
+	LatestCommit    string `json:"latestCommit"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+	ReleaseURL      string `json:"releaseUrl,omitempty"`
+	ArchiveName     string `json:"archiveName,omitempty"`
+	ArchiveSize     int64  `json:"archiveSize,omitempty"`
+	BuiltAt         string `json:"builtAt,omitempty"`
+	CheckedAt       string `json:"checkedAt"`
+	Error           string `json:"error,omitempty"`
+	// SafetyCopyBytes is roughly the disk space an update keeps for rolling back.
+	SafetyCopyBytes int64 `json:"safetyCopyBytes,omitempty"`
 }
 
 // ApplyResult is returned after applying an update.
 type ApplyResult struct {
-	Success      bool   `json:"success"`
-	Message      string `json:"message"`
-	NewVersion   string `json:"newVersion,omitempty"`
-	Restarting   bool   `json:"restarting"`
+	Success    bool   `json:"success"`
+	Message    string `json:"message"`
+	NewVersion string `json:"newVersion,omitempty"`
+	Restarting bool   `json:"restarting"`
 }
 
 // Manager coordinates update checks and application.
@@ -90,6 +94,8 @@ type Manager struct {
 	webDir     string
 	binaryPath string
 	client     *http.Client
+	progress   Progress
+	stageHook  func(stage string, message string)
 }
 
 // NewManager creates an updater manager.
@@ -105,6 +111,59 @@ func NewManager(binaryPath, webDir, dataDir string) *Manager {
 			Timeout: HTTPTimeout,
 		},
 	}
+}
+
+// updateBaseOverride lets tests and local rehearsals point the updater at a
+// server on this machine. Only loopback addresses are accepted, so it cannot
+// redirect real updates anywhere else.
+func updateBaseOverride() string {
+	raw := strings.TrimSpace(os.Getenv("CLIFF_UPDATE_BASE_URL"))
+	if raw == "" {
+		return ""
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Scheme != "http" {
+		return ""
+	}
+	switch parsed.Hostname() {
+	case "127.0.0.1", "localhost", "::1":
+		return strings.TrimRight(raw, "/") + "/"
+	}
+	return ""
+}
+
+func manifestURL() string {
+	if base := updateBaseOverride(); base != "" {
+		return base + "cliff-release.json"
+	}
+	return ManifestURL
+}
+
+func archiveURL(name string) string {
+	if base := updateBaseOverride(); base != "" {
+		return base + name
+	}
+	return "https://github.com/W1seGit/Cliff/releases/latest/download/" + name
+}
+
+// verifyNewBinary starts the unpacked new program just far enough to report its
+// version. It catches a corrupt, wrong-platform or broken build before anything
+// on the machine has been changed.
+func verifyNewBinary(ctx context.Context, path string, version string) error {
+	if runtime.GOOS != "windows" {
+		_ = os.Chmod(path, 0o755)
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, path, "version").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("the new version could not start (%v)", err)
+	}
+	wanted := strings.TrimPrefix(version, "v")
+	if wanted != "" && !strings.Contains(string(out), wanted) {
+		return fmt.Errorf("the new version reported %q instead of v%s", strings.TrimSpace(string(out)), wanted)
+	}
+	return nil
 }
 
 // currentPlatform returns the platform identifier matching the release manifest (e.g. "linux-amd64").
@@ -174,6 +233,7 @@ func (m *Manager) CheckNow(ctx context.Context) CheckResult {
 		result.ArchiveName = asset.Archive
 		result.ArchiveSize = asset.SizeBytes
 	}
+	result.SafetyCopyBytes = m.EstimateSafetyCopyBytes()
 
 	return result
 }
@@ -219,7 +279,7 @@ func (m *Manager) IsApplying() bool {
 
 // Apply downloads the latest release, verifies it, and swaps the binary + web assets.
 // On success, the daemon will restart itself.
-func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, error) {
+func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (result ApplyResult, err error) {
 	m.mu.Lock()
 	if m.applying {
 		m.mu.Unlock()
@@ -231,6 +291,9 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 		m.mu.Lock()
 		m.applying = false
 		m.mu.Unlock()
+		if err != nil {
+			m.SetStage(StageFailed, err.Error())
+		}
 	}()
 
 	// Ensure we have a fresh manifest.
@@ -252,6 +315,7 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 	}
 
 	slog.Info("applying update", "current", buildinfo.Version, "target", manifest.Version, "archive", asset.Archive)
+	m.beginProgress(buildinfo.Version, manifest.Version)
 
 	// Stage the download in dataDir/updates.
 	stagingDir := filepath.Join(m.dataDir, "updates")
@@ -261,13 +325,15 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 	archivePath := filepath.Join(stagingDir, asset.Archive)
 
 	// Download the archive.
-	archiveURL := fmt.Sprintf("https://github.com/W1seGit/Cliff/releases/latest/download/%s", asset.Archive)
-	slog.Info("downloading update archive", "url", archiveURL)
-	if err := m.downloadFile(ctx, archiveURL, archivePath); err != nil {
+	downloadURL := archiveURL(asset.Archive)
+	slog.Info("downloading update archive", "url", downloadURL)
+	m.SetStage(StageDownloading, fmt.Sprintf("Downloading Cliff v%s (%s)...", strings.TrimPrefix(manifest.Version, "v"), humanSize(asset.SizeBytes)))
+	if err := m.downloadFile(ctx, downloadURL, archivePath); err != nil {
 		return ApplyResult{}, fmt.Errorf("download archive: %w", err)
 	}
 
 	// Verify SHA256.
+	m.SetStage(StageVerifying, "Checking the download against its SHA-256 fingerprint...")
 	if err := verifySHA256(archivePath, asset.SHA256); err != nil {
 		os.Remove(archivePath)
 		return ApplyResult{}, fmt.Errorf("checksum verification failed: %w", err)
@@ -275,6 +341,7 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 	slog.Info("archive verified", "sha256", asset.SHA256)
 
 	// Extract to a temp directory.
+	m.SetStage(StageChecking, "Unpacking the update and test-starting it. Nothing on your machine has changed yet.")
 	extractDir := filepath.Join(stagingDir, "extracted")
 	os.RemoveAll(extractDir)
 	if err := os.MkdirAll(extractDir, 0o755); err != nil {
@@ -293,6 +360,13 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 		return ApplyResult{}, fmt.Errorf("find extracted assets: %w", err)
 	}
 
+	// Start the new program once, just to see that it runs, before touching anything.
+	if err := verifyNewBinary(ctx, newBinary, manifest.Version); err != nil {
+		os.RemoveAll(extractDir)
+		os.Remove(archivePath)
+		return ApplyResult{}, fmt.Errorf("the downloaded version failed its start-up check, so nothing was changed: %w", err)
+	}
+
 	// Everything is downloaded, verified and unpacked. Only now does the caller
 	// stop servers and back up data, so a failed download changes nothing.
 	if hooks.BeforeSwap != nil {
@@ -303,6 +377,7 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 	}
 
 	// Swap the binary and web assets.
+	m.SetStage(StageInstalling, fmt.Sprintf("Installing v%s. The current version is kept so it can be restored.", strings.TrimPrefix(manifest.Version, "v")))
 	if err := m.swapAssets(newBinary, newWebDir); err != nil {
 		os.RemoveAll(extractDir)
 		return ApplyResult{}, fmt.Errorf("swap assets: %w", err)
@@ -313,6 +388,8 @@ func (m *Manager) Apply(ctx context.Context, hooks ApplyHooks) (ApplyResult, err
 	// Clean up staging.
 	os.RemoveAll(extractDir)
 	os.Remove(archivePath)
+
+	m.SetStage(StageRestarting, "Restarting Cliff. It will check the new version and go back to the old one by itself if it does not start.")
 
 	return ApplyResult{
 		Success:    true,
@@ -329,7 +406,7 @@ func (m *Manager) cachedManifest() *ReleaseManifest {
 }
 
 func (m *Manager) fetchManifest(ctx context.Context) (*ReleaseManifest, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ManifestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, manifestURL(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -402,10 +479,9 @@ func (m *Manager) swapAssets(newBinary, newWebDir string) error {
 			// current one first so `cliff rollback` can put it back.
 			previous := m.binaryPath + previousSuffix
 			if err := copyFile(m.binaryPath, previous); err != nil {
-				slog.Warn("could not keep the previous binary for rollback", "error", err)
-			} else {
-				_ = os.Chmod(previous, 0o755)
+				return fmt.Errorf("could not keep a copy of the current version for rollback: %w", err)
 			}
+			_ = os.Chmod(previous, 0o755)
 			if err := os.Rename(newBinary, m.binaryPath); err != nil {
 				return fmt.Errorf("rename new binary: %w", err)
 			}

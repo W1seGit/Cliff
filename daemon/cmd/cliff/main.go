@@ -56,6 +56,12 @@ func main() {
 	case "rollback":
 		runRollback(os.Args[2:])
 		return
+	case "cleanup":
+		runCleanup(os.Args[2:])
+		return
+	case "__update-watchdog":
+		runUpdateWatchdog(os.Args[2:])
+		return
 	case "uninstall":
 		runUninstall(os.Args[2:])
 		return
@@ -271,6 +277,7 @@ Usage:
   cliff logs [flags]     Print the current daemon log
   cliff update           Check for and apply updates
   cliff rollback         Go back to the version before the last update
+  cliff cleanup          Delete the copies kept for undoing an update
   cliff uninstall        Remove Cliff from this machine
   cliff version          Print version information
   cliff daemon [flags]   Run the daemon in the foreground (for debugging)

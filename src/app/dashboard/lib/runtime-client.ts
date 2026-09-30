@@ -1,4 +1,4 @@
-import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UploadResult, User, WorldsPayload } from "./types";
+import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LastUpdateResult, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo, UploadResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -432,12 +432,34 @@ export async function applyUpdate(): Promise<UpdateApplyResult> {
   return daemonApi<UpdateApplyResult>("/api/updates/apply", { method: "POST" });
 }
 
+export async function fetchUpdateProgress(): Promise<UpdateProgress> {
+  return daemonApi<UpdateProgress>("/api/updates/progress");
+}
+
+export async function fetchUpdateSafety(): Promise<UpdateSafetyInfo> {
+  return daemonApi<UpdateSafetyInfo>("/api/updates/safety");
+}
+
+export async function clearUpdateSafety(): Promise<{ ok: boolean; freedBytes: number; safety: UpdateSafetyInfo }> {
+  return daemonApi("/api/updates/safety", { method: "DELETE" });
+}
+
+export async function fetchLastUpdateResult(): Promise<LastUpdateResult | null> {
+  const payload = await daemonApi<{ result: LastUpdateResult | null }>("/api/updates/last-result");
+  return payload.result ?? null;
+}
+
+export async function dismissLastUpdateResult(): Promise<void> {
+  await daemonApi("/api/updates/last-result", { method: "DELETE" });
+}
+
 export async function reloadAfterDaemonRestart(): Promise<void> {
   const startedAt = Date.now();
   let sawRestartGap = false;
   await sleep(1200);
 
-  while (Date.now() - startedAt < 60000) {
+  // The daemon checks the new version for up to 45s and puts the old one back if it fails.
+  while (Date.now() - startedAt < 150000) {
     try {
       const response = await fetch(daemonPath("/api/settings?storage=0"), {
         cache: "no-store",

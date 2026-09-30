@@ -2,18 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyTextToClipboard } from "../../lib/clipboard";
+import { formatBytes } from "../../lib/utils";
+import { useUpdateInstaller } from "../../components/update-progress";
 import {
-  applyUpdate,
   checkForUpdates,
+  clearUpdateSafety,
   fetchDaemonLogs,
   fetchDaemonLogsFull,
   fetchJavaRuntimes,
   fetchTypeVersions,
+  fetchUpdateSafety,
   installJavaRuntime,
-  reloadAfterDaemonRestart,
   uninstallJavaRuntime,
 } from "../../lib/runtime-client";
-import type { JavaRuntimeInfo, ServerType, UpdateCheckResult } from "../../lib/types";
+import type { JavaRuntimeInfo, ServerType, UpdateCheckResult, UpdateSafetyInfo } from "../../lib/types";
 
 type Notify = (message: string) => void;
 
@@ -175,7 +177,15 @@ export function useDaemonLogs(active: boolean, onMessage: Notify) {
 export function useUpdates(initial: UpdateCheckResult | null | undefined, onMessage: Notify) {
   const [check, setCheck] = useState<UpdateCheckResult | null>(initial ?? null);
   const [checking, setChecking] = useState(false);
-  const [installing, setInstalling] = useState(false);
+  const installer = useUpdateInstaller(onMessage);
+  const [safety, setSafety] = useState<UpdateSafetyInfo | null>(null);
+  const [clearing, setClearing] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    fetchUpdateSafety().then((info) => { if (alive) setSafety(info); }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
 
   const checkNow = useCallback(async () => {
     setChecking(true);
@@ -192,23 +202,31 @@ export function useUpdates(initial: UpdateCheckResult | null | undefined, onMess
     }
   }, [onMessage]);
 
-  const install = useCallback(async () => {
-    setInstalling(true);
+  const clearSafety = useCallback(async () => {
+    setClearing(true);
     try {
-      const result = await applyUpdate();
-      if (result.success) {
-        onMessage(result.restarting ? "Update applied. Waiting for Cliff to restart..." : result.message);
-        if (result.restarting) await reloadAfterDaemonRestart();
-        else window.location.reload();
-      } else {
-        onMessage(result.message || "Update failed");
-      }
+      const result = await clearUpdateSafety();
+      setSafety(result.safety);
+      onMessage(`Deleted the update safety copies and freed ${formatBytes(result.freedBytes)}`);
     } catch (error) {
-      onMessage(error instanceof Error ? error.message : "Update failed");
+      onMessage(error instanceof Error ? error.message : "Could not delete the safety copies");
+      fetchUpdateSafety().then(setSafety).catch(() => undefined);
     } finally {
-      setInstalling(false);
+      setClearing(false);
     }
   }, [onMessage]);
 
-  return { check: check ?? initial ?? null, checking, installing, checkNow, install };
+  return {
+    check: check ?? initial ?? null,
+    checking,
+    checkNow,
+    installing: installer.installing,
+    progress: installer.progress,
+    installError: installer.error,
+    failedStage: installer.failedStage,
+    install: installer.install,
+    safety,
+    clearing,
+    clearSafety,
+  };
 }

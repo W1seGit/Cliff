@@ -405,6 +405,36 @@ export type UpdateCheckResult = {
   builtAt?: string;
   checkedAt: string;
   error?: string;
+  /** Roughly the disk space an update keeps so it can be undone. */
+  safetyCopyBytes?: number;
+};
+
+/** One step of a running update, as reported by the daemon. */
+export type UpdateProgress = {
+  active: boolean;
+  stage: "" | "downloading" | "verifying" | "checking" | "backup" | "stopping" | "installing" | "restarting" | "failed";
+  message: string;
+  fromVersion?: string;
+  toVersion?: string;
+};
+
+/** The copies Cliff keeps so an update can be undone. */
+export type UpdateSafetyInfo = {
+  canRollback: boolean;
+  previousVersionBytes: number;
+  backupCount: number;
+  backupBytes: number;
+  totalBytes: number;
+  backupDir: string;
+};
+
+/** How the last update ended, shown once after Cliff comes back. */
+export type LastUpdateResult = {
+  status: "updated" | "rolled-back" | "failed";
+  from: string;
+  to: string;
+  message: string;
+  at: string;
 };
 
 export type UpdateApplyResult = {

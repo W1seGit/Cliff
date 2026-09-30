@@ -1,29 +1,77 @@
 "use client";
 
-import { ExternalLink, RefreshCw } from "lucide-react";
+import { ExternalLink, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 import { formatBytes } from "../../lib/utils";
-import type { UpdateCheckResult } from "../../lib/types";
+import type { UpdateCheckResult, UpdateProgress, UpdateSafetyInfo } from "../../lib/types";
 import { Banner, Button, Card, KeyValueList, StatusDot, type KeyValueItem } from "../../components/ui";
+import { UpdateProgressList } from "../../components/update-progress";
+
+type FailedStage = Exclude<UpdateProgress["stage"], "" | "failed"> | null;
 
 export function UpdatesTab({
   check,
   checking,
   installing,
+  progress,
+  installError,
+  failedStage,
+  safety,
+  clearing,
   onCheck,
   onInstall,
+  onClearSafety,
 }: {
   check: UpdateCheckResult | null;
   checking: boolean;
   installing: boolean;
+  progress: UpdateProgress;
+  installError: string;
+  failedStage: FailedStage;
+  safety: UpdateSafetyInfo | null;
+  clearing: boolean;
   onCheck: () => void;
   onInstall: () => void;
+  onClearSafety: () => void;
 }) {
   const checkButton = (
-    <Button iconLeft={<RefreshCw size={14} />} disabled={checking} onClick={onCheck}>
+    <Button iconLeft={<RefreshCw size={14} />} disabled={checking || installing} onClick={onCheck}>
       {checking ? "Checking..." : "Check for updates"}
     </Button>
   );
 
+  return (
+    <>
+      <UpdateCard
+        check={check}
+        checkButton={checkButton}
+        installing={installing}
+        progress={progress}
+        installError={installError}
+        failedStage={failedStage}
+        onInstall={onInstall}
+      />
+      <SafetyCard safety={safety} busy={clearing || installing} onClear={onClearSafety} />
+    </>
+  );
+}
+
+function UpdateCard({
+  check,
+  checkButton,
+  installing,
+  progress,
+  installError,
+  failedStage,
+  onInstall,
+}: {
+  check: UpdateCheckResult | null;
+  checkButton: React.ReactNode;
+  installing: boolean;
+  progress: UpdateProgress;
+  installError: string;
+  failedStage: FailedStage;
+  onInstall: () => void;
+}) {
   if (!check) {
     return (
       <Card title="Cliff updates" description="Click Check for updates to see if a new version is available." actions={checkButton}>
@@ -53,6 +101,8 @@ export function UpdatesTab({
   }
   if (check.archiveSize) items.push({ key: "size", label: "Download size", value: formatBytes(check.archiveSize) });
 
+  const showProgress = installing || Boolean(installError);
+
   return (
     <Card title="Cliff updates" actions={checkButton}>
       {check.updateAvailable ? (
@@ -61,23 +111,77 @@ export function UpdatesTab({
           title={`Version ${check.latestVersion} is available`}
           action={
             <Button variant="primary" disabled={installing} loading={installing} loadingText="Updating..." onClick={onInstall}>
-              Install update
+              {installError ? "Try again" : "Install update"}
             </Button>
           }
         >
-          Running servers are stopped gracefully, and Cliff restarts automatically after the update.
+          Before installing, Cliff copies its settings database and keeps the current version
+          {check.safetyCopyBytes ? ` (about ${formatBytes(check.safetyCopyBytes)})`  : ""}. If the new version does not start, Cliff puts the
+          old one back automatically. A running Minecraft server is stopped and its world saved first.
         </Banner>
       ) : (
         <p className="update-status">
           <StatusDot tone="running" /> Cliff is up to date.
         </p>
       )}
+      {showProgress && <UpdateProgressList progress={progress} error={installError} failedStage={failedStage} />}
       <KeyValueList items={items} />
       {check.releaseUrl && (
         <p className="update-release-link">
           <a href={check.releaseUrl} target="_blank" rel="noopener noreferrer">
             View release notes on GitHub <ExternalLink size={12} aria-hidden="true" />
           </a>
+        </p>
+      )}
+    </Card>
+  );
+}
+
+function SafetyCard({ safety, busy, onClear }: { safety: UpdateSafetyInfo | null; busy: boolean; onClear: () => void }) {
+  const hasCopies = Boolean(safety && (safety.canRollback || safety.backupCount > 0));
+  const items: KeyValueItem[] = safety
+    ? [
+        { key: "previous", label: "Previous version", value: safety.canRollback ? formatBytes(safety.previousVersionBytes) : "None kept" },
+        {
+          key: "db",
+          label: "Database copies",
+          value: safety.backupCount > 0 ? `${safety.backupCount} (${formatBytes(safety.backupBytes)})` : "None",
+        },
+        { key: "total", label: "Disk space used", value: formatBytes(safety.totalBytes) },
+      ]
+    : [];
+  if (safety && safety.backupCount > 0) items.push({ key: "where", label: "Stored in", value: safety.backupDir, mono: true });
+
+  return (
+    <Card
+      title="Update safety copies"
+      description="Kept after an update so it can be undone. Nothing here holds your servers or worlds."
+      actions={
+        <Button
+          variant="danger-ghost"
+          iconLeft={<Trash2 size={14} />}
+          disabled={busy || !hasCopies}
+          onClick={onClear}
+          title={hasCopies ? "Delete the previous version and the database copies" : "There is nothing to delete yet"}
+        >
+          Delete safety copies
+        </Button>
+      }
+    >
+      {!safety ? (
+        <p className="muted">Checking what is kept...</p>
+      ) : hasCopies ? (
+        <>
+          <p className="update-safety-lead">
+            <ShieldCheck size={15} aria-hidden="true" /> The last update can be undone with <code>cliff rollback</code> in a terminal. Once you are
+            happy with the new version you can delete these to free the space (or run <code>cliff cleanup</code>).
+          </p>
+          <KeyValueList items={items} />
+        </>
+      ) : (
+        <p className="muted">
+          Nothing is kept right now. After your next update Cliff keeps the previous version and a small copy of its database here, so the
+          update can be undone.
         </p>
       )}
     </Card>

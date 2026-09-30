@@ -5,14 +5,14 @@ import dynamic from "next/dynamic";
 import toast, { Toaster } from "react-hot-toast";
 import { AlertCircle, CheckCircle2, Info, LayoutDashboard, Plus, Settings as SettingsIcon, TriangleAlert, Upload, UserRound } from "lucide-react";
 import { serverTypeSupportsContent } from "./dashboard/lib/utils";
-import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates } from "./dashboard/lib/runtime-client";
-import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult } from "./dashboard/lib/types";
+import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates, fetchLastUpdateResult } from "./dashboard/lib/runtime-client";
+import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult, LastUpdateResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
 import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
 import { PageBand } from "./dashboard/components/page-band";
 import { CloneServerDialog } from "./dashboard/components/clone-server-dialog";
 import { EulaModal } from "./dashboard/components/eula-modal";
-import { UpdateModal, skippedUpdateVersion } from "./dashboard/components/update-modal";
+import { UpdateModal, UpdateResultModal, skippedUpdateVersion } from "./dashboard/components/update-modal";
 import { Sidebar } from "./dashboard/components/sidebar";
 import { ServerHeader } from "./dashboard/components/server-header";
 import { OverviewPanel } from "./dashboard/panels/overview-panel";
@@ -125,6 +125,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<LastUpdateResult | null>(null);
   const [unsavedChange, setUnsavedChange] = useState<UnsavedChangesRegistration | null>(null);
   const [serverActionMenu, setServerActionMenu] = useState("");
   const [quickBusyAction, setQuickBusyAction] = useState("");
@@ -584,6 +585,15 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // After an update, say how it ended (updated, or rolled back to the old version).
+  useEffect(() => {
+    let alive = true;
+    fetchLastUpdateResult()
+      .then((result) => { if (alive && result) setLastUpdate(result); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+
   // Auto-check for updates on mount and periodically.
   useEffect(() => {
     let alive = true;
@@ -840,7 +850,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       />
       <CloneServerDialog server={cloneTarget} onSubmit={submitClone} onClose={() => setCloneTarget(null)} />
       {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onMessage={setMessage} onSaved={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true })} />}
-      {updateCheck && updateCheck.updateAvailable && (
+      <UpdateResultModal result={lastUpdate} onDone={() => setLastUpdate(null)} />
+      {updateCheck && updateCheck.updateAvailable && !lastUpdate && (
         <UpdateModal
           update={updateCheck}
           isOpen={updateModalOpen}

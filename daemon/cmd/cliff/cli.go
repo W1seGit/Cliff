@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -20,7 +19,6 @@ import (
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/buildinfo"
-	"github.com/W1seGit/Cliff/daemon/internal/updater"
 )
 
 const (
@@ -57,6 +55,9 @@ type daemonHealth struct {
 	StartedAt string   `json:"startedAt"`
 	LocalURL  string   `json:"localUrl"`
 	LANURLs   []string `json:"lanUrls"`
+	Build     struct {
+		Version string `json:"version"`
+	} `json:"build"`
 }
 
 // daemonInfo describes a running Cliff daemon found by findDaemon.
@@ -615,202 +616,6 @@ func tailLines(text string, n int) []string {
 		lines = lines[len(lines)-n:]
 	}
 	return lines
-}
-
-// ---- cliff update ----
-
-func runUpdate(args []string) {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
-	var checkOnly bool
-	var dataDir string
-	var webDir string
-	fs.BoolVar(&checkOnly, "check", false, "only check for updates, don't apply")
-	fs.StringVar(&dataDir, "data-dir", os.Getenv("CLIFF_DATA_DIR"), "panel data directory (default: <install-dir>/data)")
-	fs.StringVar(&webDir, "web-dir", os.Getenv("CLIFF_WEB_DIR"), "static dashboard directory")
-	fs.Parse(args)
-
-	root := installRoot()
-	dataDirProvided := dataDir != ""
-	webDirProvided := webDir != ""
-	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
-	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
-	info := findDaemon(dataDir)
-	var state *cliffState
-	if info != nil {
-		state = info.State
-	}
-	if state != nil {
-		if !dataDirProvided {
-			dataDir = resolveCLIPath(state.DataDir, dataDir)
-		}
-		if !webDirProvided {
-			webDir = resolveCLIPath(state.WebDir, webDir)
-		}
-	}
-
-	self, _ := os.Executable()
-	mgr := updater.NewManager(self, webDir, dataDir)
-
-	fmt.Println("Checking for updates...")
-	result := mgr.CheckNow(context.Background())
-
-	fmt.Printf("  Current version: %s\n", result.CurrentVersion)
-	fmt.Printf("  Latest version:  %s\n", result.LatestVersion)
-
-	if result.Error != "" {
-		fmt.Fprintf(os.Stderr, "  Error: %s\n", result.Error)
-		os.Exit(1)
-	}
-
-	if !result.UpdateAvailable {
-		fmt.Println("Cliff is up to date.")
-		return
-	}
-
-	fmt.Printf("  Released:        %s\n", result.BuiltAt)
-	if result.ArchiveSize > 0 {
-		fmt.Printf("  Download size:   %s\n", formatBytes(result.ArchiveSize))
-	}
-
-	if checkOnly {
-		fmt.Println("\nUpdate available. Run 'cliff update' to install it.")
-		return
-	}
-
-	wasRunning := info != nil
-
-	// Bring the daemon back with the same settings it had.
-	restartDaemon := func() {
-		restartState := cliffState{DataDir: dataDir, WebDir: webDir}
-		if state != nil {
-			restartState = *state
-		}
-		restartDataDir := resolveCLIPath(restartState.DataDir, dataDir)
-		restartServerRoot := resolveCLIPath(restartState.ServerRoot, filepath.Join(root, "servers"))
-		restartWebDir := resolveCLIPath(restartState.WebDir, webDir)
-		restartHost := restartState.Host
-		if restartHost == "" {
-			restartHost = "0.0.0.0"
-		}
-		restartPort := restartState.Port
-		if restartPort < 1 || restartPort > 65535 {
-			restartPort = info.Port
-		}
-		if restartPort < 1 || restartPort > 65535 {
-			restartPort = 8080
-		}
-		restartArgs := []string{
-			"start", "--host", restartHost, "--port", fmt.Sprint(restartPort),
-			"--data-dir", restartDataDir, "--server-root", restartServerRoot, "--web-dir", restartWebDir,
-		}
-		updater.RestartAsync(self, restartArgs, 500*time.Millisecond)
-		time.Sleep(2 * time.Second)
-	}
-
-	// Download and verify first. Only once the new version is safely on disk is
-	// the daemon stopped and the database copied, so a failed download changes nothing.
-	stopped := false
-	fmt.Println("Downloading update...")
-	applyResult, err := mgr.Apply(context.Background(), updater.ApplyHooks{
-		BeforeSwap: func(context.Context) error {
-			backup := updater.PreUpdateBackupPath(dataDir, buildinfo.Current().Version)
-			if wasRunning {
-				fmt.Println("Stopping running daemon...")
-				if err := stopDaemon(info, dataDir); err != nil {
-					return fmt.Errorf("could not stop the daemon (PID %d): %w", info.PID, err)
-				}
-				stopped = true
-			}
-			if err := updater.CopyDatabase(filepath.Join(dataDir, "dashboard.sqlite"), backup); err != nil {
-				return fmt.Errorf("could not back up the database: %w", err)
-			}
-			updater.PruneBackups(updater.PreUpdateBackupDir(dataDir), 3)
-			fmt.Println("Applying update...")
-			return nil
-		},
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Update failed: %s\n", err)
-		if stopped {
-			fmt.Fprintln(os.Stderr, "Restarting the previous version...")
-			restartDaemon()
-		}
-		os.Exit(1)
-	}
-
-	if applyResult.Success {
-		fmt.Printf("Update successful: %s\n", applyResult.Message)
-		fmt.Println("If the new version misbehaves, 'cliff rollback' restores the previous one.")
-		if wasRunning {
-			fmt.Println("Restarting daemon...")
-			restartDaemon()
-		} else {
-			fmt.Println("Cliff was not running before the update; start it with 'cliff start'.")
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "Update failed: %s\n", applyResult.Message)
-		if stopped {
-			restartDaemon()
-		}
-		os.Exit(1)
-	}
-}
-
-// ---- cliff rollback ----
-
-func runRollback(args []string) {
-	fs := flag.NewFlagSet("rollback", flag.ExitOnError)
-	var yes bool
-	var dataDir string
-	var webDir string
-	fs.BoolVar(&yes, "yes", false, "skip confirmation prompt")
-	fs.BoolVar(&yes, "y", false, "skip confirmation prompt (shorthand)")
-	fs.StringVar(&dataDir, "data-dir", os.Getenv("CLIFF_DATA_DIR"), "panel data directory (default: <install-dir>/data)")
-	fs.StringVar(&webDir, "web-dir", os.Getenv("CLIFF_WEB_DIR"), "static dashboard directory")
-	fs.Parse(args)
-
-	root := installRoot()
-	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
-	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
-	self, _ := os.Executable()
-	if resolved, err := filepath.EvalSymlinks(self); err == nil {
-		self = resolved
-	}
-
-	info := findDaemon(dataDir)
-	if info != nil && info.State != nil && info.State.WebDir != "" {
-		webDir = resolveCLIPath(info.State.WebDir, webDir)
-	}
-
-	if !yes {
-		fmt.Println("This puts back the version of Cliff you had before the last update.")
-		fmt.Println("Your servers, worlds and settings are not changed.")
-		if !confirmPrompt("Type 'yes' to continue: ") {
-			fmt.Println("Rollback cancelled. Nothing was changed.")
-			return
-		}
-	}
-
-	if info != nil {
-		fmt.Printf("Stopping Cliff (PID %d)...\n", info.PID)
-		if err := stopDaemon(info, dataDir); err != nil {
-			fmt.Fprintf(os.Stderr, "Could not stop Cliff: %s. Nothing was changed.\n", err)
-			os.Exit(1)
-		}
-	}
-
-	restored, err := updater.Rollback(self, webDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Rollback failed: %s\n", err)
-		os.Exit(1)
-	}
-	for _, path := range restored {
-		fmt.Printf("Restored: %s\n", path)
-	}
-	fmt.Printf("Database copies from before updates are kept in %s.\n", updater.PreUpdateBackupDir(dataDir))
-	if info != nil {
-		fmt.Println("Start Cliff again with: cliff start")
-	}
 }
 
 // ---- helpers ----
