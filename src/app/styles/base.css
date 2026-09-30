@@ -11,9 +11,9 @@
   --text-tertiary: #808896; /* >= 4.5:1 on --bg, --surface, --surface-2 */
   --accent: #04a3fb; /* Cliff logo blue */
   --accent-hover: #38b6fc;
-  --primary: #04a3fb;
-  --primary-hover: #33b5fc;
-  --on-primary: #04121d;
+  --primary: #0369d6; /* deeper logo blue: white text reaches 5.3:1 */
+  --primary-hover: #0359ba;
+  --on-primary: #ffffff;
   --accent-soft: rgba(4, 163, 251, 0.12);
   --success: #8fb3ff;
   --success-bg: #17233a;
