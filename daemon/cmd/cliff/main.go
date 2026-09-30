@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -188,7 +189,21 @@ func runDaemon() {
 	updateManager := updater.NewManager(binaryPath, cfg.WebDir, cfg.DataDir)
 	updateManager.StartBackgroundChecker(daemonCtx)
 
+	// `cliff stop` asks for a clean shutdown over loopback with a per-run token.
+	shutdownRequested := make(chan struct{})
+	var requestShutdownOnce sync.Once
+	shutdownToken, tokenErr := newShutdownToken()
+	if tokenErr != nil {
+		slog.Warn("graceful stop over HTTP is unavailable", "error", tokenErr)
+	} else if err := writeShutdownToken(cfg.DataDir, shutdownToken); err != nil {
+		slog.Warn("could not write the stop token", "error", err)
+		shutdownToken = ""
+	}
+	defer removeShutdownToken(cfg.DataDir)
+
 	handler := httpserver.New(httpserver.Options{
+		Shutdown:         func() { requestShutdownOnce.Do(func() { close(shutdownRequested) }) },
+		ShutdownToken:    shutdownToken,
 		Config:           cfg,
 		Store:            db,
 		Process:          manager,
@@ -220,8 +235,12 @@ func runDaemon() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	<-ctx.Done()
-	slog.Info("daemon shutting down")
+	select {
+	case <-ctx.Done():
+		slog.Info("daemon shutting down", "reason", "signal")
+	case <-shutdownRequested:
+		slog.Info("daemon shutting down", "reason", "cliff stop")
+	}
 	daemonCancel()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -316,7 +335,13 @@ func configureLogging(logFile string, level string, logBuffer *logbuf.Buffer) (f
 		Compress:   true,
 	}
 
-	writer := io.MultiWriter(os.Stderr, logBuffer.Writer(), rotator)
+	writers := []io.Writer{logBuffer.Writer(), rotator}
+	// When started by `cliff start`, stderr is the error log, which only needs
+	// crashes. Mirroring every log line there would grow it without limit.
+	if os.Getenv(detachedEnv) == "" {
+		writers = append([]io.Writer{os.Stderr}, writers...)
+	}
+	writer := io.MultiWriter(writers...)
 	handler := slog.NewTextHandler(writer, &slog.HandlerOptions{
 		Level: parseLogLevel(level),
 	})

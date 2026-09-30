@@ -10,6 +10,7 @@ START=0
 FORCE=0
 SKIP_CHECKSUM=0
 EXPECTED_ARCHIVE_SHA256=""
+PLATFORM=""
 
 require_arg() {
   option="$1"
@@ -29,7 +30,8 @@ while [ "$#" -gt 0 ]; do
     --force) FORCE=1; shift ;;
     --skip-checksum) SKIP_CHECKSUM=1; shift ;;
     -h|--help)
-      echo "Usage: sh scripts/install-package.sh [--package zip-or-url] [--manifest json-or-url] [--install-dir path] [-p 8080|--port 8080] [--start] [--force] [--skip-checksum]"
+      echo "Usage: sh scripts/install-package.sh [--package zip-or-url] [--manifest json-or-url] [--install-dir path] [-p 8080|--port 8080] [--start] [--force] [--skip-checksum]
+  Re-running over an existing Cliff install upgrades it and keeps data and servers. --force is no longer needed."
       exit 0
       ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
@@ -221,73 +223,162 @@ require_extracted_file "cliff"
 require_extracted_file "web/index.html"
 require_extracted_file "package-manifest.json"
 
-if [ -x "$INSTALL_DIR/stop.sh" ]; then
+# Stop a running Cliff before replacing its files.
+if [ -x "$INSTALL_DIR/cliff" ]; then
+  "$INSTALL_DIR/cliff" stop >/dev/null 2>&1 || true
+elif [ -x "$INSTALL_DIR/stop.sh" ]; then
   DATA_DIR=data FORCE=1 sh "$INSTALL_DIR/stop.sh" >/dev/null 2>&1 || true
 fi
 
-# Also stop a CLI-managed daemon if running.
-if [ -x "$INSTALL_DIR/cliff" ]; then
-  "$INSTALL_DIR/cliff" stop >/dev/null 2>&1 || true
+# An existing Cliff install is upgraded in place and keeps its data and servers.
+# Anything else in the way is left alone: this script never deletes a folder
+# that is not a Cliff install.
+UPGRADE=0
+if [ -e "$INSTALL_DIR" ]; then
+  if [ -f "$INSTALL_DIR/package-manifest.json" ]; then
+    UPGRADE=1
+  elif [ -d "$INSTALL_DIR" ] && [ -z "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+    rmdir "$INSTALL_DIR"
+  else
+    echo "Refusing to install into $INSTALL_DIR: it exists and is not a Cliff install." >&2
+    echo "Choose another folder with --install-dir, or remove it yourself." >&2
+    exit 1
+  fi
 fi
 
-if [ -e "$INSTALL_DIR" ] && [ "$FORCE" != "1" ]; then
-  echo "Install directory already exists: $INSTALL_DIR. Re-run with --force to replace it." >&2
-  exit 1
-fi
-
-rm -rf "$INSTALL_DIR"
 mkdir -p "$(dirname "$INSTALL_DIR")"
-mv "$TEMP_ROOT/cliff" "$INSTALL_DIR"
+if [ "$UPGRADE" = "1" ]; then
+  # Remove the old program files; data/ and servers/ are never touched.
+  for entry in "$INSTALL_DIR"/* "$INSTALL_DIR"/.[!.]*; do
+    [ -e "$entry" ] || continue
+    case "$(basename "$entry")" in
+      data|servers) continue ;;
+    esac
+    rm -rf "$entry"
+  done
+  for entry in "$TEMP_ROOT/cliff"/* "$TEMP_ROOT/cliff"/.[!.]*; do
+    [ -e "$entry" ] || continue
+    name="$(basename "$entry")"
+    case "$name" in
+      data|servers)
+        if [ -e "$INSTALL_DIR/$name" ]; then continue; fi
+        ;;
+    esac
+    mv "$entry" "$INSTALL_DIR/$name"
+  done
+  echo "Upgraded Cliff in $INSTALL_DIR (your data and servers were kept)."
+else
+  mv "$TEMP_ROOT/cliff" "$INSTALL_DIR"
+fi
 
 # Make the binary executable.
 chmod +x "$INSTALL_DIR/cliff" 2>/dev/null || true
 
-# Create a symlink in PATH so `cliff` is available system-wide.
+path_contains() {
+  case ":$PATH:" in
+    *":$1:"*) return 0 ;;
+  esac
+  return 1
+}
+
+# Put the shell setup in a marked block so `cliff uninstall` can remove it again.
+add_path_block() {
+  rc="$1"
+  mkdir -p "$(dirname "$rc")" 2>/dev/null || return 0
+  [ -f "$rc" ] || : > "$rc"
+  if grep -q '>>> cliff >>>' "$rc" 2>/dev/null; then
+    return 0
+  fi
+  {
+    echo ''
+    echo '# >>> cliff >>>'
+    echo 'export PATH="$HOME/.local/bin:$PATH"'
+    echo '# <<< cliff <<<'
+  } >> "$rc"
+  echo "Added ~/.local/bin to PATH in $rc"
+}
+
+add_fish_path() {
+  rc="$HOME/.config/fish/conf.d/cliff.fish"
+  mkdir -p "$(dirname "$rc")" 2>/dev/null || return 0
+  if [ ! -f "$rc" ]; then
+    {
+      echo '# cliff: put the cliff command on PATH'
+      echo 'fish_add_path -g $HOME/.local/bin'
+    } > "$rc"
+    echo "Added ~/.local/bin to PATH for fish in $rc"
+  fi
+}
+
+# Make `cliff` available. Prefer a folder that is already on PATH so it works in
+# this very terminal; otherwise use ~/.local/bin and update the shell profile.
+CLIFF_READY_NOW=0
 setup_path_symlink() {
   binary="$INSTALL_DIR/cliff"
-  target="$HOME/.local/bin"
 
+  for dir in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin" "$HOME/bin"; do
+    if path_contains "$dir" && [ -d "$dir" ] && [ -w "$dir" ]; then
+      # Do not replace a real file that something else installed.
+      if [ -e "$dir/cliff" ] && [ ! -L "$dir/cliff" ]; then
+        continue
+      fi
+      if ln -sf "$binary" "$dir/cliff" 2>/dev/null; then
+        echo "Linked: $dir/cliff -> $binary"
+        CLIFF_READY_NOW=1
+        return 0
+      fi
+    fi
+  done
+
+  target="$HOME/.local/bin"
   if ! mkdir -p "$target" 2>/dev/null; then
     echo "Could not create $target. Use $INSTALL_DIR/cliff directly." >&2
     return 1
   fi
   if ! ln -sf "$binary" "$target/cliff" 2>/dev/null; then
-    echo "Could not create symlink at $target/cliff. Use $INSTALL_DIR/cliff directly." >&2
+    echo "Could not create a link at $target/cliff. Use $INSTALL_DIR/cliff directly." >&2
     return 1
   fi
+  echo "Linked: $target/cliff -> $binary"
 
-  echo "Symlinked: $target/cliff -> $binary"
+  if path_contains "$target"; then
+    CLIFF_READY_NOW=1
+    return 0
+  fi
 
-  case ":$PATH:" in
-    *":$target:"*) return 0 ;;
+  case "${SHELL:-}" in
+    */zsh) add_path_block "$HOME/.zshrc" ;;
+    */bash)
+      add_path_block "$HOME/.bashrc"
+      if [ "$(uname -s)" = "Darwin" ]; then add_path_block "$HOME/.bash_profile"; fi
+      ;;
+    */fish) add_fish_path ;;
+    *) add_path_block "$HOME/.profile" ;;
   esac
-
-  for rc in "$HOME/.zshrc" "$HOME/.bashrc" "$HOME/.profile"; do
-    if [ ! -f "$rc" ]; then
-      : > "$rc"
-    fi
-    if ! grep -q '\.local/bin' "$rc" 2>/dev/null; then
-      {
-        echo ''
-        echo '# Cliff CLI'
-        echo 'export PATH="$HOME/.local/bin:$PATH"'
-      } >> "$rc"
-      echo "Added ~/.local/bin to PATH in $(basename "$rc")"
-    fi
-  done
-
-  echo "Open a new terminal or run: export PATH=\"\$HOME/.local/bin:\$PATH\""
   return 0
 }
 
 setup_path_symlink || true
 
+print_path_help() {
+  if [ "$CLIFF_READY_NOW" = "1" ]; then
+    return 0
+  fi
+  echo
+  echo "To use 'cliff' in this terminal right now, run:"
+  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  echo "New terminals pick it up automatically. Or run Cliff directly:"
+  echo "  $INSTALL_DIR/cliff status"
+}
+
 if [ "$START" = "1" ]; then
   "$INSTALL_DIR/cliff" start -p "$PORT"
-  echo
-  echo "Open a new terminal to use the 'cliff' command from PATH."
 else
   echo "Cliff installed to $INSTALL_DIR"
-  echo "Open a new terminal to use the 'cliff' command from PATH."
-  echo "Then run: cliff start"
+  if [ "$CLIFF_READY_NOW" = "1" ]; then
+    echo "Start it with: cliff start"
+  else
+    echo "Start it with: $INSTALL_DIR/cliff start"
+  fi
 fi
+print_path_help

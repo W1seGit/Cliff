@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,13 +14,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/buildinfo"
 	"github.com/W1seGit/Cliff/daemon/internal/updater"
+)
+
+const (
+	// detachedEnv marks a daemon started by `cliff start`; its stderr is the crash log.
+	detachedEnv = "CLIFF_DETACHED"
+	// tokenFileName holds the per-run secret that lets `cliff stop` ask for a clean shutdown.
+	tokenFileName = "cliff.token"
+	// startTimeout allows for a slow first launch, such as macOS scanning a new binary.
+	startTimeout = 30 * time.Second
+	// shutdownWait covers the daemon's own budget for stopping servers and saving worlds.
+	shutdownWait = 45 * time.Second
 )
 
 // cliffState is written to <dataDir>/cliff-state.json by `cliff start`
@@ -40,6 +54,18 @@ type daemonHealth struct {
 	Self   struct {
 		PID int `json:"pid"`
 	} `json:"self"`
+	StartedAt string   `json:"startedAt"`
+	LocalURL  string   `json:"localUrl"`
+	LANURLs   []string `json:"lanUrls"`
+}
+
+// daemonInfo describes a running Cliff daemon found by findDaemon.
+type daemonInfo struct {
+	PID   int
+	Port  int
+	State *cliffState
+	// Responding is true when the daemon answered a health check just now.
+	Responding bool
 }
 
 // installRoot returns the directory containing the cliff binary.
@@ -87,6 +113,37 @@ func pidFilePath(dataDir string) string {
 	return filepath.Join(dataDir, "cliff.pid")
 }
 
+func tokenFilePath(dataDir string) string {
+	if dataDir == "" {
+		dataDir = defaultDataDir()
+	}
+	return filepath.Join(dataDir, tokenFileName)
+}
+
+// ---- stop token (used by the daemon and by `cliff stop`) ----
+
+func newShutdownToken() (string, error) {
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(raw), nil
+}
+
+func writeShutdownToken(dataDir string, token string) error {
+	if token == "" {
+		return nil
+	}
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(tokenFilePath(dataDir), []byte(token), 0o600)
+}
+
+func removeShutdownToken(dataDir string) {
+	_ = os.Remove(tokenFilePath(dataDir))
+}
+
 // ---- cliff start ----
 
 func runStart(args []string) {
@@ -114,9 +171,9 @@ func runStart(args []string) {
 	logFile := filepath.Join(dataDir, "logs", "cliff.log")
 	errorLogFile := filepath.Join(dataDir, "logs", "cliff-error.log")
 
-	// Check if already running.
-	if state := readState(dataDir); state != nil && processAlive(state.PID) {
-		fmt.Fprintf(os.Stderr, "Cliff is already running (PID %d) on port %d.\n", state.PID, state.Port)
+	// Refuse to start a second daemon, but only when the PID really is Cliff.
+	if existing := findDaemonByFiles(dataDir); existing != nil {
+		fmt.Fprintf(os.Stderr, "Cliff is already running (PID %d) on port %d.\n", existing.PID, existing.Port)
 		fmt.Fprintf(os.Stderr, "Run 'cliff stop' first, or use 'cliff status' to check.\n")
 		os.Exit(1)
 	}
@@ -131,12 +188,8 @@ func runStart(args []string) {
 		os.Exit(1)
 	}
 
-	// Open log files.
-	logOut, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to open log file: %s\n", err)
-		os.Exit(1)
-	}
+	// The daemon writes cliff.log itself (with rotation). Whatever reaches its
+	// stdout or stderr, such as a crash, goes to the error log.
 	errOut, err := os.OpenFile(errorLogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to open error log file: %s\n", err)
@@ -155,9 +208,10 @@ func runStart(args []string) {
 	}
 
 	cmd := exec.Command(self, daemonArgs...)
-	cmd.Stdout = logOut
+	cmd.Stdout = errOut
 	cmd.Stderr = errOut
 	cmd.Dir = root
+	cmd.Env = append(os.Environ(), detachedEnv+"=1")
 
 	// Detach from the terminal.
 	setDetachFlags(cmd)
@@ -166,11 +220,17 @@ func runStart(args []string) {
 		fmt.Fprintf(os.Stderr, "Failed to start daemon: %s\n", err)
 		os.Exit(1)
 	}
+	_ = errOut.Close()
 
 	pid := cmd.Process.Pid
 
-	// Release the process so it doesn't become a zombie.
-	_ = cmd.Process.Release()
+	// Reap the child in the background so a crash during startup is seen as an
+	// exit, not a zombie that still looks alive.
+	exited := make(chan struct{})
+	go func() {
+		_, _ = cmd.Process.Wait()
+		close(exited)
+	}()
 
 	startedAt := time.Now().UTC()
 	lanURLs := detectLANURLs(port)
@@ -188,11 +248,13 @@ func runStart(args []string) {
 	}
 
 	// Wait until this exact process answers health checks before writing state.
-	deadline := time.Now().Add(10 * time.Second)
+	deadline := time.Now().Add(startTimeout)
 	for time.Now().Before(deadline) {
-		if !processAlive(pid) {
-			fmt.Fprintf(os.Stderr, "Cliff failed to start. Check %s for details.\n", errorLogFile)
+		select {
+		case <-exited:
+			fmt.Fprintf(os.Stderr, "Cliff failed to start. Check %s and %s for details.\n", logFile, errorLogFile)
 			os.Exit(1)
+		default:
 		}
 		if health := readDaemonHealth(port); health != nil {
 			if health.Self.PID == pid {
@@ -212,7 +274,7 @@ func runStart(args []string) {
 	}
 
 	_ = killProcess(pid)
-	fmt.Fprintf(os.Stderr, "Cliff did not become ready before timeout. Check %s for details.\n", errorLogFile)
+	fmt.Fprintf(os.Stderr, "Cliff did not become ready within %s. Check %s and %s for details.\n", startTimeout, logFile, errorLogFile)
 	os.Exit(1)
 }
 
@@ -229,6 +291,154 @@ func printStarted(state cliffState, pid int, logFile string) {
 	fmt.Printf("  cliff stop     Stop Cliff\n")
 }
 
+// ---- finding and stopping the daemon ----
+
+// findDaemon locates a running Cliff daemon. It tries, in order: the state
+// file, the PID file, then a health probe on the saved and default ports, so a
+// daemon started another way (run.sh, a different data dir) is still found.
+// A stale state or PID file is cleaned up. It returns nil when nothing is running.
+func findDaemon(dataDir string) *daemonInfo {
+	if info := findDaemonByFiles(dataDir); info != nil {
+		return info
+	}
+	for _, port := range candidatePorts() {
+		if health := readDaemonHealth(port); health != nil && health.Self.PID > 0 {
+			return &daemonInfo{PID: health.Self.PID, Port: port, State: stateFromHealth(port, health, dataDir), Responding: true}
+		}
+	}
+	clearDaemonFiles(dataDir)
+	return nil
+}
+
+// findDaemonByFiles only looks at this data directory's state and PID files.
+// `cliff start` uses it so a second install on another port is not blocked by
+// a daemon that belongs to a different data directory.
+func findDaemonByFiles(dataDir string) *daemonInfo {
+	if state := readState(dataDir); state != nil {
+		if state.Port > 0 {
+			if health := readDaemonHealth(state.Port); health != nil && health.Self.PID > 0 {
+				return &daemonInfo{PID: health.Self.PID, Port: state.Port, State: state, Responding: true}
+			}
+		}
+		// Not answering yet (or hung): trust the PID only if it is really Cliff.
+		if processAlive(state.PID) && looksLikeCliff(state.PID) {
+			return &daemonInfo{PID: state.PID, Port: state.Port, State: state}
+		}
+	}
+	if pid := readPIDFile(dataDir); pid > 0 && processAlive(pid) && looksLikeCliff(pid) {
+		return &daemonInfo{PID: pid, State: readState(dataDir)}
+	}
+	return nil
+}
+
+func candidatePorts() []int {
+	ports := []int{}
+	seen := map[int]bool{}
+	for _, port := range []int{getenvInt("CLIFF_PORT", 0), 8080} {
+		if port > 0 && port < 65536 && !seen[port] {
+			seen[port] = true
+			ports = append(ports, port)
+		}
+	}
+	return ports
+}
+
+func stateFromHealth(port int, health *daemonHealth, dataDir string) *cliffState {
+	if dataDir == "" {
+		dataDir = defaultDataDir()
+	}
+	return &cliffState{
+		PID:       health.Self.PID,
+		Port:      port,
+		DataDir:   dataDir,
+		StartedAt: health.StartedAt,
+		LocalURL:  health.LocalURL,
+		LANURLs:   health.LANURLs,
+	}
+}
+
+func readPIDFile(dataDir string) int {
+	raw, err := os.ReadFile(pidFilePath(dataDir))
+	if err != nil {
+		return 0
+	}
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	return pid
+}
+
+func clearDaemonFiles(dataDir string) {
+	_ = os.Remove(stateFilePath(dataDir))
+	_ = os.Remove(pidFilePath(dataDir))
+	_ = os.Remove(tokenFilePath(dataDir))
+}
+
+// looksLikeCliff guards against a recycled PID that now belongs to another program.
+func looksLikeCliff(pid int) bool {
+	return strings.Contains(strings.ToLower(pidCommandName(pid)), "cliff")
+}
+
+// requestGracefulShutdown asks the daemon to stop itself over loopback. It
+// works the same on every platform and lets the daemon stop Minecraft servers
+// and save worlds. It reports whether the daemon accepted the request.
+func requestGracefulShutdown(port int, dataDir string) bool {
+	if port <= 0 {
+		return false
+	}
+	token, err := os.ReadFile(tokenFilePath(dataDir))
+	if err != nil || len(bytes.TrimSpace(token)) == 0 {
+		return false
+	}
+	request, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/api/internal/shutdown", port), nil)
+	if err != nil {
+		return false
+	}
+	request.Header.Set("X-Cliff-Token", strings.TrimSpace(string(token)))
+	client := &http.Client{Timeout: 3 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		return false
+	}
+	defer response.Body.Close()
+	_, _ = io.Copy(io.Discard, response.Body)
+	return response.StatusCode == http.StatusAccepted
+}
+
+// stopDaemon shuts the daemon down cleanly, waiting long enough for it to stop
+// Minecraft servers and save worlds, and only force-kills as a last resort.
+func stopDaemon(info *daemonInfo, dataDir string) error {
+	graceful := requestGracefulShutdown(info.Port, dataDir)
+	if !graceful {
+		if err := stopProcess(info.PID); err != nil && processAlive(info.PID) {
+			return fmt.Errorf("could not signal PID %d: %w", info.PID, err)
+		}
+	}
+
+	announced := false
+	deadline := time.Now().Add(shutdownWait)
+	start := time.Now()
+	for time.Now().Before(deadline) {
+		if !processAlive(info.PID) {
+			break
+		}
+		if !announced && time.Since(start) > 3*time.Second {
+			fmt.Println("Waiting for Cliff to stop servers and save worlds...")
+			announced = true
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	if processAlive(info.PID) {
+		fmt.Fprintln(os.Stderr, "Cliff did not stop in time; forcing it to stop. A running Minecraft server may need a moment to release its port.")
+		_ = killProcess(info.PID)
+		time.Sleep(time.Second)
+		if processAlive(info.PID) {
+			return fmt.Errorf("PID %d is still running", info.PID)
+		}
+	}
+	clearDaemonFiles(dataDir)
+	return nil
+}
+
 // ---- cliff stop ----
 
 func runStop(args []string) {
@@ -237,55 +447,17 @@ func runStop(args []string) {
 	fs.StringVar(&dataDir, "data-dir", "", "panel data directory (default: <install-dir>/data)")
 	fs.Parse(args)
 
-	state := readState(dataDir)
-	if state == nil {
-		// Also try reading the PID file (shell script compat).
-		pidStr, err := os.ReadFile(pidFilePath(dataDir))
-		if err != nil {
-			fmt.Println("Cliff is not running.")
-			return
-		}
-		var pid int
-		fmt.Sscanf(string(pidStr), "%d", &pid)
-		if pid == 0 || !processAlive(pid) {
-			os.Remove(pidFilePath(dataDir))
-			fmt.Println("Cliff is not running.")
-			return
-		}
-		state = &cliffState{PID: pid}
-	}
-
-	if !processAlive(state.PID) {
-		os.Remove(stateFilePath(dataDir))
-		os.Remove(pidFilePath(dataDir))
-		fmt.Println("Cliff is not running (stale PID file removed).")
+	info := findDaemon(dataDir)
+	if info == nil {
+		fmt.Println("Cliff is not running.")
 		return
 	}
 
-	// Send SIGTERM (or equivalent on Windows).
-	if err := stopProcess(state.PID); err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to stop Cliff (PID %d): %s\n", state.PID, err)
+	fmt.Printf("Stopping Cliff (PID %d)...\n", info.PID)
+	if err := stopDaemon(info, dataDir); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to stop Cliff: %s\n", err)
 		os.Exit(1)
 	}
-
-	// Wait up to 15 seconds for the process to exit.
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if !processAlive(state.PID) {
-			break
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	if processAlive(state.PID) {
-		// Force kill.
-		_ = killProcess(state.PID)
-		time.Sleep(500 * time.Millisecond)
-	}
-
-	os.Remove(stateFilePath(dataDir))
-	os.Remove(pidFilePath(dataDir))
-
 	fmt.Println("Cliff stopped.")
 }
 
@@ -297,25 +469,30 @@ func runStatus(args []string) {
 	fs.StringVar(&dataDir, "data-dir", "", "panel data directory (default: <install-dir>/data)")
 	fs.Parse(args)
 
-	state := readState(dataDir)
-	if state == nil {
+	info := findDaemon(dataDir)
+	if info == nil {
 		fmt.Println("Cliff is not running.")
 		fmt.Println("Run 'cliff start' to start the daemon.")
 		return
 	}
 
-	if !processAlive(state.PID) {
-		os.Remove(stateFilePath(dataDir))
-		os.Remove(pidFilePath(dataDir))
-		fmt.Println("Cliff is not running (stale state file removed).")
+	build := buildinfo.Current()
+	if info.Responding {
+		fmt.Printf("Cliff %s — running\n", build.Version)
+	} else {
+		fmt.Printf("Cliff %s — process is up but the dashboard is not answering yet\n", build.Version)
+	}
+	fmt.Printf("  PID:         %d\n", info.PID)
+	state := info.State
+	if info.Port > 0 {
+		fmt.Printf("  Port:        %d\n", info.Port)
+	}
+	if state == nil {
 		return
 	}
-
-	info := buildinfo.Current()
-	fmt.Printf("Cliff %s — running\n", info.Version)
-	fmt.Printf("  PID:         %d\n", state.PID)
-	fmt.Printf("  Port:        %d\n", state.Port)
-	fmt.Printf("  Local URL:   %s\n", state.LocalURL)
+	if state.LocalURL != "" {
+		fmt.Printf("  Local URL:   %s\n", state.LocalURL)
+	}
 	for _, url := range state.LANURLs {
 		fmt.Printf("  Network URL: %s\n", url)
 	}
@@ -326,13 +503,19 @@ func runStatus(args []string) {
 		if err == nil {
 			uptime := time.Since(startedAt).Round(time.Second)
 			fmt.Printf("  Uptime:      %s\n", formatUptime(uptime))
-			fmt.Printf("  Started:     %s\n", startedAt.Format("2006-01-02 15:04:05"))
+			fmt.Printf("  Started:     %s\n", startedAt.Local().Format("2006-01-02 15:04:05"))
 		}
 	}
 
-	fmt.Printf("  Data dir:    %s\n", state.DataDir)
-	fmt.Printf("  Server root: %s\n", state.ServerRoot)
-	fmt.Printf("  Log file:    %s\n", state.LogFile)
+	if state.DataDir != "" {
+		fmt.Printf("  Data dir:    %s\n", state.DataDir)
+	}
+	if state.ServerRoot != "" {
+		fmt.Printf("  Server root: %s\n", state.ServerRoot)
+	}
+	if state.LogFile != "" {
+		fmt.Printf("  Log file:    %s\n", state.LogFile)
+	}
 }
 
 // ---- cliff logs ----
@@ -341,9 +524,12 @@ func runLogs(args []string) {
 	fs := flag.NewFlagSet("logs", flag.ExitOnError)
 	var dataDir string
 	var tail int
+	var follow bool
 	fs.StringVar(&dataDir, "data-dir", "", "panel data directory (default: <install-dir>/data)")
 	fs.IntVar(&tail, "tail", 80, "number of recent log lines to print")
 	fs.IntVar(&tail, "n", 80, "number of recent log lines to print (shorthand)")
+	fs.BoolVar(&follow, "follow", false, "keep printing new log lines (Ctrl+C to stop)")
+	fs.BoolVar(&follow, "f", false, "keep printing new log lines (shorthand)")
 	fs.Parse(args)
 
 	state := readState(dataDir)
@@ -358,25 +544,74 @@ func runLogs(args []string) {
 		logFile = filepath.Join(resolvedDataDir, "logs", "cliff.log")
 	}
 
-	data, err := os.ReadFile(logFile)
+	file, err := os.Open(logFile)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "No daemon logs found at %s.\n", logFile)
 		fmt.Fprintln(os.Stderr, "Run 'cliff start' to start Cliff, then try 'cliff logs' again.")
 		os.Exit(1)
 	}
+	defer file.Close()
 
-	lines := strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n")
-	for len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
+	// Only the end of the file matters, so never read a huge log in full.
+	const window = 256 * 1024
+	info, _ := file.Stat()
+	size := int64(0)
+	if info != nil {
+		size = info.Size()
 	}
-	if tail > 0 && len(lines) > tail {
-		lines = lines[len(lines)-tail:]
+	offset := int64(0)
+	if size > window {
+		offset = size - window
+	}
+	buffer := make([]byte, size-offset)
+	if _, err := file.ReadAt(buffer, offset); err != nil && err != io.EOF {
+		fmt.Fprintf(os.Stderr, "Could not read %s: %s\n", logFile, err)
+		os.Exit(1)
 	}
 
 	fmt.Printf("Cliff daemon logs: %s\n\n", logFile)
-	for _, line := range lines {
+	for _, line := range tailLines(string(buffer), tail) {
 		fmt.Println(line)
 	}
+	if !follow {
+		return
+	}
+
+	position := size
+	for {
+		time.Sleep(500 * time.Millisecond)
+		current, err := os.Stat(logFile)
+		if err != nil {
+			continue
+		}
+		if current.Size() < position {
+			// The log was rotated or truncated; start over from the top.
+			position = 0
+			file.Close()
+			if file, err = os.Open(logFile); err != nil {
+				continue
+			}
+		}
+		if current.Size() == position {
+			continue
+		}
+		chunk := make([]byte, current.Size()-position)
+		n, _ := file.ReadAt(chunk, position)
+		position += int64(n)
+		fmt.Print(string(chunk[:n]))
+	}
+}
+
+// tailLines returns the last n lines of text (all lines when n <= 0).
+func tailLines(text string, n int) []string {
+	lines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	if n > 0 && len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return lines
 }
 
 // ---- cliff update ----
@@ -396,7 +631,11 @@ func runUpdate(args []string) {
 	webDirProvided := webDir != ""
 	dataDir = resolveCLIPath(dataDir, filepath.Join(root, "data"))
 	webDir = resolveCLIPath(webDir, filepath.Join(root, "web"))
-	state := readState(dataDir)
+	info := findDaemon(dataDir)
+	var state *cliffState
+	if info != nil {
+		state = info.State
+	}
 	if state != nil {
 		if !dataDirProvided {
 			dataDir = resolveCLIPath(state.DataDir, dataDir)
@@ -436,27 +675,13 @@ func runUpdate(args []string) {
 	}
 
 	// Stop the daemon if it's running.
-	wasRunning := state != nil && processAlive(state.PID)
+	wasRunning := info != nil
 	if wasRunning {
 		fmt.Println("Stopping running daemon...")
-		if err := stopProcess(state.PID); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to stop daemon (PID %d): %s\n", state.PID, err)
+		if err := stopDaemon(info, dataDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to stop daemon (PID %d): %s; update cancelled.\n", info.PID, err)
 			os.Exit(1)
 		}
-		// Wait for it to exit.
-		deadline := time.Now().Add(15 * time.Second)
-		for time.Now().Before(deadline) {
-			if !processAlive(state.PID) {
-				break
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
-		if processAlive(state.PID) {
-			fmt.Fprintf(os.Stderr, "Daemon (PID %d) did not stop; update cancelled.\n", state.PID)
-			os.Exit(1)
-		}
-		os.Remove(stateFilePath(dataDir))
-		os.Remove(pidFilePath(dataDir))
 	}
 
 	fmt.Println("Downloading and applying update...")
@@ -470,7 +695,10 @@ func runUpdate(args []string) {
 		fmt.Printf("Update successful: %s\n", applyResult.Message)
 		if wasRunning {
 			fmt.Println("Restarting daemon...")
-			restartState := *state
+			restartState := cliffState{DataDir: dataDir, WebDir: webDir}
+			if state != nil {
+				restartState = *state
+			}
 			restartDataDir := resolveCLIPath(restartState.DataDir, dataDir)
 			restartServerRoot := resolveCLIPath(restartState.ServerRoot, filepath.Join(root, "servers"))
 			restartWebDir := resolveCLIPath(restartState.WebDir, webDir)
@@ -479,6 +707,9 @@ func runUpdate(args []string) {
 				restartHost = "0.0.0.0"
 			}
 			restartPort := restartState.Port
+			if restartPort < 1 || restartPort > 65535 {
+				restartPort = info.Port
+			}
 			if restartPort < 1 || restartPort > 65535 {
 				restartPort = 8080
 			}
@@ -494,85 +725,6 @@ func runUpdate(args []string) {
 	} else {
 		fmt.Fprintf(os.Stderr, "Update failed: %s\n", applyResult.Message)
 		os.Exit(1)
-	}
-}
-
-// ---- cliff uninstall ----
-
-func runUninstall(args []string) {
-	fs := flag.NewFlagSet("uninstall", flag.ExitOnError)
-	var yes bool
-	fs.BoolVar(&yes, "yes", false, "skip confirmation prompt")
-	fs.BoolVar(&yes, "y", false, "skip confirmation prompt (shorthand)")
-	fs.Parse(args)
-
-	root := installRoot()
-	dataDir := defaultDataDir()
-
-	// Stop the daemon if running.
-	if state := readState(dataDir); state != nil && processAlive(state.PID) {
-		fmt.Printf("Stopping daemon (PID %d)...\n", state.PID)
-		_ = stopProcess(state.PID)
-		deadline := time.Now().Add(15 * time.Second)
-		for time.Now().Before(deadline) {
-			if !processAlive(state.PID) {
-				break
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
-		if processAlive(state.PID) {
-			_ = killProcess(state.PID)
-		}
-		os.Remove(stateFilePath(dataDir))
-		os.Remove(pidFilePath(dataDir))
-	}
-
-	if !yes {
-		fmt.Printf("This will remove Cliff from:\n  %s\n", root)
-		fmt.Printf("This includes all server data, worlds, and configuration.\n")
-		fmt.Printf("Are you sure? Type 'yes' to confirm: ")
-		var response string
-		fmt.Scanln(&response)
-		if response != "yes" {
-			fmt.Println("Uninstall cancelled.")
-			return
-		}
-	}
-
-	// Remove the symlink from PATH.
-	removeSymlink()
-
-	// Remove the install directory. On Windows, the running cliff.exe can't
-	// delete itself, so we remove everything except the binary and tell the
-	// user to delete the remaining folder.
-	self, _ := os.Executable()
-	removedAll := true
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to read install directory: %s\n", err)
-		os.Exit(1)
-	}
-	for _, entry := range entries {
-		entryPath := filepath.Join(root, entry.Name())
-		// Skip the binary itself — it's locked because we're running from it.
-		if runtime.GOOS == "windows" && strings.EqualFold(entryPath, self) {
-			continue
-		}
-		if err := os.RemoveAll(entryPath); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to remove %s: %s\n", entryPath, err)
-			removedAll = false
-		}
-	}
-
-	if runtime.GOOS == "windows" && removedAll {
-		// Try to remove the now-empty directory (will fail if binary is still there).
-		_ = os.Remove(root)
-		fmt.Printf("Cliff uninstalled. Delete the remaining folder: %s\n", root)
-	} else if removedAll {
-		os.Remove(root)
-		fmt.Println("Cliff has been uninstalled.")
-	} else {
-		fmt.Fprintf(os.Stderr, "Some files could not be removed. Delete manually: %s\n", root)
 	}
 }
 
@@ -617,11 +769,9 @@ func readDaemonHealth(port int) *daemonHealth {
 	return &health
 }
 
+// processAlive reports whether pid is a live (not exited, not zombie) process.
 func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	return syscallKill(pid, 0) == nil
+	return pidExists(pid) && !pidIsZombie(pid)
 }
 
 func stopProcess(pid int) error {
@@ -678,42 +828,7 @@ func formatBytes(bytes int64) string {
 	return fmt.Sprintf("%d B", bytes)
 }
 
-// removeSymlink removes the cliff symlink from PATH locations.
-func removeSymlink() {
-	binaryName := "cliff"
-	if runtime.GOOS == "windows" {
-		binaryName = "cliff.exe"
-	}
-
-	candidates := []string{
-		filepath.Join("/usr/local/bin", binaryName),
-		filepath.Join(homeDir(), ".local", "bin", binaryName),
-	}
-
-	if runtime.GOOS == "windows" {
-		// On Windows, the install dir itself is added to PATH, not a symlink.
-		// Nothing to remove here — the install dir removal handles it.
-		return
-	}
-
-	for _, path := range candidates {
-		info, err := os.Lstat(path)
-		if err != nil {
-			continue
-		}
-		if info.Mode()&os.ModeSymlink != 0 || (info.Mode().IsRegular() && info.Size() < 1024) {
-			// It's a symlink or a very small file (likely a wrapper script).
-			if err := os.Remove(path); err == nil {
-				fmt.Printf("Removed: %s\n", path)
-			}
-		}
-	}
-}
-
 func homeDir() string {
 	dir, _ := os.UserHomeDir()
 	return dir
 }
-
-// Ensure unused imports don't cause errors.
-var _ io.Writer = os.Stdout

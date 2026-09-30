@@ -192,42 +192,69 @@ try {
   }
   Assert-ExtractedPackage $ExtractedPackage
 
-  if (Test-Path (Join-Path $InstallDir "stop.ps1")) {
+  # Stop a running Cliff before replacing its files.
+  $CliffExe = Join-Path $InstallDir "cliff.exe"
+  if (Test-Path $CliffExe) {
+    & $CliffExe stop 2>$null | Out-Null
+  } elseif (Test-Path (Join-Path $InstallDir "stop.ps1")) {
     powershell -ExecutionPolicy Bypass -File (Join-Path $InstallDir "stop.ps1") -Force | Out-Null
   }
 
-  # Also stop a CLI-managed daemon if running.
-  $CliffExe = Join-Path $InstallDir "cliff.exe"
-  if (Test-Path $CliffExe) {
-    & $CliffExe stop 2>$null
-  }
-
-  if ((Test-Path $InstallDir) -and -not $Force) {
-    throw "Install directory already exists: $InstallDir. Re-run with -Force to replace it."
-  }
-
+  # An existing Cliff install is upgraded in place and keeps its data and servers.
+  # Anything else in the way is left alone: this script never deletes a folder
+  # that is not a Cliff install.
+  $Upgrade = $false
   if (Test-Path $InstallDir) {
-    Remove-Item -LiteralPath $InstallDir -Recurse -Force
+    if (Test-Path (Join-Path $InstallDir "package-manifest.json")) {
+      $Upgrade = $true
+    } elseif (-not (Get-ChildItem -LiteralPath $InstallDir -Force | Select-Object -First 1)) {
+      Remove-Item -LiteralPath $InstallDir -Force
+    } else {
+      throw "Refusing to install into $InstallDir because it exists and is not a Cliff install. Choose another folder with -InstallDir, or remove it yourself."
+    }
   }
 
   New-Item -ItemType Directory -Force -Path (Split-Path -Parent $InstallDir) | Out-Null
-  Move-Item -LiteralPath $ExtractedPackage -Destination $InstallDir
-
-  # Add the install directory to the user's PATH so `cliff` is available.
-  $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-  if ($UserPath -notlike "*$InstallDir*") {
-    [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+  if ($Upgrade) {
+    # Remove the old program files; data and servers are never touched.
+    Get-ChildItem -LiteralPath $InstallDir -Force |
+      Where-Object { $_.Name -notin @("data", "servers") } |
+      Remove-Item -Recurse -Force
+    Get-ChildItem -LiteralPath $ExtractedPackage -Force | ForEach-Object {
+      $Target = Join-Path $InstallDir $_.Name
+      if ($_.Name -in @("data", "servers") -and (Test-Path $Target)) { return }
+      Move-Item -LiteralPath $_.FullName -Destination $Target
+    }
+    Write-Host "Upgraded Cliff in $InstallDir (your data and servers were kept)."
+  } else {
+    Move-Item -LiteralPath $ExtractedPackage -Destination $InstallDir
   }
+
+  # Add the install directory to the user's PATH so `cliff` is available in new terminals.
+  $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  $PathEntries = @()
+  if ($UserPath) { $PathEntries = @($UserPath -split ";" | Where-Object { $_ }) }
+  $NormalizedInstallDir = $InstallDir.TrimEnd("\")
+  $OnUserPath = $PathEntries | Where-Object { $_.TrimEnd("\") -ieq $NormalizedInstallDir }
+  if (-not $OnUserPath) {
+    [Environment]::SetEnvironmentVariable("Path", (($PathEntries + $InstallDir) -join ";"), "User")
+  }
+  $env:Path = "$env:Path;$InstallDir"
 
   if ($Start) {
     & $CliffExe start -p $Port
-    Write-Host ""
-    Write-Host "Open a new terminal to use the 'cliff' command from PATH."
   } else {
     Write-Host "Cliff installed to $InstallDir"
-    Write-Host "Open a new terminal to use the 'cliff' command from PATH."
-    Write-Host "Then run: cliff start"
+    Write-Host "Start it with: $CliffExe start"
   }
+
+  # A script cannot change the PATH of the terminal that launched it, so say how
+  # to use `cliff` there right now.
+  Write-Host ""
+  Write-Host "To use 'cliff' in the terminal you installed from, run one of these:"
+  Write-Host "  PowerShell:  `$env:Path += `";$InstallDir`""
+  Write-Host "  cmd.exe:     set PATH=%PATH%;$InstallDir"
+  Write-Host "New terminals already have it."
 }
 finally {
   Remove-Item -LiteralPath $ExtractRoot -Recurse -Force -ErrorAction SilentlyContinue

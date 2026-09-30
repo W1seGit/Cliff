@@ -38,6 +38,9 @@ type Options struct {
 	SchedulerContext context.Context
 	LogBuffer        *logbuf.Buffer
 	Updater          *updater.Manager
+	// Shutdown and ShutdownToken enable POST /api/internal/shutdown for `cliff stop`.
+	Shutdown      func()
+	ShutdownToken string
 }
 
 func New(options Options) http.Handler {
@@ -64,12 +67,16 @@ func New(options Options) http.Handler {
 		logBuffer:     options.LogBuffer,
 		updater:       options.Updater,
 		loginLimiter:  newLoginLimiter(),
+
+		shutdown:      options.Shutdown,
+		shutdownToken: options.ShutdownToken,
 	}
 	if options.SchedulerContext != nil {
 		go api.runScheduler(options.SchedulerContext)
 	}
 
 	mux.HandleFunc("GET /api/health", api.health)
+	mux.HandleFunc("POST /api/internal/shutdown", api.shutdownDaemon)
 	mux.HandleFunc("GET /api/auth/me", api.authMe)
 	mux.HandleFunc("POST /api/auth/setup", api.authSetup)
 	mux.HandleFunc("POST /api/auth/login", api.authLogin)
@@ -142,6 +149,9 @@ type apiHandler struct {
 	logBuffer     *logbuf.Buffer
 	updater       *updater.Manager
 	loginLimiter  *loginLimiter
+
+	shutdown      func()
+	shutdownToken string
 }
 
 type storageUsageCache struct {

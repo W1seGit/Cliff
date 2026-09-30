@@ -100,10 +100,11 @@ After installing, `cliff` is available in your terminal:
 | Command | Description |
 |---------|-------------|
 | `cliff start` | Start the daemon in the background |
-| `cliff stop` | Stop a running daemon |
+| `cliff stop` | Stop the daemon cleanly (running servers are stopped and worlds saved first) |
 | `cliff status` | Show daemon status (URL, uptime, PID) |
+| `cliff logs` | Print recent daemon logs (`-f` keeps following) |
 | `cliff update` | Check for and apply updates |
-| `cliff uninstall` | Remove Cliff from this machine |
+| `cliff uninstall` | Remove Cliff from this machine (`--keep-data` keeps your servers and settings) |
 | `cliff version` | Print version information |
 | `cliff help` | Show all commands and flags |
 
