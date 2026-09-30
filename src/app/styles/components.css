@@ -88,8 +88,8 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--accent);
-  color: #0b0d10;
+  background: var(--primary);
+  color: var(--on-primary);
   font-size: 10px;
   font-weight: 700;
 }
@@ -452,8 +452,8 @@
 }
 
 .schedule-preset.active {
-  background: var(--accent);
-  color: #0b0d10;
+  background: var(--primary);
+  color: var(--on-primary);
   font-weight: 600;
 }
 
@@ -511,8 +511,8 @@
 }
 
 .schedule-unit-button.active {
-  background: var(--accent);
-  color: #0b0d10;
+  background: var(--primary);
+  color: var(--on-primary);
   font-weight: 600;
 }
 

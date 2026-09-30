@@ -12,6 +12,8 @@ import type { MinecraftMetadata, ServerType, UnsavedChangesRegistration } from "
 import { Input } from "../components/ui/input";
 import { Panel } from "../components/ui/panel";
 import { Hint } from "../components/ui/hint";
+import { Banner } from "../components/ui/banner";
+import { KeyValueList } from "../components/ui/setting-row";
 import { WizardTabs, WizardActions } from "../components/ui/wizard";
 import { FieldGrid } from "../components/ui/field-grid";
 
@@ -184,16 +186,17 @@ export function CreatePanel({
       )}
 
       {step === 3 && (
-        <div className="form-section">
-          <h3>Review</h3>
-          <div className="wizard-review-grid">
-            <div><span>Type</span><strong>{type}</strong></div>
-            <div><span>Minecraft</span><strong>{effectiveMinecraftVersion}</strong></div>
-            <div><span>Loader</span><strong>{loaderVersion || "None"}</strong></div>
-            <div><span>Port</span><strong>{port}</strong></div>
-            <div><span>Memory</span><strong>{minMemoryMb}M / {maxMemoryMb}M</strong></div>
-          </div>
-          <Hint warn={!canSubmit}>{canSubmit ? "Profile valid." : "Complete the previous steps to create."}</Hint>
+        <div className="review-step">
+          <KeyValueList
+            items={[
+              { key: "type", label: "Type", value: type },
+              { key: "mc", label: "Minecraft", value: effectiveMinecraftVersion, mono: true },
+              { key: "loader", label: "Loader", value: loaderVersion || "None", mono: Boolean(loaderVersion) },
+              { key: "port", label: "Port", value: port, mono: true },
+              { key: "memory", label: "Memory", value: `${minMemoryMb} MB min, ${maxMemoryMb} MB max` },
+            ]}
+          />
+          {!canSubmit && <Banner variant="warning">Complete the previous steps to create the server.</Banner>}
         </div>
       )}
     </Panel>

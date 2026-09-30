@@ -75,19 +75,19 @@ button:disabled {
 }
 
 .primary {
-  background: var(--accent);
+  background: var(--primary);
   box-shadow: none;
-  color: #0b0d10;
+  color: var(--on-primary);
   font-weight: 600;
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--primary-hover);
   box-shadow: none;
 }
 
 .primary:active:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--primary-hover);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 

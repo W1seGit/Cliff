@@ -70,6 +70,8 @@ export { Toggle } from "./toggle";
 export type { ToggleProps } from "./toggle";
 export { Tooltip } from "./tooltip";
 export type { TooltipProps } from "./tooltip";
+export { CodeEditor, languageForFile } from "./code-editor";
+export type { CodeEditorProps, CodeIssue, CodeLanguage } from "./code-editor";
 export { CopyButton } from "./copy-button";
 export type { CopyButtonProps } from "./copy-button";
 export { SettingsLayout, SettingsSectionPanel } from "./settings-layout";

@@ -12,6 +12,8 @@ import type { ImportDetection, MinecraftMetadata, ServerType, UnsavedChangesRegi
 import { Input } from "../components/ui/input";
 import { Panel } from "../components/ui/panel";
 import { Hint } from "../components/ui/hint";
+import { Banner } from "../components/ui/banner";
+import { KeyValueList } from "../components/ui/setting-row";
 import { WizardTabs, WizardActions } from "../components/ui/wizard";
 import { FieldGrid } from "../components/ui/field-grid";
 
@@ -423,19 +425,19 @@ export function ImportPanel({
       )}
 
       {step === 3 && detection && (
-        <div className="form-section">
-          <h3>Review</h3>
-          <div className="wizard-review-grid">
-            <div><span>Type</span><strong>{type}</strong></div>
-            <div><span>Minecraft</span><strong>{effectiveMinecraftVersion}</strong></div>
-            <div><span>Loader</span><strong>{loaderVersion || "None"}</strong></div>
-            <div><span>Port</span><strong>{effectivePort}</strong></div>
-            <div><span>Mods</span><strong>{detection.mods} enabled</strong></div>
-            <div><span>Disabled mods</span><strong>{detection.disabledMods}</strong></div>
-            <div><span>Memory</span><strong>{minMemoryMb}M / {maxMemoryMb}M</strong></div>
-            <div><span>Launch target</span><strong>{launchJar || "Detected"}</strong></div>
-          </div>
-          <Hint warn={!canImport}>{canImport ? "Ready to import." : "Review the detected profile and resources before importing."}</Hint>
+        <div className="review-step">
+          <KeyValueList
+            items={[
+              { key: "type", label: "Type", value: type },
+              { key: "mc", label: "Minecraft", value: effectiveMinecraftVersion, mono: true },
+              { key: "loader", label: "Loader", value: loaderVersion || "None", mono: Boolean(loaderVersion) },
+              { key: "port", label: "Port", value: effectivePort, mono: true },
+              { key: "mods", label: "Mods", value: `${detection.mods} enabled${detection.disabledMods ? `, ${detection.disabledMods} disabled` : ""}` },
+              { key: "memory", label: "Memory", value: `${minMemoryMb} MB min, ${maxMemoryMb} MB max` },
+              { key: "launch", label: "Launch target", value: launchJar || "Detected", mono: true },
+            ]}
+          />
+          {!canImport && <Banner variant="warning">Review the detected profile and resources before importing.</Banner>}
         </div>
       )}
     </Panel>

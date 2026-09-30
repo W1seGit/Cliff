@@ -135,6 +135,10 @@
   line-height: 20px;
 }
 
+.props-editor.tall {
+  height: max(420px, calc(100vh - 300px));
+}
+
 .props-editor:focus-within {
   box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-tint);
 }

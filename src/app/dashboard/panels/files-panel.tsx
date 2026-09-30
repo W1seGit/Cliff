@@ -10,7 +10,7 @@ import { Page } from "../components/ui/page-layout";
 import { Breadcrumb } from "../components/ui/breadcrumb";
 import { Table } from "../components/ui/table";
 import { Input } from "../components/ui/input";
-import { Textarea } from "../components/ui/textarea";
+import { CodeEditor, languageForFile } from "../components/ui/code-editor";
 import { SelectionBar } from "../components/ui/selection-bar";
 import { FilterBar } from "../components/ui/filter-bar";
 import { Modal } from "../components/ui/modal";
@@ -224,7 +224,7 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
           </>
         }
       >
-        <Textarea className="file-editor" value={content} onChange={(event) => setContent(event.target.value)} disabled={!openFile.editable} spellCheck={false} aria-label={`Contents of ${openFile.name}`} />
+        <CodeEditor tall value={content} onChange={setContent} language={languageForFile(openFile.name)} disabled={!openFile.editable} ariaLabel={`Contents of ${openFile.name}`} />
       </Page>
     );
   }

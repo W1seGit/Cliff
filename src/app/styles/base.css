@@ -11,6 +11,9 @@
   --text-tertiary: #808896; /* >= 4.5:1 on --bg, --surface, --surface-2 */
   --accent: #5b8def;
   --accent-hover: #6e9cf7;
+  --primary: #2f62d0;
+  --primary-hover: #2857c0;
+  --on-primary: #ffffff;
   --accent-soft: rgba(91, 141, 239, 0.12);
   --success: #8fb3ff;
   --success-bg: #17233a;
@@ -72,7 +75,7 @@
   --radius-pill: 999px;
 
   /* Layout */
-  --layout-max: 1120px;
+  --layout-max: none;
   --control-h: 36px;
   --row-h: 40px;
   --icon: var(--text-tertiary);
