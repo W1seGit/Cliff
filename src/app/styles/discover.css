@@ -172,10 +172,17 @@
   align-items: start;
 }
 
+/* The filters scroll on their own, so a long list never drags the results with it */
 .discover-filter-sidebar {
   position: sticky;
   top: 58px;
   align-self: start;
+  max-height: calc(100vh - 74px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .discover-results-pane {
@@ -253,7 +260,7 @@ svg.discover-opt-glyph { background: none; }
 /* Two connected buttons, each half the width */
 .discover-segmented {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   border-radius: var(--radius-sm);
   box-shadow: inset 0 0 0 1px var(--border-strong);
   overflow: hidden;

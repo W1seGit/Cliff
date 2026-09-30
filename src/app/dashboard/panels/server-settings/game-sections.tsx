@@ -9,7 +9,7 @@ type SetField = <K extends keyof Editable>(key: K, value: Editable[K]) => void;
 
 export function EulaCard({ accepted, onChange }: { accepted: boolean; onChange: (accepted: boolean) => void }) {
   return (
-    <Card title="Minecraft EULA" description="Mojang requires you to accept the EULA before a server can run.">
+    <Card aria-label="Minecraft EULA">
       <ToggleRow
         label="I accept the Minecraft EULA"
         description={<>Required before the server can start. Read it at <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener noreferrer">aka.ms/MinecraftEULA</a>.</>}

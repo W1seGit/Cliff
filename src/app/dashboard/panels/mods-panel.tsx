@@ -201,8 +201,9 @@ function DiscoverFilters({
           <div className="discover-group" role="group" aria-label="Side">
             <span className="discover-group-label">Runs on</span>
             <div className="discover-segmented">
-              <button type="button" aria-pressed={filters.side === "server"} onClick={() => set({ side: filters.side === "server" ? "both" : "server" })}>Server</button>
-              <button type="button" aria-pressed={filters.side === "client"} onClick={() => set({ side: filters.side === "client" ? "both" : "client" })}>Client</button>
+              <button type="button" aria-pressed={filters.side === "server"} onClick={() => set({ side: "server" })}>Server</button>
+              <button type="button" aria-pressed={filters.side === "both"} onClick={() => set({ side: "both" })}>Both</button>
+              <button type="button" aria-pressed={filters.side === "client"} onClick={() => set({ side: "client" })}>Client</button>
             </div>
           </div>
           <div className="discover-group" role="group" aria-label="Category">
