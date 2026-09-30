@@ -5,6 +5,8 @@ import React, { useRef } from "react";
 export interface TabItem {
   id: string;
   label: React.ReactNode;
+  /** Small icon shown before the label. */
+  icon?: React.ReactNode;
   disabled?: boolean;
   extraClassName?: string;
 }
@@ -66,6 +68,7 @@ export function Tabs({ items, activeId, onChange, ariaLabel, className = "", idP
             className={itemClass || undefined}
             onClick={() => onChange(item.id)}
           >
+            {item.icon}
             {item.label}
           </button>
         );

@@ -1,10 +1,13 @@
 "use client";
 
 import React from "react";
+import { Check } from "lucide-react";
 import { Button } from "./button";
 
 export interface WizardTabsProps {
   steps: string[];
+  /** One icon per step. A finished step shows a check instead. */
+  icons?: React.ReactNode[];
   currentStep: number;
   canVisitStep: (index: number) => boolean;
   stepValid: boolean[];
@@ -14,6 +17,7 @@ export interface WizardTabsProps {
 
 export function WizardTabs({
   steps,
+  icons,
   currentStep,
   canVisitStep,
   stepValid,
@@ -38,7 +42,8 @@ export function WizardTabs({
           }
           onClick={() => onStepChange(index)}
         >
-          {index + 1}. {label}
+          {index < currentStep && stepValid[index] ? <Check size={14} aria-hidden="true" /> : icons?.[index]}
+          {label}
         </button>
       ))}
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, FolderOpen, LoaderCircle, Upload } from "lucide-react";
+import { CheckCircle2, ClipboardCheck, Cpu, FolderInput, FolderOpen, LoaderCircle, ScanSearch, Upload } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange, validPort } from "../lib/utils";
 import { JavaPresetRow, ExtraArgsPresetRow, MemoryPresetRow } from "../components/preset-rows";
 import { ServerTypePresets } from "../components/server-type-presets";
@@ -116,6 +116,7 @@ export function ImportPanel({
   const [progress, setProgress] = useState<{ kind: ImportProgressKind; index: number } | null>(null);
 
   const importSteps = ["Source", "Detected", "Resources", "Review"];
+  const importStepIcons = [<FolderInput key="source" size={14} />, <ScanSearch key="detected" size={14} />, <Cpu key="resources" size={14} />, <ClipboardCheck key="review" size={14} />];
   const effectiveMinecraftVersion = minecraftVersion || detection?.minecraftVersion || metadata?.latest.release || "";
   const effectivePort = port.trim() ? Number(port) : detection?.port || 25565;
   const needsLoader = serverTypeNeedsLoader(type);
@@ -307,6 +308,7 @@ export function ImportPanel({
       <div className="wizard-header">
         <WizardTabs
           steps={importSteps}
+          icons={importStepIcons}
           currentStep={step}
           canVisitStep={canVisitStep}
           stepValid={importStepValid}

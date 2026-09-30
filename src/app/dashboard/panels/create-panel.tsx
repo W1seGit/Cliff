@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ClipboardCheck, Cpu, Layers, Tag } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange, validPort } from "../lib/utils";
 import { createServerProfile } from "../lib/runtime-client";
 import { ExtraArgsPresetRow, JavaPresetRow, MemoryPresetRow } from "../components/preset-rows";
@@ -58,6 +59,7 @@ export function CreatePanel({
   const portValid = validPort(port);
   const canSubmit = Boolean(metadata && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion) && memoryValid && portValid && !busy);
   const createSteps = ["Type", "Version", "Resources", "Review"];
+  const createStepIcons = [<Layers key="type" size={14} />, <Tag key="version" size={14} />, <Cpu key="resources" size={14} />, <ClipboardCheck key="review" size={14} />];
   const createStepValid = [
     Boolean(name.trim()),
     Boolean(metadata && effectiveMinecraftVersion && (!needsLoader || loaderVersion)),
@@ -111,6 +113,7 @@ export function CreatePanel({
       <div className="wizard-header">
         <WizardTabs
           steps={createSteps}
+          icons={createStepIcons}
           currentStep={step}
           canVisitStep={canVisitStep}
           stepValid={createStepValid}

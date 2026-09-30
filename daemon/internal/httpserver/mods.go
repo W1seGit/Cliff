@@ -497,6 +497,8 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 
 	action := ""
 	uploadedName := ""
+	session := &uploadSession{h: h, ctx: r.Context(), server: server}
+	var results []uploadResult
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -514,11 +516,22 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 				return
 			}
 			action = value
-			if action != "upload" {
+			if action != "upload" && action != "upload-auto" {
 				writeError(w, http.StatusBadRequest, "Unsupported mod upload action")
 				return
 			}
+		case "worldName":
+			value, err := readMultipartTextPart(part)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			session.worldName = value
 		case "file":
+			if action == "upload-auto" {
+				results = append(results, session.handlePart(part)...)
+				continue
+			}
 			if action != "upload" {
 				writeError(w, http.StatusBadRequest, "Upload action must be sent before the mod jar")
 				return
@@ -543,6 +556,20 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 			}
 			uploadedName = safeName
 		}
+	}
+	if action == "upload-auto" {
+		if len(results) == 0 {
+			writeError(w, http.StatusBadRequest, "No files were uploaded")
+			return
+		}
+		added := []string{}
+		for _, result := range results {
+			if result.Status == "added" {
+				added = append(added, result.Name)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": len(added) > 0, "files": added, "results": results})
+		return
 	}
 	if action != "upload" {
 		writeError(w, http.StatusBadRequest, "Unsupported mod upload action")

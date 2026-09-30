@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Cpu, Gamepad2, Server, SlidersHorizontal, Wrench } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange } from "../lib/utils";
 import { fetchServerProperties, runFileAction, saveServerProperties, serverFileUrl, updateServerProfile, uploadServerFile } from "../lib/runtime-client";
 import { useHashSection } from "../lib/use-hash-section";
+import { editableFromRaw, parsePropertiesText, sameProperties, setPropertyInText, validatePropertiesText } from "../lib/properties-text";
 import type { MinecraftMetadata, ServerProperties, ServerPropertiesEditable, ServerRecord, UnsavedChangesRegistration } from "../lib/types";
 import { Banner, Card, PageHeader, SettingsLayout, SettingsSectionPanel, SkeletonRows } from "../components/ui";
 import { ImageCropModal } from "../components/ui/image-crop-modal";
@@ -12,7 +13,7 @@ import { notifyServerIconUpdated } from "../components/server-avatar";
 import { EulaCard, GameplayCard, RulesCard, WorldCard } from "./server-settings/game-sections";
 import { ServerListCard } from "./server-settings/server-list-card";
 import { ProfileGeneralCard, ProfileVersionCard, RuntimeSections } from "./server-settings/profile-sections";
-import { RawPropertiesCard } from "./server-settings/advanced-section";
+import { PropertiesEditorCard } from "./server-settings/properties-editor";
 
 const settingsSections = ["game", "profile", "runtime", "advanced"] as const;
 type SettingsSection = (typeof settingsSections)[number];
@@ -39,12 +40,6 @@ function rawValueForEditableField(key: keyof ServerPropertiesEditable, value: Se
   return String(value ?? "");
 }
 
-function editableValueFromRaw(key: keyof ServerPropertiesEditable, value: string) {
-  if (key === "maxPlayers" || key === "serverPort" || key === "viewDistance" || key === "simulationDistance") return Number(value);
-  if (key === "onlineMode" || key === "whiteList" || key === "pvp" || key === "enableCommandBlock" || key === "allowFlight") return value.trim().toLowerCase() === "true";
-  return value;
-}
-
 function sortedRecordJson(record: Record<string, unknown>) {
   return JSON.stringify(Object.fromEntries(Object.entries(record).toSorted(([a], [b]) => a.localeCompare(b))));
 }
@@ -67,8 +62,10 @@ export function ServerSettingsPanel({
   onUnsavedChange: (change: UnsavedChangesRegistration | null) => void;
 }) {
   const [properties, setProperties] = useState<ServerProperties | null>(null);
-  const [draft, setDraft] = useState<ServerProperties["editable"] | null>(null);
-  const [rawDraft, setRawDraft] = useState<ServerProperties["raw"]>({});
+  // The text of server.properties is the single source of truth. The Game tab
+  // fields are derived from it and edit one line at a time, so comments and
+  // key order in the file survive.
+  const [propsText, setPropsText] = useState("");
   const [eulaAccepted, setEulaAccepted] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [settingsBusy, setSettingsBusy] = useState(false);
@@ -104,7 +101,7 @@ export function ServerSettingsPanel({
       setIconResetPending(false);
     }, 0);
     fetchServerProperties(server.id)
-      .then((data) => { setProperties(data); setDraft(data.editable); setRawDraft(data.raw); setEulaAccepted(data.eulaAccepted); })
+      .then((data) => { setProperties(data); setPropsText(data.text ?? ""); setEulaAccepted(data.eulaAccepted); })
       .catch((error) => onMessage(error.message));
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,6 +111,10 @@ export function ServerSettingsPanel({
     if (iconPreviewUrl) URL.revokeObjectURL(iconPreviewUrl);
   }, [iconPreviewUrl]);
 
+  const rawDraft = useMemo(() => parsePropertiesText(propsText), [propsText]);
+  const draft = useMemo(() => (properties ? editableFromRaw(rawDraft) : null), [properties, rawDraft]);
+  const savedEditable = useMemo(() => (properties ? editableFromRaw(parsePropertiesText(properties.text ?? "")) : null), [properties]);
+  const propsIssues = useMemo(() => validatePropertiesText(propsText), [propsText]);
   const profileMinecraftVersion = profile.minecraftVersion || metadata?.latest.release || "";
   const profileNeedsLoader = serverTypeNeedsLoader(profile.type);
   const profileMemoryValid = validMemoryRange(profile.minMemoryMb, profile.maxMemoryMb);
@@ -121,7 +122,7 @@ export function ServerSettingsPanel({
   const canSaveSettings = Boolean(
     draft && draft.levelName.trim() && draft.maxPlayers >= 1 && draft.maxPlayers <= 1000 &&
     draft.serverPort >= 1 && draft.serverPort <= 65535 && draft.viewDistance >= 2 && draft.viewDistance <= 32 &&
-    draft.simulationDistance >= 2 && draft.simulationDistance <= 32 && !settingsBusy,
+    draft.simulationDistance >= 2 && draft.simulationDistance <= 32 && propsIssues.length === 0 && !settingsBusy,
   );
   const profileDirty = profile.name !== server.name ||
     profile.type !== server.type ||
@@ -133,17 +134,16 @@ export function ServerSettingsPanel({
     profile.launchJar !== server.launchJar ||
     profile.extraArgs !== server.extraArgs;
   const iconDirty = Boolean(pendingIconFile) || iconResetPending;
-  const settingsDirty = Boolean(properties && draft && (
+  const settingsDirty = Boolean(properties && (
     eulaAccepted !== properties.eulaAccepted ||
-    sortedRecordJson(draft) !== sortedRecordJson(properties.editable) ||
-    sortedRecordJson(rawDraft) !== sortedRecordJson(properties.raw)
+    !sameProperties(propsText, properties.text ?? "")
   )) || iconDirty;
   const hasUnsavedChanges = profileDirty || settingsDirty;
-  const gameDirty = Boolean(properties && draft && (
+  const gameDirty = Boolean(properties && draft && savedEditable && (
     eulaAccepted !== properties.eulaAccepted ||
-    sortedRecordJson(draft) !== sortedRecordJson(properties.editable)
+    sortedRecordJson(draft) !== sortedRecordJson(savedEditable)
   )) || iconDirty;
-  const advancedDirty = Boolean(properties && sortedRecordJson(rawDraft) !== sortedRecordJson(properties.raw));
+  const advancedDirty = Boolean(properties && !sameProperties(propsText, properties.text ?? ""));
   const profileSectionDirty = profile.name !== server.name ||
     profile.type !== server.type ||
     profile.minecraftVersion !== server.minecraftVersion ||
@@ -154,7 +154,9 @@ export function ServerSettingsPanel({
     profile.launchJar !== server.launchJar ||
     profile.extraArgs !== server.extraArgs;
   const saveBlockedReason = settingsDirty && !canSaveSettings
-    ? "Fix the highlighted game settings to save."
+    ? propsIssues.length > 0
+      ? `server.properties has ${propsIssues.length} problem${propsIssues.length === 1 ? "" : "s"}. Fix ${propsIssues.length === 1 ? "it" : "them"} to save.`
+      : "Fix the highlighted game settings to save."
     : profileDirty && !canSaveProfile
       ? metadata ? "Fix the highlighted profile fields to save." : "Version data is still loading."
       : undefined;
@@ -193,10 +195,9 @@ export function ServerSettingsPanel({
         setIconVersion((v) => v + 1);
         notifyServerIconUpdated(server.id);
       }
-      const data = await saveServerProperties(server.id, { editable: draft, raw: rawDraft, eulaAccepted });
+      const data = await saveServerProperties(server.id, { text: propsText, eulaAccepted });
       setProperties(data);
-      setDraft(data.editable);
-      setRawDraft(data.raw);
+      setPropsText(data.text ?? "");
       setEulaAccepted(data.eulaAccepted);
       await onSaved();
       onMessage("Settings saved");
@@ -222,8 +223,7 @@ export function ServerSettingsPanel({
       javaPath: server.javaPath, minMemoryMb: server.minMemoryMb, maxMemoryMb: server.maxMemoryMb, launchJar: server.launchJar, extraArgs: server.extraArgs,
     });
     if (properties) {
-      setDraft(properties.editable);
-      setRawDraft(properties.raw);
+      setPropsText(properties.text ?? "");
       setEulaAccepted(properties.eulaAccepted);
     }
     setPendingIconFile(null);
@@ -257,19 +257,9 @@ export function ServerSettingsPanel({
   }, [hasUnsavedChanges, settingsDirty, profileDirty, canSaveSettings, canSaveProfile, settingsBusy, profileBusy, saveBlockedReason, server.id]);
 
   function setField<K extends keyof ServerProperties["editable"]>(key: K, value: ServerProperties["editable"][K]) {
-    setDraft((current) => (current ? { ...current, [key]: value } : current));
     const rawKey = Object.entries(editablePropertyMap).find(([, editableKey]) => editableKey === key)?.[0];
-    if (rawKey) {
-      setRawDraft((current) => ({ ...current, [rawKey]: rawValueForEditableField(key, value) }));
-    }
-  }
-
-  function setRawProperty(key: string, value: string) {
-    setRawDraft((current) => ({ ...current, [key]: value }));
-    const editableKey = editablePropertyMap[key as keyof typeof editablePropertyMap];
-    if (editableKey) {
-      setDraft((current) => (current ? { ...current, [editableKey]: editableValueFromRaw(editableKey, value) } : current));
-    }
+    if (!rawKey) return;
+    setPropsText((current) => setPropertyInText(current, rawKey, rawValueForEditableField(key, value)));
   }
 
   function uploadServerIcon(file: File | null) {
@@ -366,8 +356,7 @@ export function ServerSettingsPanel({
           <RuntimeSections profile={profile} setProfile={setProfile} />
         </SettingsSectionPanel>
         <SettingsSectionPanel idPrefix={idPrefix} id="advanced" activeId={activeSection}>
-          {restartNote}
-          <RawPropertiesCard raw={rawDraft} onChange={setRawProperty} />
+          <PropertiesEditorCard serverId={server.id} value={propsText} onChange={setPropsText} issues={propsIssues} running={isRunning} />
         </SettingsSectionPanel>
       </SettingsLayout>
       <ImageCropModal

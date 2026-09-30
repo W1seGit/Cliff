@@ -512,3 +512,52 @@
   white-space: nowrap;
 }
 
+
+/* Multi-file upload */
+.upload-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+}
+
+.upload-row + .upload-row {
+  border-top: 1px solid var(--border-hairline);
+}
+
+.upload-row-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-row-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.upload-row-copy small {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.upload-icon.ok { color: var(--running); }
+.upload-icon.skip { color: var(--text-tertiary); }
+.upload-results { display: grid; gap: 12px; }

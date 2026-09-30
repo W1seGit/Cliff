@@ -1,4 +1,4 @@
-import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, User, WorldsPayload } from "./types";
+import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UploadResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -194,7 +194,7 @@ export async function runServerModAction(serverId: string, body: Record<string, 
 }
 
 export async function uploadServerMod(serverId: string, form: FormData) {
-  return daemonApi<{ files?: string[] }>(`/api/servers/${serverId}/mods`, { method: "POST", body: form });
+  return daemonApi<{ files?: string[]; results?: UploadResult[] }>(`/api/servers/${serverId}/mods`, { method: "POST", body: form });
 }
 
 export function modUrl(serverId: string, query: string) {
@@ -225,7 +225,7 @@ export async function fetchServerProperties(serverId: string) {
   return daemonApi<ServerProperties>(`/api/servers/${serverId}/properties`);
 }
 
-export async function saveServerProperties(serverId: string, body: { editable: ServerProperties["editable"]; raw?: ServerProperties["raw"]; eulaAccepted: boolean }) {
+export async function saveServerProperties(serverId: string, body: { text: string; eulaAccepted: boolean } | { editable: ServerProperties["editable"]; raw?: ServerProperties["raw"]; eulaAccepted: boolean }) {
   return daemonApi<ServerProperties>(`/api/servers/${serverId}/properties`, { method: "PUT", body: JSON.stringify(body) });
 }
 

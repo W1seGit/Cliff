@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown, ChevronRight, CircleCheck, Download, LayoutGrid, List, Package, PackagePlus, Puzzle, Search, SlidersHorizontal,
-  TriangleAlert, Upload, Users,
+  Store, TriangleAlert, Upload, Users,
 } from "lucide-react";
 import { compactNumber, formatBytes, serverTypeNeedsLoader, serverTypeNeedsPlugins } from "../lib/utils";
 import {
   fetchModrinthProjectDetails, fetchServerWorlds, fetchWorldDatapackDetails, modUrl, runServerModAction,
-  runWorldAction, searchServerMods, searchWorldDatapacks, uploadServerMod, uploadWorldFile, worldUrl,
+  runWorldAction, searchServerMods, searchWorldDatapacks, worldUrl,
 } from "../lib/runtime-client";
 import { VersionSelect } from "../components/version-select";
 import type {
@@ -27,6 +27,7 @@ import { FilterBar } from "../components/ui/filter-bar";
 import { SelectionBar } from "../components/ui/selection-bar";
 import { Tabs } from "../components/ui/tabs";
 import { Skeleton } from "../components/ui/skeleton";
+import { UploadTab } from "./mods/upload-tab";
 
 type DependencyWarning = NonNullable<NonNullable<ModFile["metadata"]>["dependencyWarnings"]>[number];
 type DiscoverSource = "marketplace" | "upload";
@@ -238,14 +239,10 @@ export function ModsPanel({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ModSearchResult[]>([]);
   const [busyId, setBusyId] = useState("");
-  const [uploading, setUploading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreResults, setHasMoreResults] = useState(false);
   const [nextResultOffset, setNextResultOffset] = useState(0);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadType, setUploadType] = useState<"mod" | "datapack" | null>(null);
-  const [uploadDragActive, setUploadDragActive] = useState(false);
   const [installedQuery, setInstalledQuery] = useState("");
   const [installedType, setInstalledType] = useState<string>("");
   const [installedStatus, setInstalledStatus] = useState<string>("");
@@ -276,9 +273,8 @@ export function ModsPanel({
   const blockedMoreKeyRef = useRef("");
   const loadingMoreRef = useRef(false);
   const resultListRef = useRef<HTMLDivElement | null>(null);
-  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
-  const busy = Boolean(busyId) || uploading || searching || loadingMore;
+  const busy = Boolean(busyId) || searching || loadingMore;
   const vanillaProfile = !serverTypeNeedsLoader(server.type) && !serverTypeNeedsPlugins(server.type);
   const pluginProfile = serverTypeNeedsPlugins(server.type);
   const worlds = worldsData?.worlds ?? [];
@@ -742,50 +738,6 @@ export function ModsPanel({
     }
   }
 
-  async function uploadMod() {
-    if (!uploadFile || busy || !uploadType) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      const uploadingDatapack = uploadType === "datapack";
-      form.set("action", uploadingDatapack ? "upload-datapack" : "upload");
-      if (uploadingDatapack) form.set("worldName", selectedWorld);
-      form.set("file", uploadFile);
-      const data = uploadingDatapack ? await uploadWorldFile(server.id, form) : await uploadServerMod(server.id, form);
-      setUploadFile(null);
-      setUploadType(null);
-      if ("files" in data && data.files?.length) onMessage(`Uploaded ${data.files.join(", ")}`);
-      else onMessage(uploadingDatapack ? "Uploaded datapack" : `Uploaded ${pluginProfile ? "plugin" : "mod"}`);
-      if (uploadingDatapack) setWorldsData(data as WorldsPayload);
-      else await onRefresh();
-    } catch (error) {
-      onMessage(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function handleUploadFileSelected(file: File | null) {
-    if (!file) {
-      setUploadFile(null);
-      setUploadType(null);
-      return;
-    }
-    const isZip = file.name.toLowerCase().endsWith(".zip");
-    const isJar = file.name.toLowerCase().endsWith(".jar");
-    setUploadFile(file);
-    setUploadType(isZip ? "datapack" : isJar ? "mod" : null);
-  }
-
-  function handleUploadDrop(event: React.DragEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    setUploadDragActive(false);
-    if (busy) return;
-    const file = event.dataTransfer.files?.[0] ?? null;
-    handleUploadFileSelected(file);
-  }
-
   function switchSource(next: DiscoverSource) {
     if (next === source) return;
     setSource(next);
@@ -1014,42 +966,26 @@ export function ModsPanel({
         <div className="mods-discover">
           <Tabs
             items={[
-              { id: "marketplace", label: "Marketplace" },
-              { id: "upload", label: "Upload" },
+              { id: "marketplace", label: "Marketplace", icon: <Store size={15} aria-hidden="true" /> },
+              { id: "upload", label: "Upload", icon: <Upload size={15} aria-hidden="true" /> },
             ]}
             activeId={source}
             onChange={(id) => switchSource(id as DiscoverSource)}
           />
 
           {source === "upload" && (
-            <div className="discover-upload">
-              <div className="discover-upload-head">
-                <div>
-                  <h2>Upload</h2>
-                  <p className="muted">Add a local .jar {pluginProfile ? "plugin" : "mod"} or .zip datapack to this server.</p>
-                </div>
-                <Button variant="primary" className="icon-button" disabled={!uploadFile || !uploadType || busy || (uploadType === "datapack" && !selectedWorld)} onClick={uploadMod}><Upload size={16} />{uploading ? "Uploading..." : uploadType ? `Upload ${uploadType === "mod" && pluginProfile ? "plugin" : uploadType}` : "Upload"}</Button>
-              </div>
-              {uploadType === "datapack" && (
-                <label className="discover-filter-field">
-                  <span>Target world</span>
-                  <Select value={selectedWorld} onChange={(event) => setSelectedWorld(event.target.value)}>
-                    {worlds.map((world) => <option key={world.name} value={world.name}>{world.name}</option>)}
-                  </Select>
-                </label>
-              )}
-              <div
-                className={`mod-upload-drop ${uploadDragActive ? "drag-active" : ""}`}
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!busy) setUploadDragActive(true); }}
-                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setUploadDragActive(false); }}
-                onDrop={handleUploadDrop}
-                onClick={() => { if (!busy) uploadInputRef.current?.click(); }}
-              >
-                <Input ref={uploadInputRef} type="file" accept=".jar,.zip" disabled={busy} onChange={(event) => handleUploadFileSelected(event.target.files?.[0] ?? null)} />
-                <strong>{uploadFile ? uploadFile.name : "Drag and drop a .jar or .zip"}</strong>
-                <span className="muted">{uploadFile ? (uploadType ? `${uploadType === "datapack" ? "Datapack" : pluginProfile ? "Plugin" : "Mod"} detected` : "Unrecognized file type") : "or click to browse"}</span>
-              </div>
-            </div>
+            <UploadTab
+              serverId={server.id}
+              pluginProfile={pluginProfile}
+              worlds={worlds}
+              selectedWorld={selectedWorld}
+              onSelectWorld={setSelectedWorld}
+              disabled={busy}
+              onUploaded={async () => {
+                await Promise.all([onRefresh(), loadWorlds()]);
+              }}
+              onMessage={onMessage}
+            />
           )}
 
           {source !== "upload" && (

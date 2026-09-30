@@ -115,3 +115,138 @@
     flex-wrap: wrap;
   }
 }
+
+/* server.properties editor: a transparent textarea over a highlighted copy */
+.props-editor-wrap {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.props-editor {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  height: clamp(320px, 56vh, 640px);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.props-editor:focus-within {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-tint);
+}
+
+.props-editor.has-issues {
+  box-shadow: inset 0 0 0 1px var(--danger);
+}
+
+.props-editor-gutter {
+  overflow: hidden;
+  padding: 12px 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border-hairline);
+  color: var(--text-tertiary);
+  text-align: right;
+  user-select: none;
+}
+
+.gutter-line {
+  height: 20px;
+  padding-right: 10px;
+}
+
+.gutter-line.has-issue {
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.props-editor-body {
+  position: relative;
+  min-width: 0;
+}
+
+.props-editor-highlight,
+.props-editor-input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 12px 14px;
+  border: 0;
+  font: inherit;
+  letter-spacing: 0;
+  line-height: inherit;
+  tab-size: 4;
+  white-space: pre;
+}
+
+.props-editor-highlight {
+  overflow: hidden;
+  color: var(--text);
+  pointer-events: none;
+}
+
+.props-editor-input {
+  overflow: auto;
+  resize: none;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--text);
+  outline: none;
+  box-shadow: none;
+}
+
+.props-editor-input::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.props-editor-input[aria-invalid="true"] {
+  box-shadow: none;
+}
+
+.code-line {
+  height: 20px;
+}
+
+.code-line.has-issue {
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.tok-comment { color: var(--text-tertiary); font-style: italic; }
+.tok-key { color: #8fb3ff; }
+.tok-eq { color: var(--text-tertiary); }
+.tok-string { color: var(--text); }
+.tok-number { color: #fbbf24; }
+.tok-true { color: var(--running); }
+.tok-false { color: var(--danger); }
+.tok-error { color: var(--danger); text-decoration: underline wavy; }
+
+.props-editor-issues {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.props-editor-issues li {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.props-editor-issues button {
+  padding: 0;
+  background: transparent;
+  color: var(--danger);
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.props-editor-issues button:hover:not(:disabled) {
+  background: transparent;
+}

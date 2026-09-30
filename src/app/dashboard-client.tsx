@@ -263,6 +263,20 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const isRunning = selected ? selectedRuntime.runningServerId === selected.id : false;
   const anotherServerRunning = false;
   const selectedLifecycle = isRunning ? selectedRuntime.lifecycle : "stopped";
+
+  // Report what actually happened after a start: ready, or died while starting.
+  const lastLifecycleRef = useRef<Record<string, string>>({});
+  const userStopRef = useRef(false);
+  useEffect(() => {
+    if (!selected) return;
+    const previous = lastLifecycleRef.current[selected.id];
+    lastLifecycleRef.current[selected.id] = selectedLifecycle;
+    if (previous === "starting" && selectedLifecycle === "running") {
+      setMessage(`${selected.name} is ready`, "success");
+    } else if (previous === "starting" && selectedLifecycle === "stopped" && !userStopRef.current) {
+      setMessage(`${selected.name} stopped during startup. Check the console for the error.`, "error");
+    }
+  }, [selectedLifecycle, selected, setMessage]);
   const selectedModsSupported = selected ? serverTypeSupportsContent(selected.type) : false;
   const publicAccessSetup = tab === "public-access/setup";
   const serverContext = Boolean(selected && !utilityTabs.has(tab));
@@ -449,11 +463,13 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     if (!selected || quickBusyAction) return;
     const actionServerId = selected.id;
     setQuickBusyAction(busyLabel);
-    // Navigate to console immediately for start/restart — don't wait for the
-    // server to finish starting. The backend start endpoint blocks up to 5s
-    // waiting for startup confirmation, but the user should see the console
-    // right away so they can watch the boot output.
+    userStopRef.current = path === "stop";
+    // Show the console right away for start/restart so the boot output is visible.
     if (path === "start" || path === "restart") setTab("console", actionServerId);
+    const refreshInBackground = () => {
+      void loadDashboard({ includeSettings: false, includeSettingsStorage: false });
+      void refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false });
+    };
     try {
       const force = "force" in body;
       const result = path === "start"
@@ -461,25 +477,30 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         : path === "stop"
           ? await stopRuntimeServer(actionServerId, force)
           : await restartRuntimeServer(actionServerId, force);
-      await loadDashboard({ includeSettings: false, includeSettingsStorage: false });
-      await refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false });
-      if (path === "start") {
-        setMessage("Server started");
-      } else if (path === "stop") {
+      if (path === "start" || path === "restart") {
+        // The request only confirms the process launched. The server is "starting"
+        // until it prints its ready line; the lifecycle effect reports ready or a
+        // failed start. Free the button now instead of waiting on refreshes.
+        setQuickBusyAction("");
+        refreshInBackground();
+        return;
+      }
+      await Promise.all([
+        loadDashboard({ includeSettings: false, includeSettingsStorage: false }),
+        refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false }),
+      ]);
+      if (path === "stop") {
         if ("pending" in result && result.pending) {
-          setMessage("Server is still stopping");
+          setMessage("Server is still stopping", "warning");
         } else {
           const stopped = await waitForServerRuntimeState(actionServerId, (status) => status.runningServerId !== actionServerId, "force" in body ? 5000 : 15000);
-          setMessage(stopped ? "Server stopped" : "Server is still stopping");
+          setMessage(stopped ? "Server stopped" : "Server is still stopping", stopped ? "success" : "warning");
         }
-      } else if (path === "restart") {
-        await waitForServerRuntimeState(actionServerId, (status) => status.runningServerId === actionServerId, 15000);
-        setMessage("Server restarted");
       } else {
         setMessage(`${busyLabel.replace("-", " ")} complete`);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Action failed");
+      setMessage(error instanceof Error ? error.message : "Action failed", "error");
     }
     finally { setQuickBusyAction(""); }
   }

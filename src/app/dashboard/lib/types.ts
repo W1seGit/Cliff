@@ -272,6 +272,8 @@ export type FileEntry = {
 export type FileListing = { cwd: string; parent: string; entries: FileEntry[] };
 export type FilePayload = { file: { name: string; path: string; size: number; editable: boolean; content: string } };
 export type ServerProperties = {
+  /** The exact contents of server.properties, comments included. */
+  text: string;
   raw: Record<string, string>;
   eulaAccepted: boolean;
   editable: {
@@ -412,4 +414,13 @@ export type UpdateApplyResult = {
   message: string;
   newVersion?: string;
   restarting: boolean;
+};
+
+export type UploadResult = {
+  name: string;
+  kind: "mod" | "plugin" | "datapack" | "bundle" | "world" | "resourcepack" | "jar" | "unknown";
+  status: "added" | "skipped";
+  message?: string;
+  /** The archive this file was extracted from, for zips of mods. */
+  source?: string;
 };

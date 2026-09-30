@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  CheckCircle2, Clipboard, Loader2, RadioTower, XCircle,
+  CheckCircle2, Clipboard, Download, Link2, Loader2, RadioTower, Waypoints, XCircle,
 } from "lucide-react";
 import {
   checkPlayitDeps as checkPlayitDepsAction,
@@ -375,6 +375,7 @@ export function PublicAccessPanel({
   const publicAccessRunning = configured && config.enabled !== false && agentRunning && tunnelReady;
   const publicAccessLoading = configured && config.enabled !== false && agentRunning && !tunnelReady;
   const flowSteps = ["Install Agent", "Connect Account", "Create Tunnel"];
+  const flowStepIcons = [<Download key="install" size={15} />, <Link2 key="connect" size={15} />, <Waypoints key="tunnel" size={15} />];
   const setupStepValid = [agentInstalled, config.claimed, Boolean(config.publicAddress)];
   const setupActive = mode === "setup" || setupOpen;
 
@@ -837,7 +838,8 @@ export function PublicAccessPanel({
           ariaLabel="Public access setup steps"
           items={flowSteps.map((label, index) => ({
             id: String(index),
-            label: `${index + 1}. ${label}`,
+            label,
+            icon: flowStepIcons[index],
             disabled: index > 0 && !setupStepValid[index - 1],
             extraClassName: setupStepValid[index] && index !== setupStep ? "done" : "",
           }))}
