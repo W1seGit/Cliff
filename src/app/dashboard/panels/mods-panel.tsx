@@ -16,12 +16,11 @@ import type {
   ModrinthProjectDetails, ServerRecord, WorldInfo, WorldsPayload,
 } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
-import { PageHeader } from "../components/ui/page-header";
+import { Page } from "../components/ui/page-layout";
+import { Banner } from "../components/ui/banner";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Table, SortableTh } from "../components/ui/table";
-import { Hint } from "../components/ui/hint";
 import { Pill } from "../components/ui/pill";
 import { FilterBar } from "../components/ui/filter-bar";
 import { SelectionBar } from "../components/ui/selection-bar";
@@ -752,26 +751,21 @@ export function ModsPanel({
   };
 
   return (
-    <section className="mods-workspace">
-      <PageHeader
-        icon={<Puzzle size={20} />}
-        title={pluginProfile ? "Plugins" : "Mods / Plugins"}
-        description={pluginProfile ? "Install, enable, and discover plugins and datapacks." : "Install, enable, and discover mods and datapacks."}
-      />
-
+    <Page
+      className="mods-workspace"
+      icon={<Puzzle size={20} />}
+      title={pluginProfile ? "Plugins" : "Mods / Plugins"}
+      description={pluginProfile ? "Install, enable, and discover plugins and datapacks." : "Install, enable, and discover mods and datapacks."}
+    >
       {vanillaProfile && (
-        <Hint variant="source" warn>
-          <span>This server type does not load Fabric, Forge, or NeoForge mods. Datapacks still work.</span>
-        </Hint>
+        <Banner variant="warning">This server type does not load Fabric, Forge, or NeoForge mods. Datapacks still work.</Banner>
       )}
       {isRunning && (
-        <Hint variant="source" warn>
-          <span>Server is running — mod and datapack deletion is disabled. Restart the server for mod changes to take effect.</span>
-        </Hint>
+        <Banner variant="warning">The server is running, so mod and datapack deletion is disabled. Restart it for changes to take effect.</Banner>
       )}
 
       {view === "installed" && (
-        <Panel className="mods-list-panel">
+        <div className="mods-list-panel">
           <FilterBar
             fields={[
               {
@@ -873,7 +867,7 @@ export function ModsPanel({
                 const rows = [
                   <tr key={item.id}>
                     <td><Input type="checkbox" aria-label={`Select ${item.fileName}`} checked={selectedInstalled.includes(item.id)} onChange={(event) => setSelectedInstalled((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /></td>
-                    <td><Pill variant={item.type === "mod" ? "success" : item.type === "modpack" ? "accent" : "warning"}>{item.type}</Pill></td>
+                    <td><Pill>{item.type}</Pill></td>
                     <td>
                       <div className="installed-mod-cell">
                         {item.type === "modpack" && item.children?.length ? (
@@ -959,7 +953,7 @@ export function ModsPanel({
               )}
               </tbody>
             </Table>
-          </Panel>
+          </div>
       )}
 
       {view === "discover" && (
@@ -1152,6 +1146,6 @@ export function ModsPanel({
           )}
         </div>
       )}
-    </section>
+    </Page>
   );
 }

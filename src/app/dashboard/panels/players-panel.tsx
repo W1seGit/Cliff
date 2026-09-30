@@ -6,7 +6,7 @@ import { formatDateTime } from "../lib/utils";
 import { fetchServerPlayers, lookupServerPlayer, runPlayerAccessAction } from "../lib/runtime-client";
 import type { PlayerAccess, PlayerSession, ServerRecord } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
+import { Page } from "../components/ui/page-layout";
 import { Input } from "../components/ui/input";
 import { Modal } from "../components/ui/modal";
 import { Table, SortableTh } from "../components/ui/table";
@@ -169,12 +169,12 @@ export function PlayersPanel({
   }
 
   return (
-    <Panel
-      className="players-list-panel"
-      title="Joined players"
-      description="Manage ops, whitelist, and bans for this server."
-      icon={<Users />}
-    >
+    <Page
+      className="players-page"
+      title="Players"
+      description="Everyone who has joined, and who is an op, whitelisted or banned."
+      icon={<Users size={20} />}
+      toolbar={
       <FilterBar
         fields={[
           {
@@ -200,9 +200,10 @@ export function PlayersPanel({
             ],
           },
         ]}
-        actions={<Button variant="primary" onClick={() => setShowAddPlayer(true)}><UserPlus size={14} />Add player</Button>}
+        actions={<Button variant="primary" iconLeft={<UserPlus size={14} />} onClick={() => setShowAddPlayer(true)}>Add player</Button>}
       />
-
+      }
+    >
       {selectedPlayers.length > 0 && (
         <SelectionBar
           selectedCount={selectedPlayers.length}
@@ -239,21 +240,13 @@ export function PlayersPanel({
         />
       )}
       <Table className="players-table">
-        <colgroup>
-          <col className="players-table-select-col" />
-          <col className="players-table-player-col" />
-          <col className="players-table-joined-col" />
-          <col className="players-table-ip-col" />
-          <col className="players-table-tags-col" />
-          <col className="players-table-count-col" />
-        </colgroup>
         <thead>
-          <tr><th><Input type="checkbox" aria-label="Select all players" checked={allFilteredSelected} onChange={(event) => setSelectedPlayers(event.target.checked ? filteredPlayers.map((player) => player.name) : [])} /></th><SortableTh label="Player" sortKey="player" activeSort={playerSortKey} sortDir={playerSortDir} onSort={handleSort} /><SortableTh label="Last joined" sortKey="joined" activeSort={playerSortKey} sortDir={playerSortDir} onSort={handleSort} /><SortableTh label="IP" sortKey="ip" activeSort={playerSortKey} sortDir={playerSortDir} onSort={handleSort} /><th>Tags</th><th><span className="table-count">{filteredPlayers.length} of {players.length}</span></th></tr>
+          <tr><th className="col-check"><Input type="checkbox" aria-label="Select all players" checked={allFilteredSelected} onChange={(event) => setSelectedPlayers(event.target.checked ? filteredPlayers.map((player) => player.name) : [])} /></th><SortableTh label="Player" sortKey="player" activeSort={playerSortKey} sortDir={playerSortDir} onSort={handleSort} /><SortableTh label="Last joined" sortKey="joined" activeSort={playerSortKey} sortDir={playerSortDir} onSort={handleSort} /><SortableTh label="IP" sortKey="ip" activeSort={playerSortKey} sortDir={playerSortDir} onSort={handleSort} /><th>Tags</th><th className="col-actions"><span className="table-count">{filteredPlayers.length} of {players.length}</span></th></tr>
         </thead>
         <tbody>
           {filteredPlayers.map((player) => (
             <tr key={player.name}>
-              <td><Input type="checkbox" aria-label={`Select ${player.name}`} checked={selectedPlayers.includes(player.name)} onChange={(event) => setSelectedPlayers((current) => event.target.checked ? [...current, player.name] : current.filter((name) => name !== player.name))} /></td>
+              <td className="col-check"><Input type="checkbox" aria-label={`Select ${player.name}`} checked={selectedPlayers.includes(player.name)} onChange={(event) => setSelectedPlayers((current) => event.target.checked ? [...current, player.name] : current.filter((name) => name !== player.name))} /></td>
               <td>
                 <span className="player-cell">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -269,21 +262,21 @@ export function PlayersPanel({
                   <strong>{player.name}</strong>
                 </span>
               </td>
-              <td>{player.manual ? "added manually" : formatDateTime(player.lastJoinedAt)}</td>
-              <td>{player.ip}</td>
+              <td className="col-num">{player.manual ? "Added manually" : formatDateTime(player.lastJoinedAt)}</td>
+              <td className="col-num">{player.ip || "—"}</td>
               <td className="player-tags-cell">
                 <span className="player-tags-list">
-                  {ops.has(player.name) && <Pill variant="accent">Op</Pill>}
+                  {ops.has(player.name) && <Pill>Op</Pill>}
                   {whitelist.has(player.name) && <Pill variant="success">Whitelisted</Pill>}
                   {banned.has(player.name) && <Pill variant="danger">Banned</Pill>}
                   {!ops.has(player.name) && !whitelist.has(player.name) && !banned.has(player.name) && <span className="muted">—</span>}
                 </span>
               </td>
-              <td></td>
+              <td className="col-actions" />
             </tr>
           ))}
-          {players.length === 0 && <tr><td colSpan={6} className="muted">No players have joined yet.</td></tr>}
-          {players.length > 0 && filteredPlayers.length === 0 && <tr><td colSpan={6} className="muted">No players match.</td></tr>}
+          {players.length === 0 && <tr><td colSpan={6} className="table-empty">No players have joined yet. Add one by name to op or whitelist them before they join.</td></tr>}
+          {players.length > 0 && filteredPlayers.length === 0 && <tr><td colSpan={6} className="table-empty">No players match.</td></tr>}
         </tbody>
       </Table>
       <Modal
@@ -304,6 +297,6 @@ export function PlayersPanel({
           placeholder="Minecraft username"
         />
       </Modal>
-    </Panel>
+    </Page>
   );
 }

@@ -171,6 +171,16 @@ tr:focus-within .row-actions,
   color: var(--text-tertiary);
 }
 
+/* Older per-page column rules no longer apply; the table sizes itself. */
+.table-wrap table.players-table {
+  table-layout: auto;
+  min-width: 680px;
+}
+
+.player-cell strong {
+  font-weight: 500;
+}
+
 /* Selection actions above a table */
 .table-selection {
   display: flex;
