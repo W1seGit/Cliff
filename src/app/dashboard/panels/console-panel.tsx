@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownToLine, Download, Terminal } from "lucide-react";
-import { fetchServerProperties, logsUrl, sendRuntimeCommand } from "../lib/runtime-client";
+import { logsUrl, sendRuntimeCommand } from "../lib/runtime-client";
 import type { RuntimeStatus, ServerRecord } from "../lib/types";
 import { Button } from "../components/ui/button";
 import { Page } from "../components/ui/page-layout";
@@ -58,7 +58,6 @@ export function ConsolePanel({
   onCommand,
   onMessage,
   onRefresh,
-  onAcceptEula,
 }: {
   selected: ServerRecord;
   isRunning: boolean;
@@ -69,7 +68,6 @@ export function ConsolePanel({
   onCommand?: ((command: string) => boolean) | null;
   onMessage: (message: string) => void;
   onRefresh: () => void;
-  onAcceptEula: () => void;
 }) {
   const [command, setCommand] = useState("");
   const [busyAction, setBusyAction] = useState("");
@@ -94,38 +92,6 @@ export function ConsolePanel({
       consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
     }
   }, [logLines.length]);
-
-  // Detect the server's "you need to agree to the EULA" message and offer the
-  // accept dialog. The message stays in the log after the EULA is accepted, so
-  // ask the server whether it is really unaccepted before prompting; otherwise
-  // every visit to this tab would re-open the dialog until the next start.
-  const eulaPromptedRef = useRef(false);
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-  useEffect(() => {
-    if (eulaPromptedRef.current || logLines.length === 0) return;
-    const recent = logLines.slice(-30);
-    const detected = recent.some((line) => /eula/i.test(line) && /agree|accept|need/i.test(line));
-    if (!detected) return;
-    eulaPromptedRef.current = true;
-    fetchServerProperties(selected.id)
-      .then((properties) => {
-        if (mountedRef.current && !properties.eulaAccepted) onAcceptEula();
-      })
-      .catch(() => {
-        // If the check fails, fall back to prompting so a real EULA problem is not hidden.
-        if (mountedRef.current) onAcceptEula();
-      });
-  }, [logLines, onAcceptEula, selected.id]);
-
-  // Reset the EULA prompt tracker when the server starts running again so
-  // the modal can reappear if the EULA issue recurs on a later start.
-  useEffect(() => {
-    if (isRunning) eulaPromptedRef.current = false;
-  }, [isRunning]);
 
   async function action(path: string, body = {}) {
     if (busyAction) return false;

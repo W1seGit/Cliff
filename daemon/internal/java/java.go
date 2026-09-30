@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -100,7 +101,10 @@ func (r Resolver) Ensure(ctx context.Context, major int) (string, error) {
 	defer os.RemoveAll(tempDir)
 
 	archivePath := filepath.Join(tempDir, "jdk"+archiveExt())
+	slog.Info("downloading Java", "major", major, "into", root)
+	began := time.Now()
 	if err := r.download(ctx, major, archivePath); err != nil {
+		slog.Error("could not download Java", "major", major, "error", err)
 		return "", err
 	}
 	extractDir := filepath.Join(tempDir, "extract")
@@ -123,6 +127,7 @@ func (r Resolver) Ensure(ctx context.Context, major int) (string, error) {
 	if !fileExists(javaPath) {
 		return "", fmt.Errorf("downloaded Java %d did not contain %s", major, javaPath)
 	}
+	slog.Info("Java installed", "major", major, "took", time.Since(began).Round(100*time.Millisecond).String())
 	return javaPath, nil
 }
 

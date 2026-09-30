@@ -168,7 +168,7 @@ func runDaemon() {
 	}
 	defer closeLog()
 
-	slog.Info("daemon starting", "logFile", logFile, "logLevel", logLevel)
+	slog.Info("daemon starting", "version", buildinfo.Current().Version, "pid", os.Getpid(), "logFile", logFile, "logLevel", logLevel)
 
 	cfg, err := config.Load(config.Options{
 		DataDir:    dataDir,

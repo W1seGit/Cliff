@@ -101,6 +101,17 @@ export function externalApiUrl(path: string) {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** An error from the daemon; `code` is set when the daemon names the problem (for example "eula_required"). */
+export class ApiError extends Error {
+  code: string;
+
+  constructor(message: string, code = "") {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+  }
+}
+
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const isForm = init?.body instanceof FormData;
   const response = await fetch(url, {
@@ -113,7 +124,7 @@ export async function api<T>(url: string, init?: RequestInit): Promise<T> {
     window.location.replace("/");
     throw new Error("Authentication required");
   }
-  if (!response.ok) throw new Error(data.error || "Request failed");
+  if (!response.ok) throw new ApiError(data.error || "Request failed", typeof data.code === "string" ? data.code : "");
   return data;
 }
 

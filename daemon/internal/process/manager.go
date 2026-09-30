@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,6 +127,8 @@ type managedProcess struct {
 	lastUsage        *Usage
 	playerCount      int
 	playerSamples    []PlayerSample
+	stopRequested    bool
+	readyAt          time.Time
 	ready            chan struct{}
 	exited           chan struct{}
 	readyOnce        sync.Once
@@ -269,10 +272,13 @@ func (m *Manager) Start(server store.Server) (Status, error) {
 	m.rememberLocked(proc.serverID, proc.logs)
 	m.mu.Unlock()
 
+	slog.Info("starting server", "server", server.ID, "name", server.Name, "type", server.Type,
+		"version", server.MinecraftVersion, "java", server.JavaPath, "dir", server.Path, "command", commandText)
 	if err := cmd.Start(); err != nil {
 		m.mu.Lock()
 		delete(m.running, server.ID)
 		m.mu.Unlock()
+		slog.Error("could not launch the server process", "server", server.ID, "name", server.Name, "error", err)
 		return Status{}, err
 	}
 
@@ -300,7 +306,9 @@ func (m *Manager) Stop(serverID string, force bool) (Status, error) {
 		return Status{Lifecycle: LifecycleStopped}, nil
 	}
 	proc.lifecycle = LifecycleStopping
+	proc.stopRequested = true
 	m.mu.Unlock()
+	slog.Info("stopping server", "server", serverID, "force", force)
 
 	if force {
 		m.pushLog(proc, "Force stop requested")
@@ -562,6 +570,7 @@ func (m *Manager) wait(proc *managedProcess) {
 		message = "Server exited: " + err.Error()
 	}
 	m.pushLog(proc, message)
+	m.logExit(proc, err)
 
 	m.mu.Lock()
 	if m.running[proc.serverID] == proc {
@@ -571,6 +580,43 @@ func (m *Manager) wait(proc *managedProcess) {
 	m.mu.Unlock()
 	proc.exitOnce.Do(func() { close(proc.exited) })
 	m.publish(Event{Type: "status", ServerID: proc.serverID, Status: m.StatusLight()})
+}
+
+// logExit records how a server process ended. An exit the user asked for is
+// routine; one during startup or after the server was running is not, so the
+// last lines of its output are kept in the daemon log for diagnosis.
+func (m *Manager) logExit(proc *managedProcess, waitErr error) {
+	exitCode := -1
+	if proc.cmd.ProcessState != nil {
+		exitCode = proc.cmd.ProcessState.ExitCode()
+	}
+	m.mu.Lock()
+	stopRequested := proc.stopRequested
+	wasReady := !proc.readyAt.IsZero()
+	tail := lastLogLines(proc.logs, 15)
+	m.mu.Unlock()
+	uptime := time.Since(proc.startedAt).Round(time.Second).String()
+
+	switch {
+	case stopRequested:
+		slog.Info("server stopped", "server", proc.serverID, "exitCode", exitCode, "uptime", uptime)
+	case !wasReady:
+		slog.Error("server exited before it finished starting", "server", proc.serverID, "exitCode", exitCode, "uptime", uptime, "error", waitErr, "lastOutput", tail)
+	default:
+		slog.Error("server stopped unexpectedly", "server", proc.serverID, "exitCode", exitCode, "uptime", uptime, "error", waitErr, "lastOutput", tail)
+	}
+}
+
+// lastLogLines joins the last n non-empty lines with " | " so one log entry
+// tells the whole story.
+func lastLogLines(lines []string, n int) string {
+	picked := make([]string, 0, n)
+	for index := len(lines) - 1; index >= 0 && len(picked) < n; index-- {
+		if line := strings.TrimSpace(lines[index]); line != "" {
+			picked = append([]string{line}, picked...)
+		}
+	}
+	return strings.Join(picked, " | ")
 }
 
 func waitForOutputScanners(proc *managedProcess, timeout time.Duration) bool {
@@ -607,6 +653,10 @@ func (m *Manager) markRunning(proc *managedProcess) {
 	m.mu.Unlock()
 	if changed {
 		proc.readyOnce.Do(func() { close(proc.ready) })
+		m.mu.Lock()
+		proc.readyAt = time.Now()
+		m.mu.Unlock()
+		slog.Info("server is ready", "server", proc.serverID, "startup", time.Since(proc.startedAt).Round(100*time.Millisecond).String())
 	}
 	m.publish(Event{Type: "status", ServerID: proc.serverID, Status: m.StatusLight()})
 }
@@ -637,6 +687,7 @@ func (m *Manager) readyWatchdog(proc *managedProcess) {
 	case <-proc.exited:
 	case <-timer.C:
 		m.pushLog(proc, fmt.Sprintf("Cliff: no ready message after %s, treating the server as running", readyTimeout.Round(time.Second)))
+		slog.Warn("server never printed its ready message; treating it as running", "server", proc.serverID, "after", readyTimeout.Round(time.Second).String())
 		m.markRunning(proc)
 	}
 }

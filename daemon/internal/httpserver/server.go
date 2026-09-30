@@ -733,6 +733,9 @@ func (h apiHandler) start(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	if !requireEULA(w, server) {
+		return
+	}
 	server, err = h.resolveServerLaunchTarget(r, server)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -778,6 +781,9 @@ func (h apiHandler) restart(w http.ResponseWriter, r *http.Request) {
 	force, err := requestForce(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid restart body")
+		return
+	}
+	if !requireEULA(w, server) {
 		return
 	}
 	server, err = h.resolveServerLaunchTarget(r, server)
@@ -1055,11 +1061,24 @@ func setStaticCacheHeaders(w http.ResponseWriter, requestPath string, spaFallbac
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	// errBody keeps the start of an error response so the log says why it failed.
+	errBody []byte
 }
 
 func (rec *statusRecorder) WriteHeader(code int) {
 	rec.status = code
 	rec.ResponseWriter.WriteHeader(code)
+}
+
+func (rec *statusRecorder) Write(data []byte) (int, error) {
+	if rec.status >= 400 && len(rec.errBody) < 300 {
+		room := 300 - len(rec.errBody)
+		if len(data) < room {
+			room = len(data)
+		}
+		rec.errBody = append(rec.errBody, data[:room]...)
+	}
+	return rec.ResponseWriter.Write(data)
 }
 
 func (rec *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
@@ -1084,12 +1103,52 @@ func withErrorLogging(next http.Handler) http.Handler {
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		start := time.Now()
 		next.ServeHTTP(rec, r)
-		if rec.status >= 500 {
-			slog.Error("HTTP request failed", "method", r.Method, "path", r.URL.Path, "status", rec.status, "duration", time.Since(start).String())
-		} else if rec.status >= 400 {
-			slog.Debug("HTTP client error", "method", r.Method, "path", r.URL.Path, "status", rec.status, "duration", time.Since(start).String())
-		}
+		logRequest(r, rec, time.Since(start))
 	})
+}
+
+// logRequest writes the requests worth reading in the daemon log: failures
+// with the reason, and every successful change made through the API. Plain
+// reads are only logged at debug level so polling does not drown the log.
+func logRequest(r *http.Request, rec *statusRecorder, duration time.Duration) {
+	if !strings.HasPrefix(r.URL.Path, "/api/") {
+		return
+	}
+	attrs := []any{"method", r.Method, "path", r.URL.Path, "status", rec.status, "duration", duration.Round(time.Millisecond).String()}
+	reason := strings.TrimSpace(string(rec.errBody))
+	if reason != "" {
+		attrs = append(attrs, "response", reason)
+	}
+	switch {
+	case rec.status >= 500:
+		slog.Error("request failed", attrs...)
+	case rec.status >= 400:
+		// A signed-out poll or a missing file is routine; anything else is worth seeing.
+		if rec.status == http.StatusUnauthorized || (rec.status == http.StatusNotFound && r.Method == http.MethodGet) {
+			slog.Debug("request refused", attrs...)
+			return
+		}
+		slog.Warn("request refused", attrs...)
+	case r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions:
+		slog.Info("request", attrs...)
+	default:
+		slog.Debug("request", attrs...)
+	}
+}
+
+// requireEULA stops a start when eula.txt does not say eula=true. The file is
+// the source of truth, so this holds whether or not anyone is watching the
+// console. The dashboard answers the "eula_required" code with the accept dialog.
+func requireEULA(w http.ResponseWriter, server store.Server) bool {
+	if readEULAAccepted(filepath.Join(server.Path, "eula.txt")) {
+		return true
+	}
+	slog.Warn("start refused: the Minecraft EULA has not been accepted", "server", server.ID, "name", server.Name)
+	writeJSON(w, http.StatusConflict, map[string]string{
+		"error": "Accept the Minecraft EULA before starting this server.",
+		"code":  "eula_required",
+	})
+	return false
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

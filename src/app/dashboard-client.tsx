@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import toast, { Toaster } from "react-hot-toast";
 import { AlertCircle, CheckCircle2, Info, LayoutDashboard, Plus, Settings as SettingsIcon, TriangleAlert, Upload, UserRound } from "lucide-react";
-import { serverTypeSupportsContent } from "./dashboard/lib/utils";
+import { ApiError, serverTypeSupportsContent } from "./dashboard/lib/utils";
 import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates, fetchLastUpdateResult } from "./dashboard/lib/runtime-client";
 import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult, LastUpdateResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
@@ -122,6 +122,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [renameTarget, setRenameTarget] = useState<ServerRecord | null>(null);
   const [cloneTarget, setCloneTarget] = useState<ServerRecord | null>(null);
   const [eulaModalOpen, setEulaModalOpen] = useState(false);
+  /** What the user was doing when the EULA dialog opened, so it can carry on once they accept. */
+  const eulaThenAction = useRef<"start" | "restart" | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
@@ -501,7 +503,13 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         setMessage(`${busyLabel.replace("-", " ")} complete`);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Action failed", "error");
+      if (error instanceof ApiError && error.code === "eula_required") {
+        // eula.txt says the EULA is not accepted. Ask now, then start once it is.
+        eulaThenAction.current = path === "restart" ? "restart" : "start";
+        setEulaModalOpen(true);
+      } else {
+        setMessage(error instanceof Error ? error.message : "Action failed", "error");
+      }
     }
     finally { setQuickBusyAction(""); }
   }
@@ -803,7 +811,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
 
           {initialLoading && <DashboardSkeleton />}
           {!initialLoading && tab === "overview" && <OverviewPanel selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
-          {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} onAcceptEula={() => setEulaModalOpen(true)} />}
+          {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} />}
           {!initialLoading && tab === "console" && !selected && <EmptyPanel title="No server selected" action="Import server" onAction={() => setTab("import")} />}
           {!initialLoading && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
           {!initialLoading && isModsTab(tab) && !selected && <EmptyPanel title="No mods to show" action="Import server" onAction={() => setTab("import")} />}
@@ -849,7 +857,12 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         onClose={() => setRenameTarget(null)}
       />
       <CloneServerDialog server={cloneTarget} onSubmit={submitClone} onClose={() => setCloneTarget(null)} />
-      {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onMessage={setMessage} onSaved={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true })} />}
+      {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onCancel={() => { eulaThenAction.current = null; }} onMessage={setMessage} onSaved={() => {
+        void refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true });
+        const pending = eulaThenAction.current;
+        eulaThenAction.current = null;
+        if (pending) void runQuickAction(pending, {}, pending);
+      }} />}
       <UpdateResultModal result={lastUpdate} onDone={() => setLastUpdate(null)} />
       {updateCheck && updateCheck.updateAvailable && !lastUpdate && (
         <UpdateModal

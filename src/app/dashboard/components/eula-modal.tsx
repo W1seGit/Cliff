@@ -9,12 +9,15 @@ export function EulaModal({
   serverId,
   isOpen,
   onClose,
+  onCancel,
   onMessage,
   onSaved,
 }: {
   serverId: string;
   isOpen: boolean;
   onClose: () => void;
+  /** Called when the dialog is dismissed without saving. */
+  onCancel?: () => void;
   onMessage: (message: string) => void;
   onSaved?: () => void;
 }) {
@@ -40,6 +43,7 @@ export function EulaModal({
 
   function handleClose() {
     setLoaded(false);
+    onCancel?.();
     onClose();
   }
 
