@@ -52,12 +52,6 @@
   min-height: 44px;
 }
 
-.discover-upload-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
 .discover-search-row {
   display: flex;
   align-items: center;
@@ -75,7 +69,9 @@
 
 .discover-search-icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
+  width: 16px;
+  height: 16px;
   color: var(--text-tertiary);
   pointer-events: none;
   z-index: 1;
@@ -83,13 +79,14 @@
 
 .discover-search-bar input {
   flex: 1;
-  padding: 12px 14px 12px 42px;
+  height: var(--control-h);
+  padding: 0 14px 0 38px;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   border: 0;
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .discover-search-bar input:focus {
@@ -101,8 +98,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
   overflow: hidden;
 }
 
@@ -126,7 +122,7 @@
 
 .discover-mobile-filter-toggle.has-active {
   background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(4, 163, 251, 0.35);
   color: var(--accent);
 }
 
@@ -138,8 +134,8 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--accent);
-  color: #0b0d10;
+  background: var(--primary);
+  color: var(--on-primary);
   font-size: 10px;
   font-weight: 700;
 }
@@ -157,7 +153,7 @@
   align-items: center;
   justify-content: center;
   width: 40px;
-  height: 44px;
+  height: var(--control-h);
   border: 0;
   background: transparent;
   color: var(--text-tertiary);
@@ -171,15 +167,22 @@
 
 .discover-marketplace-layout {
   display: grid;
-  grid-template-columns: minmax(190px, 220px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
 
+/* The filters scroll on their own, so a long list never drags the results with it */
 .discover-filter-sidebar {
   position: sticky;
   top: 58px;
   align-self: start;
+  max-height: calc(100vh - 74px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
 
 .discover-results-pane {
@@ -190,24 +193,127 @@
 
 .discover-filters {
   display: grid;
-  gap: 10px;
-  padding: 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
+  gap: var(--space-5);
 }
 
-.discover-filter-field {
+.discover-group {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
-.discover-filter-field span {
+.discover-group-label {
+  margin-bottom: 4px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* One filter choice: quiet text row, accent marker when selected */
+.discover-opt {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms) ease, color var(--dur-fast, 120ms) ease;
+}
+
+.discover-opt:hover { background: var(--surface); color: var(--text); }
+.discover-opt.active { background: var(--surface-2); color: var(--text); }
+.discover-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.discover-opt-logo {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 4px;
+  object-fit: contain;
+}
+
+.discover-opt-glyph {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: 4px;
+  background: var(--surface-2);
   color: var(--text-secondary);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
 }
+
+svg.discover-opt-glyph { background: none; }
+
+/* Two connected buttons, each half the width */
+.discover-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  overflow: hidden;
+}
+
+.discover-segmented button {
+  min-height: var(--control-h);
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms) ease, color var(--dur-fast, 120ms) ease;
+}
+
+.discover-segmented button + button { box-shadow: inset 1px 0 0 var(--border-strong); }
+.discover-segmented button:hover { color: var(--text); background: var(--surface); }
+.discover-segmented button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.discover-segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.discover-sort { width: auto; min-width: 150px; }
+
+/* Removable chips for the filters that are switched on */
+.discover-active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.discover-active .discover-group-label { margin: 0; }
+
+.discover-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.discover-chip svg { color: var(--text-tertiary); }
+.discover-chip:hover svg { color: var(--text); }
 
 
 /* Discover results */
@@ -252,15 +358,14 @@
 }
 
 .discover-card.list-view {
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
   align-items: center;
-  padding: 10px 14px;
+  padding: 14px;
 }
 
 .discover-card:hover {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px rgba(91, 141, 239, 0.25);
-  border-color: rgba(91, 141, 239, 0.25);
+  border-color: var(--border-strong);
+  background: var(--surface);
 }
 
 .discover-card.clickable {
@@ -297,8 +402,9 @@
 
 .discover-card.list-view .discover-card-icon img,
 .discover-card.list-view .discover-card-icon .mod-icon-fallback {
-  width: 40px;
-  height: 40px;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-sm);
 }
 
 .discover-card-body {
@@ -341,7 +447,7 @@
 }
 
 .discover-card.list-view .discover-card-desc {
-  -webkit-line-clamp: 1;
+  -webkit-line-clamp: 2;
 }
 
 .discover-card.list-view .discover-card-body {
@@ -365,9 +471,6 @@
   margin-top: 0;
 }
 
-.discover-card.list-view .discover-card-tags {
-  display: none;
-}
 
 .discover-card-stats {
   display: flex;
@@ -391,8 +494,8 @@
 
 .discover-card-tag {
   font-size: 10px;
-  padding: 2px 7px;
-  border-radius: var(--radius-xs);
+  padding: 1px 8px;
+  border-radius: 999px;
   background: var(--surface-2);
   color: var(--text-secondary);
   white-space: nowrap;
@@ -452,27 +555,6 @@
   font-size: 13px;
 }
 
-.status-toggle {
-  display: inline-flex;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  box-shadow: none;
-  border: 1px solid var(--border-hairline);
-  overflow: hidden;
-}
-
-.status-toggle button {
-  border-radius: 0;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  padding: 8px 12px;
-}
-
-.status-toggle button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
-.status-toggle button.active { background: var(--surface-2); color: var(--text); }
-
 .mod-upload-drop {
   display: flex;
   flex-direction: column;
@@ -490,8 +572,8 @@
   transition: border-color 120ms ease, background 120ms ease;
 }
 
-.mod-upload-drop:hover { border-color: var(--accent); background: rgba(91, 141, 239, 0.05); }
-.mod-upload-drop.drag-active { border-color: var(--accent); border-style: solid; background: rgba(91, 141, 239, 0.1); transform: scale(1.01); }
+.mod-upload-drop:hover { border-color: var(--accent); background: rgba(4, 163, 251, 0.05); }
+.mod-upload-drop.drag-active { border-color: var(--accent); border-style: solid; background: rgba(4, 163, 251, 0.1); transform: scale(1.01); }
 .mod-upload-drop input { display: none; }
 .mod-upload-drop strong {
   max-width: 100%;
@@ -503,12 +585,52 @@
 }
 .mod-upload-drop .muted { font-size: 13px; }
 
-.file-token {
-  display: inline-block;
-  max-width: 280px;
+
+/* Multi-file upload */
+.upload-list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+}
+
+.upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+}
+
+.upload-row + .upload-row {
+  border-top: 1px solid var(--border-hairline);
+}
+
+.upload-row-name {
+  min-width: 0;
+  flex: 1;
   overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
-  vertical-align: bottom;
   white-space: nowrap;
 }
 
+.upload-row-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.upload-row-copy small {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.upload-icon.ok { color: var(--running); }
+.upload-icon.skip { color: var(--text-tertiary); }
+.upload-results { display: grid; gap: 12px; }

@@ -42,7 +42,7 @@ A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. N
 
 - **Server management** — import, create, clone, start/stop Vanilla, Paper, Purpur, Folia, Fabric, Forge, and NeoForge servers
 - **Live console** — WebSocket streaming with command input, presets, and log download
-- **Mod & plugin management** — install, search, and bulk manage mods/plugins via Modrinth and CurseForge
+- **Mod & plugin management** — install, search, and bulk manage mods/plugins via Modrinth
 - **Worlds & datapacks** — switch worlds, import, rename, delete with snapshot protection
 - **Player access** — ops, whitelist, bans with Mojang UUID lookup and live player heads
 - **Backups** — automatic snapshots before risky actions, manual snapshots, restore, and retention cleanup
@@ -100,10 +100,13 @@ After installing, `cliff` is available in your terminal:
 | Command | Description |
 |---------|-------------|
 | `cliff start` | Start the daemon in the background |
-| `cliff stop` | Stop a running daemon |
+| `cliff stop` | Stop the daemon cleanly (running servers are stopped and worlds saved first) |
 | `cliff status` | Show daemon status (URL, uptime, PID) |
+| `cliff logs` | Print recent daemon logs (`-f` keeps following) |
 | `cliff update` | Check for and apply updates |
-| `cliff uninstall` | Remove Cliff from this machine |
+| `cliff rollback` | Go back to the version you had before the last update |
+| `cliff cleanup` | Delete the previous version and database copies kept for undoing an update |
+| `cliff uninstall` | Remove Cliff from this machine (`--keep-data` keeps your servers and settings) |
 | `cliff version` | Print version information |
 | `cliff help` | Show all commands and flags |
 
@@ -113,6 +116,47 @@ After installing, `cliff` is available in your terminal:
 2. Create a local admin account on first visit
 3. Import an existing server folder/ZIP or create a new one from the dashboard
 4. Hit start — you're running
+
+---
+
+## 🔒 Security & HTTPS
+
+Cliff listens on plain HTTP and binds to all interfaces by default, so treat it accordingly:
+
+- **On a home network**, HTTP is fine. Use `--host 127.0.0.1` (or `CLIFF_HOST=127.0.0.1`) if only the local machine needs access.
+- **On a VPS or the internet**, put Cliff behind a reverse proxy that terminates HTTPS and bind Cliff to `127.0.0.1`. Session cookies automatically become `Secure` when the proxy sends `X-Forwarded-Proto: https`.
+- Logins are rate limited (5 failures per 15 minutes per IP and per username), and browser requests from other origins are rejected.
+
+**Caddy** (automatic certificates):
+
+```caddyfile
+cliff.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+**nginx:**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name cliff.example.com;
+    # ssl_certificate / ssl_certificate_key ...
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;      # live console WebSocket
+        proxy_set_header Connection "upgrade";
+        client_max_body_size 0;                       # large world/mod uploads
+    }
+}
+```
+
+The proxy must pass the original `Host` header; the console WebSocket and API reject requests whose `Origin` does not match it. If you serve the dashboard from a different hostname than the API, list that origin in `CLIFF_ALLOWED_ORIGINS`.
 
 ---
 

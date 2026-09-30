@@ -3,32 +3,44 @@
 import React from "react";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "danger" | "link" | "default";
+  variant?: "primary" | "danger" | "danger-ghost" | "link" | "default";
+  size?: "sm" | "md" | "lg";
+  /** Stretch to the full width of the container. */
+  block?: boolean;
+  /** Icon rendered before the label. */
+  iconLeft?: React.ReactNode;
   loading?: boolean;
   loadingText?: string;
   href?: string;
+  /** Skip the standard button styling, for buttons that style themselves (rows, backdrops). */
+  plain?: boolean;
 }
 
 export function Button({
   variant,
+  size = "md",
+  block,
+  iconLeft,
   loading,
   loadingText,
   href,
+  plain,
   className = "",
   disabled,
   children,
   ...props
 }: ButtonProps & React.AnchorHTMLAttributes<HTMLAnchorElement>) {
   const getClassName = () => {
-    let base = className;
-    if (variant === "primary") {
-      base = `primary ${base}`;
-    } else if (variant === "danger") {
-      base = `danger-button ${base}`;
-    } else if (variant === "link") {
-      base = `button-link ${base}`;
-    }
-    return base.trim();
+    const classes: string[] = [];
+    if (!plain && variant !== "link") classes.push("btn");
+    if (variant === "primary") classes.push("primary");
+    else if (variant === "danger") classes.push("danger-button");
+    else if (variant === "danger-ghost") classes.push("danger-ghost");
+    else if (variant === "link") classes.push("button-link");
+    if (size !== "md") classes.push(`btn-${size}`);
+    if (block) classes.push("btn-block");
+    if (className) classes.push(className);
+    return classes.join(" ");
   };
 
   const isBtnDisabled = disabled || loading;
@@ -47,6 +59,7 @@ export function Button({
         className={getClassName()}
         {...(props as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
       >
+        {iconLeft}
         {children}
       </a>
     );
@@ -55,10 +68,17 @@ export function Button({
   return (
     <button
       disabled={isBtnDisabled}
-      className={getClassName()}
+      className={getClassName() || undefined}
       {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
     >
-      {loading ? loadingText || "Working..." : children}
+      {loading ? (
+        loadingText || "Working..."
+      ) : (
+        <>
+          {iconLeft}
+          {children}
+        </>
+      )}
     </button>
   );
 }

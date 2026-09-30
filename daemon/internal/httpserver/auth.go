@@ -1,7 +1,10 @@
 package httpserver
 
 import (
+	"errors"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/store"
@@ -60,11 +63,24 @@ func (h apiHandler) authLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid login body")
 		return
 	}
-	user, err := h.store.Authenticate(r.Context(), input.Username, input.Password)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, err.Error())
+	keys := loginKeys(r, input.Username)
+	if wait := h.loginLimiter.blocked(keys); wait > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		writeError(w, http.StatusTooManyRequests, "Too many failed login attempts. Try again later.")
 		return
 	}
+	user, err := h.store.Authenticate(r.Context(), input.Username, input.Password)
+	if err != nil {
+		if errors.Is(err, store.ErrInvalidCredentials) {
+			h.loginLimiter.recordFailure(keys)
+			writeError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+		slog.Error("login failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "Login failed")
+		return
+	}
+	h.loginLimiter.recordSuccess(keys)
 	if err := h.writeSession(w, r, user); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -81,10 +97,13 @@ func (h apiHandler) authLogout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.SetCookie(w, &http.Cookie{
-		Name:    sessionCookieName,
-		Value:   "",
-		Expires: time.Unix(0, 0),
-		Path:    "/",
+		Name:     sessionCookieName,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   requestIsSecure(r),
 	})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -126,7 +145,7 @@ func (h apiHandler) writeSession(w http.ResponseWriter, r *http.Request, user st
 		Value:    sessionID,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   false,
+		Secure:   requestIsSecure(r),
 		Expires:  expires,
 		Path:     "/",
 	})

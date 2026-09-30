@@ -1,4 +1,4 @@
-import type { Backup, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, User, WorldsPayload } from "./types";
+import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LastUpdateResult, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo, UploadResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -11,6 +11,7 @@ type RuntimeSubscription = {
   onSnapshot: (payload: { runtime: RuntimeStatus; logs?: string[] }) => void;
   onRuntime: (runtime: RuntimeStatus) => void;
   onLog: (line: string) => void;
+  onConnectionChange?: (connected: boolean) => void;
   onError?: (message: string) => void;
   onCommandSender?: (sender: ((command: string) => boolean) | null) => void;
   includeUsage?: boolean;
@@ -193,7 +194,7 @@ export async function runServerModAction(serverId: string, body: Record<string, 
 }
 
 export async function uploadServerMod(serverId: string, form: FormData) {
-  return daemonApi<{ files?: string[] }>(`/api/servers/${serverId}/mods`, { method: "POST", body: form });
+  return daemonApi<{ files?: string[]; results?: UploadResult[] }>(`/api/servers/${serverId}/mods`, { method: "POST", body: form });
 }
 
 export function modUrl(serverId: string, query: string) {
@@ -212,6 +213,10 @@ export async function runBackupAction(serverId: string, body: Record<string, unk
   return daemonApi(`/api/servers/${serverId}/backups`, { method: "POST", body: JSON.stringify(body) });
 }
 
+export async function fetchBackupDiff(serverId: string, backupId: string, path: string) {
+  return daemonApi<BackupDiff>(`/api/servers/${serverId}/backups/diff?backupId=${encodeURIComponent(backupId)}&path=${encodeURIComponent(path)}`);
+}
+
 export function backupUrl(serverId: string, query: string) {
   return daemonPath(`/api/servers/${serverId}/backups${query}`);
 }
@@ -220,7 +225,7 @@ export async function fetchServerProperties(serverId: string) {
   return daemonApi<ServerProperties>(`/api/servers/${serverId}/properties`);
 }
 
-export async function saveServerProperties(serverId: string, body: { editable: ServerProperties["editable"]; raw?: ServerProperties["raw"]; eulaAccepted: boolean }) {
+export async function saveServerProperties(serverId: string, body: { text: string; eulaAccepted: boolean } | { editable: ServerProperties["editable"]; raw?: ServerProperties["raw"]; eulaAccepted: boolean }) {
   return daemonApi<ServerProperties>(`/api/servers/${serverId}/properties`, { method: "PUT", body: JSON.stringify(body) });
 }
 
@@ -329,37 +334,88 @@ export function subscribeRuntime(serverId: string, handlers: RuntimeSubscription
   if (handlers.includeUsage) url.searchParams.set("usage", "1");
   if (handlers.includeLogs === false) url.searchParams.set("logs", "0");
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  const socket = new WebSocket(url);
+  let socket: WebSocket | null = null;
+  let reconnectTimer: number | null = null;
+  let reconnectAttempt = 0;
+  let disposed = false;
   const sendCommand = (command: string) => {
-    if (socket.readyState !== WebSocket.OPEN) return false;
+    if (!socket || socket.readyState !== WebSocket.OPEN) return false;
     socket.send(JSON.stringify({ type: "command", command }));
     return true;
   };
-  socket.addEventListener("open", () => handlers.onCommandSender?.(sendCommand));
-  socket.addEventListener("message", (event) => {
-    const message = JSON.parse(String(event.data)) as {
-      type: string;
-      logs?: string[];
-      status?: RuntimeStatus;
-      error?: string;
-      event?: { type: string; line?: string; status?: RuntimeStatus };
-    };
-    if (message.type === "snapshot") {
-      handlers.onSnapshot({ runtime: normalizeRuntime(message.status ?? emptyRuntime()), logs: Array.isArray(message.logs) ? message.logs : undefined });
+
+  function scheduleReconnect() {
+    if (disposed || reconnectTimer !== null) return;
+    const delay = Math.min(1000 * 2 ** reconnectAttempt, 15000);
+    reconnectAttempt += 1;
+    reconnectTimer = window.setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
+  function connect() {
+    if (disposed) return;
+    handlers.onConnectionChange?.(false);
+    let nextSocket: WebSocket;
+    try {
+      nextSocket = new WebSocket(url);
+    } catch {
+      scheduleReconnect();
+      return;
     }
-    if (message.type === "event" && message.event?.type === "log" && message.event.line) {
-      handlers.onLog(message.event.line);
-    }
-    if (message.type === "event" && message.event?.type === "status" && message.event.status) {
-      handlers.onRuntime(normalizeRuntime(message.event.status));
-    }
-    if (message.type === "error" && message.error) {
-      handlers.onError?.(message.error);
-    }
-  });
+    socket = nextSocket;
+    nextSocket.addEventListener("open", () => {
+      if (disposed || socket !== nextSocket) return;
+      reconnectAttempt = 0;
+      handlers.onConnectionChange?.(true);
+      handlers.onCommandSender?.(sendCommand);
+    });
+    nextSocket.addEventListener("message", (event) => {
+      if (disposed || socket !== nextSocket) return;
+      let message: {
+        type: string;
+        logs?: string[];
+        status?: RuntimeStatus;
+        error?: string;
+        event?: { type: string; line?: string; status?: RuntimeStatus };
+      };
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (message.type === "snapshot") {
+        handlers.onSnapshot({ runtime: normalizeRuntime(message.status ?? emptyRuntime()), logs: Array.isArray(message.logs) ? message.logs : undefined });
+      }
+      if (message.type === "event" && message.event?.type === "log" && message.event.line) {
+        handlers.onLog(message.event.line);
+      }
+      if (message.type === "event" && message.event?.type === "status" && message.event.status) {
+        handlers.onRuntime(normalizeRuntime(message.event.status));
+      }
+      if (message.type === "error" && message.error) {
+        handlers.onError?.(message.error);
+      }
+    });
+    nextSocket.addEventListener("close", () => {
+      if (socket !== nextSocket) return;
+      socket = null;
+      handlers.onCommandSender?.(null);
+      handlers.onConnectionChange?.(false);
+      scheduleReconnect();
+    });
+    nextSocket.addEventListener("error", () => nextSocket.close());
+  }
+
+  connect();
   return () => {
+    disposed = true;
+    if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
     handlers.onCommandSender?.(null);
-    socket.close();
+    const closingSocket = socket;
+    socket = null;
+    closingSocket?.close();
   };
 }
 
@@ -376,12 +432,34 @@ export async function applyUpdate(): Promise<UpdateApplyResult> {
   return daemonApi<UpdateApplyResult>("/api/updates/apply", { method: "POST" });
 }
 
+export async function fetchUpdateProgress(): Promise<UpdateProgress> {
+  return daemonApi<UpdateProgress>("/api/updates/progress");
+}
+
+export async function fetchUpdateSafety(): Promise<UpdateSafetyInfo> {
+  return daemonApi<UpdateSafetyInfo>("/api/updates/safety");
+}
+
+export async function clearUpdateSafety(): Promise<{ ok: boolean; freedBytes: number; safety: UpdateSafetyInfo }> {
+  return daemonApi("/api/updates/safety", { method: "DELETE" });
+}
+
+export async function fetchLastUpdateResult(): Promise<LastUpdateResult | null> {
+  const payload = await daemonApi<{ result: LastUpdateResult | null }>("/api/updates/last-result");
+  return payload.result ?? null;
+}
+
+export async function dismissLastUpdateResult(): Promise<void> {
+  await daemonApi("/api/updates/last-result", { method: "DELETE" });
+}
+
 export async function reloadAfterDaemonRestart(): Promise<void> {
   const startedAt = Date.now();
   let sawRestartGap = false;
   await sleep(1200);
 
-  while (Date.now() - startedAt < 60000) {
+  // The daemon checks the new version for up to 45s and puts the old one back if it fails.
+  while (Date.now() - startedAt < 150000) {
     try {
       const response = await fetch(daemonPath("/api/settings?storage=0"), {
         cache: "no-store",

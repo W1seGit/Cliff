@@ -5,13 +5,17 @@
   --surface-2: #1b1f24;
   --surface-3: #232830;
   --border: #262b32;
+  --border-strong: #3a414b;
   --border-hairline: rgba(255, 255, 255, 0.07);
   --text: #f0f2f5;
   --text-secondary: #9ba3ad;
-  --text-tertiary: #6b7280;
-  --accent: #5b8def;
-  --accent-hover: #6e9cf7;
-  --accent-soft: rgba(91, 141, 239, 0.12);
+  --text-tertiary: #808896; /* >= 4.5:1 on --bg, --surface, --surface-2 */
+  --accent: #04a3fb; /* Cliff logo blue */
+  --accent-hover: #38b6fc;
+  --primary: #0369d6; /* deeper logo blue: white text reaches 5.3:1 */
+  --primary-hover: #0359ba;
+  --on-primary: #ffffff;
+  --accent-soft: rgba(4, 163, 251, 0.12);
   --success: #8fb3ff;
   --success-bg: #17233a;
   --running: #6ee7a8;
@@ -24,10 +28,60 @@
   --radius-sm: 10px;
   --radius-xs: 7px;
   --border-soft: rgba(255, 255, 255, 0.06);
-  --chart-cpu: #5b8def;
+  --chart-cpu: #04a3fb;
   --chart-mem: #2dd4bf;
   --chart-players: #a78bfa;
   --chart-tps: #6ee7a8;
+  --accent-tint: rgba(4, 163, 251, 0.12);
+  --danger-hover: #4a2323;
+
+  /* Spacing scale (4px base) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 48px;
+
+  /* Type scale */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  /* Elevation */
+  --shadow-menu: 0 16px 36px rgba(0, 0, 0, 0.5);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --shadow-bar: 0 8px 28px rgba(0, 0, 0, 0.45);
+
+  /* Stacking */
+  --z-sticky: 40;
+  --z-bar: 60;
+  --z-popover: 300;
+  --z-modal: 200;
+  --z-toast: 1000;
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Interaction */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+  --disabled-opacity: 0.45;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --layout-max: none;
+  --control-h: 36px;
+  --row-h: 40px;
+  --icon: var(--text-tertiary);
+  --sidebar-w: 232px;
+
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
@@ -49,3 +103,23 @@ button, input, select, textarea {
   color: inherit;
 }
 
+
+/* Keyboard focus: one visible ring for every interactive element.
+   Mouse clicks do not trigger :focus-visible, so pointer users see no ring. */
+:where(button, a, summary, [role="tab"], [role="menuitem"], [role="switch"], [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* Visually hidden, still read by screen readers. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

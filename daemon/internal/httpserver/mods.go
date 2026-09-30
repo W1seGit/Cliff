@@ -160,7 +160,7 @@ func (h apiHandler) mods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if source == "curseforge" || source == "curseforge-pack" {
-		writeJSON(w, http.StatusOK, map[string]any{"disabled": true, "results": []any{}, "nextOffset": options.Offset + options.Limit})
+		writeError(w, http.StatusNotImplemented, "CurseForge integration is not available yet. Use Modrinth instead.")
 		return
 	}
 	if source != "" {
@@ -225,10 +225,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 	case "delete":
-		if err := h.createAutoSnapshot(r.Context(), server, "before deleting "+safeBaseName(input.FileName)); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		if err := deleteModFile(server, input.FileName, truthy(input.Enabled)); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return
@@ -249,10 +245,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": files})
 	case "delete-selected":
-		if err := h.createAutoSnapshot(r.Context(), server, "before deleting selected mods"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := deleteSelectedMods(server, input.Mods)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -274,10 +266,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"dependencies": dependencies})
 	case "install-modrinth":
-		if err := h.createAutoSnapshot(r.Context(), server, "before install-modrinth"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		includeDependencies := input.IncludeDependencies == nil || *input.IncludeDependencies
 		files, err := h.installModrinth(r, input.ProjectID, server, input.VersionID, includeDependencies, input.DependencyWarnings)
 		if err != nil {
@@ -286,10 +274,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": files})
 	case "install-modrinth-modpack":
-		if err := h.createAutoSnapshot(r.Context(), server, "before installing modpack"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := h.installModrinthModpack(r, input.ProjectID, server, input.VersionID)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -297,10 +281,6 @@ func (h apiHandler) modAction(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "files": files})
 	case "install-modrinth-dependencies":
-		if err := h.createAutoSnapshot(r.Context(), server, "before installing mod dependencies"); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := h.installModrinthDependencies(r, input.Dependencies, server)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -497,6 +477,8 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 
 	action := ""
 	uploadedName := ""
+	session := &uploadSession{h: h, ctx: r.Context(), server: server}
+	var results []uploadResult
 	for {
 		part, err := reader.NextPart()
 		if errors.Is(err, io.EOF) {
@@ -514,21 +496,28 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 				return
 			}
 			action = value
-			if action != "upload" {
+			if action != "upload" && action != "upload-auto" {
 				writeError(w, http.StatusBadRequest, "Unsupported mod upload action")
 				return
 			}
+		case "worldName":
+			value, err := readMultipartTextPart(part)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			session.worldName = value
 		case "file":
+			if action == "upload-auto" {
+				results = append(results, session.handlePart(part)...)
+				continue
+			}
 			if action != "upload" {
 				writeError(w, http.StatusBadRequest, "Upload action must be sent before the mod jar")
 				return
 			}
 			safeName, err := uniqueModFileName(server, part.FileName())
 			if err != nil {
-				writeError(w, http.StatusBadRequest, err.Error())
-				return
-			}
-			if err := h.createAutoSnapshot(r.Context(), server, "before uploading "+safeName); err != nil {
 				writeError(w, http.StatusBadRequest, err.Error())
 				return
 			}
@@ -543,6 +532,20 @@ func (h apiHandler) uploadMod(w http.ResponseWriter, r *http.Request, server sto
 			}
 			uploadedName = safeName
 		}
+	}
+	if action == "upload-auto" {
+		if len(results) == 0 {
+			writeError(w, http.StatusBadRequest, "No files were uploaded")
+			return
+		}
+		added := []string{}
+		for _, result := range results {
+			if result.Status == "added" {
+				added = append(added, result.Name)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": len(added) > 0, "files": added, "results": results})
+		return
 	}
 	if action != "upload" {
 		writeError(w, http.StatusBadRequest, "Unsupported mod upload action")

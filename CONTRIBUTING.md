@@ -44,6 +44,8 @@ npm run daemon:run
 
 Open `http://localhost:8080`.
 
+`npm run daemon:run` allows the Next.js dev server (`http://localhost:3000`, plus your LAN addresses on that port) to call the API cross-origin, so `npm run dev` works against it. The daemon rejects browser requests from any other origin. If your dev server runs on a different port or host, set `CLIFF_ALLOWED_ORIGINS` (comma-separated origins) before starting the daemon. The packaged `cliff` binary has no default allowlist.
+
 ### Both together (production-like)
 
 ```bash
@@ -59,7 +61,8 @@ This builds the full package and starts the packaged daemon.
 
 - Follow existing patterns in `src/app/`.
 - Use functional components with hooks.
-- Keep styles in the existing CSS files under `src/app/styles/`.
+- Keep styles in the existing CSS files under `src/app/styles/`, and use the design tokens in `styles/base.css` (spacing, type, shadows, z-index, motion) instead of raw values.
+- Build UI from the shared kit in `src/app/dashboard/components/ui/` (see its [README](src/app/dashboard/components/ui/README.md)) before writing new markup. Use `PromptDialog`/`Modal`/`Menu` rather than `window.prompt` or hand-rolled popovers.
 - Use `lucide-react` for icons.
 - API calls go through `src/app/dashboard/lib/runtime-client.ts`.
 - Shared types live in `src/app/dashboard/lib/types.ts`.

@@ -3,20 +3,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import toast, { Toaster } from "react-hot-toast";
-import { AlertCircle, ArrowLeft, CheckCircle2, Info, Menu, TriangleAlert } from "lucide-react";
-import { serverTypeSupportsContent, validPort } from "./dashboard/lib/utils";
-import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates } from "./dashboard/lib/runtime-client";
-import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult } from "./dashboard/lib/types";
+import { AlertCircle, CheckCircle2, Info, LayoutDashboard, Plus, Settings as SettingsIcon, TriangleAlert, Upload, UserRound } from "lucide-react";
+import { serverTypeSupportsContent } from "./dashboard/lib/utils";
+import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates, fetchLastUpdateResult } from "./dashboard/lib/runtime-client";
+import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult, LastUpdateResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
 import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
+import { PageBand } from "./dashboard/components/page-band";
+import { CloneServerDialog } from "./dashboard/components/clone-server-dialog";
 import { EulaModal } from "./dashboard/components/eula-modal";
-import { UpdateModal } from "./dashboard/components/update-modal";
+import { UpdateModal, UpdateResultModal, skippedUpdateVersion } from "./dashboard/components/update-modal";
 import { Sidebar } from "./dashboard/components/sidebar";
 import { ServerHeader } from "./dashboard/components/server-header";
 import { OverviewPanel } from "./dashboard/panels/overview-panel";
 import { Button } from "./dashboard/components/ui/button";
 import { EmptyPanel } from "./dashboard/components/ui/empty-panel";
 import { Hint } from "./dashboard/components/ui/hint";
+import { SaveBar } from "./dashboard/components/ui/save-bar";
+import { PromptDialog } from "./dashboard/components/ui/prompt-dialog";
 
 const ConsolePanel = dynamic(() => import("./dashboard/panels/console-panel").then((mod) => mod.ConsolePanel), { loading: () => <DashboardSkeleton /> });
 const ModsPanel = dynamic(() => import("./dashboard/panels/mods-panel").then((mod) => mod.ModsPanel), { loading: () => <DashboardSkeleton /> });
@@ -103,7 +107,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [account, setAccount] = useState(user);
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [runtime, setRuntime] = useState<RuntimeStatus>(emptyRuntime);
-  const [selectedId, setSelectedId] = useState(initialServerId);
+  const [selectedId, setSelectedIdState] = useState(initialServerId);
   const [mods, setMods] = useState<ModFile[]>([]);
   const [backups, setBackups] = useState<Backup[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
@@ -111,19 +115,23 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const [settings, setSettings] = useState<Settings | null>(null);
   const [metadata, setMetadata] = useState<MinecraftMetadata | null>(null);
   const [metadataError, setMetadataError] = useState("");
-  const [tab, setRawTab] = useState(initialTab);
+  const [tab, setRawTabState] = useState(initialTab);
   const [metadataBusy, setMetadataBusy] = useState(false);
   const [refreshBusy, setRefreshBusy] = useState(false);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
+  const [renameTarget, setRenameTarget] = useState<ServerRecord | null>(null);
+  const [cloneTarget, setCloneTarget] = useState<ServerRecord | null>(null);
   const [eulaModalOpen, setEulaModalOpen] = useState(false);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [updateDismissed, setUpdateDismissed] = useState(false);
+  const [lastUpdate, setLastUpdate] = useState<LastUpdateResult | null>(null);
   const [unsavedChange, setUnsavedChange] = useState<UnsavedChangesRegistration | null>(null);
   const [serverActionMenu, setServerActionMenu] = useState("");
   const [quickBusyAction, setQuickBusyAction] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [documentVisible, setDocumentVisible] = useState(true);
+  const [liveConnected, setLiveConnected] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [nowMs, setNowMs] = useState(Date.now());
   const [liveCommandSender, setLiveCommandSender] = useState<((command: string) => boolean) | null>(null);
@@ -133,16 +141,20 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const runtimeRef = useRef<RuntimeStatus>(emptyRuntime);
   const runtimeWaiters = useRef<RuntimeWaiter[]>([]);
   const unsavedChangeRef = useRef<UnsavedChangesRegistration | null>(null);
-  const tabRef = useRef(tab);
-  const selectedIdRef = useRef(selectedId);
+  const tabRef = useRef(initialTab);
+  const selectedIdRef = useRef(initialServerId);
+  const selectedDataRequest = useRef(0);
 
-  useEffect(() => {
-    tabRef.current = tab;
-  }, [tab]);
-
-  useEffect(() => {
-    selectedIdRef.current = selectedId;
-  }, [selectedId]);
+  const setRawTab = useCallback((nextTab: string) => {
+    tabRef.current = nextTab;
+    selectedDataRequest.current += 1;
+    setRawTabState(nextTab);
+  }, []);
+  const setSelectedId = useCallback((nextServerId: string) => {
+    selectedIdRef.current = nextServerId;
+    selectedDataRequest.current += 1;
+    setSelectedIdState(nextServerId);
+  }, []);
 
   useEffect(() => {
     unsavedChangeRef.current = unsavedChange;
@@ -154,12 +166,14 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     setUnsavedChange(activeChange);
   }, []);
 
-  const setMessage = useCallback((text: string) => {
+  const setMessage = useCallback((text: string, kind?: "success" | "error" | "warning" | "info") => {
     if (!text) return;
     const normalized = text.toLowerCase();
-    const isError = /(fail|failed|error|invalid|denied|missing|required|blocked|cannot|can't)/.test(normalized);
-    const isWarning = /(stop|warning|already|pending|first|before)/.test(normalized);
-    const icon = isError ? <AlertCircle size={18} /> : isWarning ? <TriangleAlert size={18} /> : /refresh|copied|saved|created|updated|installed|uploaded|deleted|removed|renamed|duplicated|imported|enabled|disabled|requested|active|success/.test(normalized) ? <CheckCircle2 size={18} /> : <Info size={18} />;
+    // An explicit kind wins; otherwise infer it from the wording as before.
+    const isError = kind ? kind === "error" : /(fail|failed|error|invalid|denied|missing|required|blocked|cannot|can't)/.test(normalized);
+    const isWarning = kind ? kind === "warning" : /(stop|warning|already|pending|first|before)/.test(normalized);
+    const isSuccess = kind ? kind === "success" : /refresh|copied|saved|created|updated|installed|uploaded|deleted|removed|renamed|duplicated|imported|enabled|disabled|requested|active|success/.test(normalized);
+    const icon = isError ? <AlertCircle size={18} /> : isWarning ? <TriangleAlert size={18} /> : isSuccess ? <CheckCircle2 size={18} /> : <Info size={18} />;
     toast.custom((t) => (
       <button
         className={`toast ${isError ? "error" : isWarning ? "warning" : "success"}`}
@@ -231,7 +245,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       window.removeEventListener("popstate", syncRoute);
       window.removeEventListener("cliff:navigate", syncRoute);
     };
-  }, [initialServerId, initialTab, requestGuardedNavigation]);
+  }, [initialServerId, initialTab, requestGuardedNavigation, setRawTab, setSelectedId]);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -250,9 +264,23 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   const isRunning = selected ? selectedRuntime.runningServerId === selected.id : false;
   const anotherServerRunning = false;
   const selectedLifecycle = isRunning ? selectedRuntime.lifecycle : "stopped";
+
+  // Report what actually happened after a start: ready, or died while starting.
+  const lastLifecycleRef = useRef<Record<string, string>>({});
+  const userStopRef = useRef(false);
+  useEffect(() => {
+    if (!selected) return;
+    const previous = lastLifecycleRef.current[selected.id];
+    lastLifecycleRef.current[selected.id] = selectedLifecycle;
+    if (previous === "starting" && selectedLifecycle === "running") {
+      setMessage(`${selected.name} is ready`, "success");
+    } else if (previous === "starting" && selectedLifecycle === "stopped" && !userStopRef.current) {
+      setMessage(`${selected.name} stopped during startup. Check the console for the error.`, "error");
+    }
+  }, [selectedLifecycle, selected, setMessage]);
   const selectedModsSupported = selected ? serverTypeSupportsContent(selected.type) : false;
   const publicAccessSetup = tab === "public-access/setup";
-  const serverContext = Boolean(selected && !utilityTabs.has(tab) && !publicAccessSetup);
+  const serverContext = Boolean(selected && !utilityTabs.has(tab));
   const liveServerId = selected && serverContext && documentVisible && selectedRuntime.runningServerId === selected.id ? selected.id : "";
   const selectedDisplayRuntime = useMemo(() => selectedRuntime.startedAt
     ? { ...selectedRuntime, uptimeSeconds: Math.max(0, Math.floor((nowMs - new Date(selectedRuntime.startedAt).getTime()) / 1000)) }
@@ -293,7 +321,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       setRawTab(resolvedTab);
       pushAppRoute(targetRoute);
     }, "another page");
-  }, [requestGuardedNavigation, selected, selectedId, servers, setMessage]);
+  }, [requestGuardedNavigation, selected, selectedId, servers, setMessage, setRawTab]);
 
   const selectServer = useCallback((id: string, nextTab = utilityTabs.has(tab) ? "overview" : tab) => {
     const targetRoute = routeFor(nextTab, id);
@@ -303,9 +331,11 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       setRawTab(nextTab);
       pushAppRoute(targetRoute);
     }, "another server");
-  }, [requestGuardedNavigation, tab]);
+  }, [requestGuardedNavigation, setRawTab, setSelectedId, tab]);
 
   async function loadDashboard({ includeSettings = true, includeSettingsStorage = false, includeHealth = false }: { includeSettings?: boolean; includeSettingsStorage?: boolean; includeHealth?: boolean } = {}) {
+    const selectionAtStart = selectedId;
+    const tabAtStart = tab;
     const metadataRequest = metadata
       ? Promise.resolve<{ data: MinecraftMetadata | null; error: string }>({ data: metadata, error: "" })
       : fetchMinecraftMetadata().then((data) => ({ data, error: "" })).catch((error) => ({ data: null, error: error instanceof Error ? error.message : "Metadata failed" }));
@@ -318,7 +348,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     setServers(serverData.servers);
     applyRuntime(serverData.runtime);
     const activeServerId = selectedId && serverData.servers.some((server) => server.id === selectedId) ? selectedId : serverData.servers[0]?.id ?? "";
-    if (includeHealth && activeServerId && serverData.health?.[activeServerId]) {
+    const selectionStillCurrent = selectedIdRef.current === selectionAtStart && tabRef.current === tabAtStart;
+    if (selectionStillCurrent && includeHealth && activeServerId && serverData.health?.[activeServerId]) {
       setHealth(serverData.health[activeServerId]);
     }
     if (metadataResult.data) { setMetadata(metadataResult.data); setMetadataError(""); }
@@ -326,18 +357,18 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     if (settingsData) {
       setSettings((current) => settingsData.storage || !current ? settingsData : { ...settingsData, storage: current.storage });
     }
-    if (!selectedId && serverData.servers[0] && !utilityTabs.has(tab)) setSelectedId(serverData.servers[0].id);
-    if (selectedId && !serverData.servers.some((server) => server.id === selectedId)) setSelectedId(serverData.servers[0]?.id ?? "");
+    if (selectionStillCurrent && !selectedId && serverData.servers[0] && !utilityTabs.has(tab)) setSelectedId(serverData.servers[0].id);
+    if (selectionStillCurrent && selectedId && !serverData.servers.some((server) => server.id === selectedId)) setSelectedId(serverData.servers[0]?.id ?? "");
     // No servers exist — redirect to the overview welcome screen.
     // Use replaceState instead of pushAppRoute to avoid syncRoute
     // overriding the tab back to initialTab (e.g., "create").
-    if (serverData.servers.length === 0 && tab !== "overview" && tab !== "create" && tab !== "import") {
+    if (selectionStillCurrent && serverData.servers.length === 0 && tab !== "overview" && tab !== "create" && tab !== "import") {
       setRawTab("overview");
       setSelectedId("");
       if (typeof window !== "undefined") {
         window.history.replaceState(null, "", "/");
       }
-    } else if (serverData.servers.length === 0 && selectedId) {
+    } else if (selectionStillCurrent && serverData.servers.length === 0 && selectedId) {
       setSelectedId("");
       if (typeof window !== "undefined" && !utilityTabs.has(tab)) {
         window.history.replaceState(null, "", "/");
@@ -351,7 +382,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     if (refreshBusy) return;
     setRefreshBusy(true);
     try {
-      await loadDashboard({ includeSettings: true, includeSettingsStorage: tab === "app", includeHealth: tab === "overview" });
+      await loadDashboard({ includeSettings: true, includeSettingsStorage: false, includeHealth: tab === "overview" });
       await refreshSelected(selected?.id, {
         clear: false,
         includeMods: isModsTab(tab),
@@ -380,6 +411,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   async function refreshSelected(serverId = selected?.id, { clear = false, includeMods = isModsTab(tab), includeBackups = tab === "backups", includeLogs = tab === "console", includeHealth = tab === "overview" }: { clear?: boolean; includeMods?: boolean; includeBackups?: boolean; includeLogs?: boolean; includeHealth?: boolean } = {}) {
     if (!serverId) { if (clear) { setMods([]); setBackups([]); setLogs([]); setHealth(null); } return; }
     if (clear) { setMods([]); setBackups([]); setLogs([]); setHealth(null); }
+    const requestId = ++selectedDataRequest.current;
+    const requestTab = tabRef.current;
     const targetServer = servers.find((server) => server.id === serverId) ?? (selected?.id === serverId ? selected : null);
     const fetchMods = includeMods && Boolean(targetServer && serverTypeSupportsContent(targetServer.type));
     const [modData, backupData, logData, healthData] = await Promise.all([
@@ -388,6 +421,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       includeLogs ? fetchServerLogs(serverId) : Promise.resolve(null),
       includeHealth ? fetchServerHealth(serverId) : Promise.resolve(null),
     ]);
+    if (requestId !== selectedDataRequest.current || selectedIdRef.current !== serverId || tabRef.current !== requestTab) return;
     if (modData) setMods(modData.mods ?? []);
     else if (targetServer && !serverTypeSupportsContent(targetServer.type)) setMods([]);
     if (backupData) setBackups(backupData.backups ?? []);
@@ -430,11 +464,13 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     if (!selected || quickBusyAction) return;
     const actionServerId = selected.id;
     setQuickBusyAction(busyLabel);
-    // Navigate to console immediately for start/restart — don't wait for the
-    // server to finish starting. The backend start endpoint blocks up to 5s
-    // waiting for startup confirmation, but the user should see the console
-    // right away so they can watch the boot output.
+    userStopRef.current = path === "stop";
+    // Show the console right away for start/restart so the boot output is visible.
     if (path === "start" || path === "restart") setTab("console", actionServerId);
+    const refreshInBackground = () => {
+      void loadDashboard({ includeSettings: false, includeSettingsStorage: false });
+      void refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false });
+    };
     try {
       const force = "force" in body;
       const result = path === "start"
@@ -442,56 +478,62 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         : path === "stop"
           ? await stopRuntimeServer(actionServerId, force)
           : await restartRuntimeServer(actionServerId, force);
-      await loadDashboard({ includeSettings: false, includeSettingsStorage: false });
-      await refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false });
-      if (path === "start") {
-        setMessage("Server started");
-      } else if (path === "stop") {
+      if (path === "start" || path === "restart") {
+        // The request only confirms the process launched. The server is "starting"
+        // until it prints its ready line; the lifecycle effect reports ready or a
+        // failed start. Free the button now instead of waiting on refreshes.
+        setQuickBusyAction("");
+        refreshInBackground();
+        return;
+      }
+      await Promise.all([
+        loadDashboard({ includeSettings: false, includeSettingsStorage: false }),
+        refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false }),
+      ]);
+      if (path === "stop") {
         if ("pending" in result && result.pending) {
-          setMessage("Server is still stopping");
+          setMessage("Server is still stopping", "warning");
         } else {
           const stopped = await waitForServerRuntimeState(actionServerId, (status) => status.runningServerId !== actionServerId, "force" in body ? 5000 : 15000);
-          setMessage(stopped ? "Server stopped" : "Server is still stopping");
+          setMessage(stopped ? "Server stopped" : "Server is still stopping", stopped ? "success" : "warning");
         }
-      } else if (path === "restart") {
-        await waitForServerRuntimeState(actionServerId, (status) => status.runningServerId === actionServerId, 15000);
-        setMessage("Server restarted");
       } else {
         setMessage(`${busyLabel.replace("-", " ")} complete`);
       }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Action failed");
+      setMessage(error instanceof Error ? error.message : "Action failed", "error");
     }
     finally { setQuickBusyAction(""); }
   }
 
-  async function renameSidebarServer(server: ServerRecord) {
-    const nextName = window.prompt("Rename server", server.name)?.trim();
+  function renameSidebarServer(server: ServerRecord) {
     setServerActionMenu("");
-    if (!nextName || nextName === server.name) return;
+    setRenameTarget(server);
+  }
+
+  async function submitRename(server: ServerRecord, nextName: string) {
+    if (nextName === server.name) return;
     try {
       await updateServerProfile(server.id, { name: nextName });
       await refresh();
       if (selected?.id === server.id) await refreshSelected(server.id);
-      setMessage("Renamed");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Rename failed"); }
+      setMessage("Renamed", "success");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Rename failed", "error"); }
   }
 
-  async function duplicateSidebarServer(server: ServerRecord) {
+  function duplicateSidebarServer(server: ServerRecord) {
     setServerActionMenu("");
-    if (runtimeForServer(runtime, server.id).runningServerId === server.id) { setMessage("Stop this server before cloning."); return; }
-    const cloneName = window.prompt("Clone server as", `${server.name} Copy`)?.trim();
-    if (!cloneName) return;
-    const portPrompt = window.prompt("Port for clone", String(server.port + 1));
-    if (portPrompt === null) return;
-    const portValue = Number(portPrompt);
-    if (!validPort(portValue)) { setMessage("Invalid port."); return; }
+    if (runtimeForServer(runtime, server.id).runningServerId === server.id) { setMessage("Stop this server before cloning.", "warning"); return; }
+    setCloneTarget(server);
+  }
+
+  async function submitClone(server: ServerRecord, cloneName: string, port: number) {
     try {
-      const data = await createServerProfile({ mode: "clone", sourceServerId: server.id, name: cloneName, port: portValue });
+      const data = await createServerProfile({ mode: "clone", sourceServerId: server.id, name: cloneName, port });
       await refresh();
       if (data.server) selectServer(data.server.id);
-      setMessage("Server cloned");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Clone failed"); }
+      setMessage("Server cloned", "success");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Clone failed", "error"); }
   }
 
   function deleteSidebarServer(server: ServerRecord) {
@@ -535,12 +577,21 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   }, []);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      refresh({ includeSettings: true, includeSettingsStorage: tab === "app", includeHealth: tab === "overview" })
+      refresh({ includeSettings: true, includeSettingsStorage: false, includeHealth: tab === "overview" })
         .catch((error) => setMessage(error.message))
         .finally(() => setInitialLoading(false));
     }, 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // After an update, say how it ended (updated, or rolled back to the old version).
+  useEffect(() => {
+    let alive = true;
+    fetchLastUpdateResult()
+      .then((result) => { if (alive && result) setLastUpdate(result); })
+      .catch(() => undefined);
+    return () => { alive = false; };
   }, []);
 
   // Auto-check for updates on mount and periodically.
@@ -551,7 +602,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         .then((result) => {
           if (!alive) return;
           setUpdateCheck(result);
-          if (result.updateAvailable && !updateDismissed) {
+          if (result.updateAvailable && !updateDismissed && skippedUpdateVersion() !== result.latestVersion) {
             setUpdateModalOpen(true);
           }
         })
@@ -614,22 +665,33 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     return () => window.clearTimeout(timer);
   }, [initialLoading, selectedServerId, selectedModsSupported, setTab, tab]);
   useEffect(() => {
-    if (daemonRuntimeEnabled() && liveServerId) return;
+    if (daemonRuntimeEnabled() && liveServerId && liveConnected) return;
     const intervalMs = runtime.runningServerId ? 60000 : 120000;
     const timer = window.setInterval(() => {
       if (document.hidden) return;
       loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: false }).catch(() => undefined);
       if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: false, includeHealth: tab === "overview" }).catch(() => undefined);
     }, intervalMs);
-    return () => window.clearTimeout(timer);
+    let fallbackRefreshTimer: number | null = null;
+    if (liveServerId && !liveConnected) {
+      fallbackRefreshTimer = window.setTimeout(() => {
+        loadDashboard({ includeSettings: false, includeSettingsStorage: false, includeHealth: tab === "overview" }).catch(() => undefined);
+        if (selected?.id) refreshSelected(selected.id, { clear: false, includeMods: isModsTab(tab), includeBackups: tab === "backups", includeLogs: tab === "console", includeHealth: tab === "overview" }).catch(() => undefined);
+      }, 0);
+    }
+    return () => {
+      window.clearInterval(timer);
+      if (fallbackRefreshTimer !== null) window.clearTimeout(fallbackRefreshTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [liveServerId, runtime.runningServerId, selected?.id, tab]);
+  }, [liveConnected, liveServerId, runtime.runningServerId, selected?.id, tab]);
 
   useEffect(() => {
     if (!liveServerId || typeof WebSocket === "undefined") {
       return;
     }
     return subscribeRuntime(liveServerId, {
+      onConnectionChange: setLiveConnected,
       onSnapshot: (data) => {
         applyRuntime(data.runtime);
         if (data.logs) setLogs(data.logs);
@@ -645,7 +707,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       includeUsage: tab === "overview",
       includeLogs: tab === "console",
     });
-  }, [applyRuntime, liveServerId, setMessage, tab]);
+  }, [applyRuntime, liveServerId, setMessage, setLiveConnected, tab]);
 
   useEffect(() => {
     const attentionLines = startFailureLines(logs, selectedRuntime, selected);
@@ -673,7 +735,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     };
   }, [logs, selectedRuntime, selected, tab]);
 
-  const standaloneUtility = tab === "app" || tab === "account" || tab === "import" || tab === "create" || publicAccessSetup;
+  const bandIcon = tab === "app" ? <SettingsIcon size={20} /> : tab === "account" ? <UserRound size={20} /> : tab === "import" ? <Upload size={20} /> : tab === "create" ? <Plus size={20} /> : <LayoutDashboard size={20} />;
   const pageTitle = initialLoading ? "Loading dashboard" : tab === "account" ? "Manage account" : tab === "app" ? "App settings" : tab === "import" ? "Import server" : tab === "create" ? "Create server" : publicAccessSetup ? "Public Access" : selected?.name ?? "No server selected";
   const pageSubtitle = initialLoading
     ? "Loading servers, runtime, and version metadata."
@@ -689,47 +751,30 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           ? selected ? `Set up Playit for ${selected.name}.` : "Set up Playit for this server."
         : selected ? `${selected.type} ${selected.minecraftVersion} / port ${selected.port}` : "Import or create a server.";
   const consoleAttention = tab !== "console" && startFailureLines(logs, selectedRuntime, selected).length > 0;
-  const goBackToServer = () => {
-    if (publicAccessSetup && selectedServerId) {
-      setTab("public-access", selectedServerId);
-      return;
-    }
-    if (selectedServerId) { setTab("overview", selectedServerId); return; }
-    // No server selected — go to overview, bypassing the guarded navigation
-    // since there's nothing to save and the guard can get stuck after deletions.
-    // Use replaceState to avoid syncRoute overriding the tab back to initialTab.
-    registerUnsavedChange(null);
-    setRawTab("overview");
-    if (typeof window !== "undefined") {
-      window.history.replaceState(null, "", "/");
-    }
-  };
 
   return (
-    <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${standaloneUtility ? "standalone" : ""}`}>
-      {!standaloneUtility && (
-        <Sidebar
-          user={account}
-          servers={servers}
-          runtime={runtime}
-          selected={selected}
-          showSelectedServer={serverContext}
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-          serverActionMenu={serverActionMenu}
-          setServerActionMenu={setServerActionMenu}
-          setSelectedId={selectServer}
-          setTab={setTab}
-          tab={tab}
-          consoleAttention={consoleAttention}
-          onRename={renameSidebarServer}
-          onDuplicate={duplicateSidebarServer}
-          onDelete={deleteSidebarServer}
-          loading={initialLoading}
-        />
-      )}
-      {!standaloneUtility && !sidebarCollapsed && <Button className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
-      <section className={`workspace ${standaloneUtility ? "standalone-workspace" : ""}`} ref={workspaceRef}>
+    <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
+      <Sidebar
+        user={account}
+        servers={servers}
+        runtime={runtime}
+        selected={selected}
+        showSelectedServer={Boolean(selected)}
+        collapsed={sidebarCollapsed}
+        setCollapsed={setSidebarCollapsed}
+        serverActionMenu={serverActionMenu}
+        setServerActionMenu={setServerActionMenu}
+        setSelectedId={selectServer}
+        setTab={setTab}
+        tab={tab}
+        consoleAttention={consoleAttention}
+        onRename={renameSidebarServer}
+        onDuplicate={duplicateSidebarServer}
+        onDelete={deleteSidebarServer}
+        loading={initialLoading}
+      />
+      {!sidebarCollapsed && <Button plain className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
+      <section className="workspace" ref={workspaceRef}>
         {serverContext && selected && !initialLoading ? (
           <ServerHeader
             selected={selected}
@@ -745,69 +790,68 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
             onOpenSidebar={() => setSidebarCollapsed(false)}
           />
         ) : (
-          <header className={`topbar ${standaloneUtility ? "standalone-topbar" : ""}`}>
-            <div className="standalone-topbar-left">
-              {standaloneUtility ? (
-                <Button className="utility-back-button" onClick={goBackToServer}>
-                  <ArrowLeft size={16} />Back
-                </Button>
-              ) : (
-                <Button className="mobile-sidebar-button" aria-label="Open sidebar" onClick={() => setSidebarCollapsed(false)}>
-                  <Menu size={18} />
-                </Button>
-              )}
-              <div className="topbar-copy">
-                <h1>{pageTitle}</h1>
-                <p>{pageSubtitle}</p>
-              </div>
-            </div>
-            {serverContext && <div className="status-row">
-              <span className={`status ${isRunning ? selectedLifecycle === "running" ? "on" : "busy" : anotherServerRunning ? "busy" : ""}`}>{isRunning ? selectedLifecycle === "starting" ? "Starting" : selectedLifecycle === "stopping" ? "Stopping" : "Running" : anotherServerRunning ? "Blocked" : "Stopped"}</span>
-              {anotherServerRunning && runningServer && <span className="status-detail">Blocked by {runningServer.name}</span>}
-            </div>}
-            {tab === "account" && (
-              <Button variant="primary" disabled={!unsavedChange?.dirty || !unsavedChange?.canSave} onClick={() => unsavedChange?.onSave?.()} className="topbar-save-button">
-                {unsavedChange?.saveLabel ?? "Save"}
-              </Button>
-            )}
-          </header>
+          <PageBand icon={bandIcon} title={pageTitle} subtitle={pageSubtitle} onOpenSidebar={() => setSidebarCollapsed(false)} />
         )}
 
-        {metadataError && (
-          <Hint variant="source" warn>
-            <span>Version metadata failed: {metadataError}</span>
-            <Button disabled={metadataBusy} onClick={refreshVersionMetadata}>{metadataBusy ? "Refreshing..." : "Refresh"}</Button>
-          </Hint>
-        )}
+        <div className="page-frame">
+          {metadataError && (
+            <Hint variant="source" warn>
+              <span>Version metadata failed: {metadataError}</span>
+              <Button disabled={metadataBusy} onClick={refreshVersionMetadata}>{metadataBusy ? "Refreshing..." : "Refresh"}</Button>
+            </Hint>
+          )}
 
-        {initialLoading && <DashboardSkeleton />}
-        {!initialLoading && tab === "overview" && <OverviewPanel selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
-        {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} onAcceptEula={() => setEulaModalOpen(true)} />}
-        {!initialLoading && tab === "console" && !selected && <EmptyPanel title="No server selected" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
-        {!initialLoading && isModsTab(tab) && !selected && <EmptyPanel title="No mods to show" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "players" && selected && <PlayersPanel server={selected} onMessage={setMessage} />}
-        {!initialLoading && tab === "players" && !selected && <EmptyPanel title="No player lists" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "worlds" && selected && <WorldsPanel server={selected} isRunning={isRunning} onMessage={setMessage} onConfirm={setConfirmRequest} />}
-        {!initialLoading && tab === "worlds" && !selected && <EmptyPanel title="No worlds to show" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "backups" && selected && <BackupsPanel server={selected} backups={backups} isRunning={isRunning} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} />}
-        {!initialLoading && tab === "backups" && !selected && <EmptyPanel title="No backups yet" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "files" && selected && <FilesPanel server={selected} onConfirm={setConfirmRequest} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-        {!initialLoading && tab === "files" && !selected && <EmptyPanel title="No files yet" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "public-access" && selected && <PublicAccessPanel key={selected.id} server={selected} onConfigure={() => setTab("public-access/setup", selected.id)} onMessage={setMessage} />}
-        {!initialLoading && tab === "public-access/setup" && selected && <PublicAccessPanel key={`${selected.id}:setup`} mode="setup" server={selected} onBack={() => setTab("public-access", selected.id)} onMessage={setMessage} />}
-        {!initialLoading && tab === "public-access" && !selected && <EmptyPanel title="No public access setup" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-        {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
-        {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
-        {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
-        {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-        {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {initialLoading && <DashboardSkeleton />}
+          {!initialLoading && tab === "overview" && <OverviewPanel selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
+          {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} onAcceptEula={() => setEulaModalOpen(true)} />}
+          {!initialLoading && tab === "console" && !selected && <EmptyPanel title="No server selected" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
+          {!initialLoading && isModsTab(tab) && !selected && <EmptyPanel title="No mods to show" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "players" && selected && <PlayersPanel server={selected} onMessage={setMessage} />}
+          {!initialLoading && tab === "players" && !selected && <EmptyPanel title="No player lists" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "worlds" && selected && <WorldsPanel server={selected} isRunning={isRunning} onMessage={setMessage} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tab === "worlds" && !selected && <EmptyPanel title="No worlds to show" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "backups" && selected && <BackupsPanel server={selected} backups={backups} isRunning={isRunning} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tab === "backups" && !selected && <EmptyPanel title="No backups yet" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "files" && selected && <FilesPanel server={selected} onConfirm={setConfirmRequest} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "files" && !selected && <EmptyPanel title="No files yet" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "public-access" && selected && <PublicAccessPanel key={selected.id} server={selected} onConfigure={() => setTab("public-access/setup", selected.id)} onMessage={setMessage} />}
+          {!initialLoading && tab === "public-access/setup" && selected && <PublicAccessPanel key={`${selected.id}:setup`} mode="setup" server={selected} onBack={() => setTab("public-access", selected.id)} onMessage={setMessage} />}
+          {!initialLoading && tab === "public-access" && !selected && <EmptyPanel title="No public access setup" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
+          {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
+          {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
+          {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+        </div>
       </section>
-      <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} containerStyle={{ zIndex: 9999 }} />
+      {unsavedChange?.showSaveBar && (
+        <SaveBar
+          dirty={unsavedChange.dirty}
+          canSave={unsavedChange.canSave !== false && Boolean(unsavedChange.onSave)}
+          saving={unsavedChange.saving}
+          saveLabel={unsavedChange.saveLabel}
+          disabledReason={unsavedChange.disabledReason}
+          onSave={() => { void Promise.resolve(unsavedChange.onSave?.()).catch(() => undefined); }}
+          onDiscard={unsavedChange.onDiscard}
+        />
+      )}
+      <Toaster position="bottom-right" toastOptions={{ duration: 3000 }} containerStyle={{ zIndex: 1000 }} />
       <ConfirmDialog request={confirmRequest} onClose={() => setConfirmRequest(null)} />
+      <PromptDialog
+        isOpen={Boolean(renameTarget)}
+        title="Rename server"
+        label="Server name"
+        initialValue={renameTarget?.name ?? ""}
+        confirmLabel="Rename"
+        onSubmit={(name) => (renameTarget ? submitRename(renameTarget, name) : undefined)}
+        onClose={() => setRenameTarget(null)}
+      />
+      <CloneServerDialog server={cloneTarget} onSubmit={submitClone} onClose={() => setCloneTarget(null)} />
       {selected && <EulaModal serverId={selected.id} isOpen={eulaModalOpen} onClose={() => setEulaModalOpen(false)} onMessage={setMessage} onSaved={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false, includeHealth: true })} />}
-      {updateCheck && updateCheck.updateAvailable && (
+      <UpdateResultModal result={lastUpdate} onDone={() => setLastUpdate(null)} />
+      {updateCheck && updateCheck.updateAvailable && !lastUpdate && (
         <UpdateModal
           update={updateCheck}
           isOpen={updateModalOpen}

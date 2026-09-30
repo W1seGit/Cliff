@@ -6,17 +6,22 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
+	javamanager "github.com/W1seGit/Cliff/daemon/internal/java"
 	"github.com/W1seGit/Cliff/daemon/internal/store"
 )
 
@@ -489,7 +494,6 @@ func (h apiHandler) serverRecordFromInput(r *http.Request, input serverCreateInp
 		Port:             port,
 		LaunchJar:        strings.TrimSpace(input.LaunchJar),
 		ExtraArgs:        strings.TrimSpace(input.ExtraArgs),
-		SnapshotsEnabled: true,
 	}, nil
 }
 
@@ -1150,7 +1154,7 @@ func scanImportedServer(serverPath string) importedServerScan {
 	evidence := map[string]int{"vanilla": 1}
 	topJars, _ := topLevelJars(serverPath)
 
-	_, scriptJar, scriptArgFile := detectLaunchScript(serverPath)
+	scriptName, scriptJar, scriptArgFile := detectLaunchScript(serverPath)
 	if scriptJar != "" {
 		evidenceFromName(filepath.Base(scriptJar), evidence, &scan)
 	}
@@ -1190,15 +1194,17 @@ func scanImportedServer(serverPath string) importedServerScan {
 	}
 
 	if scan.LaunchTarget == "" {
-		if target, warning := bestJarLaunchTarget(candidates, scan.ServerType); target != "" || warning != "" {
+		target, warning := bestJarLaunchTarget(candidates, scan.ServerType)
+		if target != "" {
 			scan.LaunchTarget = target
-			if warning != "" {
-				scan.Warnings = append(scan.Warnings, warning)
-			}
+		} else if scriptName != "" && serverTypeNeedsLoader(scan.ServerType) {
+			scan.LaunchTarget = scriptName
+		} else if warning != "" {
+			scan.Warnings = append(scan.Warnings, warning)
 		}
 	}
 	if scan.LaunchTarget == "" && serverTypeNeedsLoader(scan.ServerType) {
-		scan.Warnings = append(scan.Warnings, "No launchable server jar was detected. Choose the generated server launcher before importing.")
+		scan.Warnings = append(scan.Warnings, "No launchable server jar or platform launcher was detected. Choose the generated server launcher before importing.")
 	}
 	return scan
 }
@@ -1219,7 +1225,11 @@ func topLevelJars(serverPath string) ([]string, error) {
 }
 
 func detectLaunchScript(serverPath string) (string, string, string) {
-	names := []string{"run.sh", "start.sh", "start.command", "server.sh", "run.bat", "start.bat", "server.bat"}
+	return detectLaunchScriptForOS(serverPath, runtime.GOOS)
+}
+
+func detectLaunchScriptForOS(serverPath string, goos string) (string, string, string) {
+	names := launchScriptNames(goos)
 	for _, name := range names {
 		path := filepath.Join(serverPath, name)
 		if !fileExists(path) {
@@ -1231,6 +1241,18 @@ func detectLaunchScript(serverPath string) (string, string, string) {
 		return name, jar, argFile
 	}
 	return "", "", ""
+}
+
+func launchScriptNames(goos string) []string {
+	if goos == "windows" {
+		return []string{"run.bat", "start.bat", "server.bat"}
+	}
+	return []string{"run.sh", "start.sh", "start.command", "server.sh"}
+}
+
+func platformLaunchScript(serverPath string, goos string) string {
+	name, _, _ := detectLaunchScriptForOS(serverPath, goos)
+	return name
 }
 
 func readSmallText(path string, limit int64) string {
@@ -1735,10 +1757,7 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 		if err := downloadFile(r, requestURL, filepath.Join(server.Path, installerName)); err != nil {
 			return "", err
 		}
-		server.LaunchJar = installerName
-		_ = writeDefaultServerFiles(*server)
-		_ = os.MkdirAll(filepath.Join(server.Path, "mods"), 0o755)
-		return "Forge installer downloaded. Run the installer from Files before first launch.", nil
+		return h.provisionInstallerServer(r, server, installerName, "Forge")
 	}
 	if server.Type == "neoforge" {
 		installerName := "neoforge-" + server.LoaderVersion + "-installer.jar"
@@ -1746,12 +1765,81 @@ func (h apiHandler) provisionServer(r *http.Request, server *store.Server) (stri
 		if err := downloadFile(r, requestURL, filepath.Join(server.Path, installerName)); err != nil {
 			return "", err
 		}
-		server.LaunchJar = installerName
-		_ = writeDefaultServerFiles(*server)
-		_ = os.MkdirAll(filepath.Join(server.Path, "mods"), 0o755)
-		return "NeoForge installer downloaded. Run the installer from Files before first launch.", nil
+		return h.provisionInstallerServer(r, server, installerName, "NeoForge")
 	}
 	return "", nil
+}
+
+func (h apiHandler) provisionInstallerServer(r *http.Request, server *store.Server, installerName string, loaderName string) (string, error) {
+	if err := writeDefaultServerFiles(*server); err != nil {
+		return "", err
+	}
+	if err := h.runLoaderInstaller(r, *server, installerName); err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(filepath.Join(server.Path, "mods"), 0o755); err != nil {
+		return "", err
+	}
+
+	server.LaunchJar = platformLaunchScript(server.Path, runtime.GOOS)
+	if server.LaunchJar == "" {
+		server.LaunchJar = detectLaunchJar(server.Path, server.Type)
+	}
+	if server.LaunchJar == "" {
+		return "", fmt.Errorf("%s installer completed but did not create a launch script or server jar for %s", loaderName, runtime.GOOS)
+	}
+	return loaderName + " server installed", nil
+}
+
+func (h apiHandler) runLoaderInstaller(r *http.Request, server store.Server, installerName string) error {
+	javaPath, err := (javamanager.Resolver{DataDir: h.config.DataDir}).Resolve(r.Context(), server.JavaPath, server.MinecraftVersion)
+	if err != nil {
+		return fmt.Errorf("managed Java setup failed: %w", err)
+	}
+
+	cmd := exec.CommandContext(r.Context(), javaPath, "-jar", installerName, "--installServer")
+	cmd.Dir = server.Path
+	output := &tailBuffer{limit: 16 << 10}
+	cmd.Stdout = output
+	cmd.Stderr = output
+	if err := cmd.Run(); err != nil {
+		if details := strings.TrimSpace(output.String()); details != "" {
+			return fmt.Errorf("%s server installer failed: %w\n%s", server.Type, err, details)
+		}
+		return fmt.Errorf("%s server installer failed: %w", server.Type, err)
+	}
+	return nil
+}
+
+type tailBuffer struct {
+	mu    sync.Mutex
+	data  []byte
+	limit int
+}
+
+func (b *tailBuffer) Write(value []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	length := len(value)
+	if b.limit <= 0 {
+		return length, nil
+	}
+	if length >= b.limit {
+		b.data = append(b.data[:0], value[length-b.limit:]...)
+		return length, nil
+	}
+	if overflow := len(b.data) + length - b.limit; overflow > 0 {
+		copy(b.data, b.data[overflow:])
+		b.data = b.data[:len(b.data)-overflow]
+	}
+	b.data = append(b.data, value...)
+	return length, nil
+}
+
+func (b *tailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return string(b.data)
 }
 
 func (h apiHandler) vanillaServerDownload(r *http.Request, minecraftVersion string) (*struct {
@@ -1934,7 +2022,32 @@ func downloadFile(r *http.Request, requestURL string, destination string) error 
 	return closeErr
 }
 
+// ensureNotInside refuses a copy whose destination lives inside its source.
+// Importing a folder that contains the server storage would otherwise copy
+// itself into itself until the disk fills.
+func ensureNotInside(source string, target string) error {
+	absSource, err := filepath.Abs(source)
+	if err != nil {
+		return err
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(absSource, absTarget)
+	if err != nil {
+		return nil // different volumes cannot be nested
+	}
+	if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+		return errors.New("That folder contains Cliff's own server storage. Choose the server's folder itself, not a parent folder.")
+	}
+	return nil
+}
+
 func copyDirectory(source string, target string) error {
+	if err := ensureNotInside(source, target); err != nil {
+		return err
+	}
 	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr

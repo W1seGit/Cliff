@@ -22,26 +22,72 @@ button:hover:not(:disabled) {
 
 button:active:not(:disabled) {
   background: var(--surface-3);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* The standard action button: outlined, one height everywhere. The Button
+   component always adds .btn; raw header buttons opt in with .icon-button. */
+.btn,
+.icon-button:not(.icon-only) {
+  min-height: var(--control-h);
+  padding: 0 14px;
+}
+
+/* An <a> styled as a button (Button with href). */
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+a.btn.btn-sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--text-xs);
+}
+
+.btn:not(.primary):not(.danger-button):not(.danger-ghost),
+.icon-button:not(.icon-only):not(.primary):not(.danger-button) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.btn:not(.primary):not(.danger-button):not(.danger-ghost):hover:not(:disabled),
+.icon-button:not(.icon-only):not(.primary):not(.danger-button):hover:not(:disabled) {
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--text-tertiary);
+}
+
+.btn:not(.primary):not(.danger-button):not(.danger-ghost):active:not(:disabled),
+.icon-button:not(.icon-only):not(.primary):not(.danger-button):active:not(:disabled) {
+  background: var(--surface-2);
 }
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.4;
+  opacity: var(--disabled-opacity);
 }
 
 .primary {
-  background: var(--accent);
-  color: #0b0d10;
+  background: var(--primary);
+  box-shadow: none;
+  color: var(--on-primary);
   font-weight: 600;
 }
 
 .primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--primary-hover);
+  box-shadow: none;
 }
 
 .primary:active:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--primary-hover);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
@@ -52,21 +98,23 @@ button:disabled {
 }
 
 .secondary:hover:not(:disabled) {
-  background: rgba(91, 141, 239, 0.08);
+  background: var(--accent-tint);
 }
 
+/* Destructive: outlined red, never a solid block. */
 .danger-button {
-  background: var(--danger-bg);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
   color: var(--danger);
 }
 
 .danger-button:hover:not(:disabled) {
-  background: #4a2323;
+  background: var(--danger-bg);
+  box-shadow: inset 0 0 0 1px var(--danger);
 }
 
 .danger-button:active:not(:disabled) {
-  background: #4a2323;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  background: var(--danger-hover);
 }
 
 .icon-button {

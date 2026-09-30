@@ -38,6 +38,9 @@ type Options struct {
 	SchedulerContext context.Context
 	LogBuffer        *logbuf.Buffer
 	Updater          *updater.Manager
+	// Shutdown and ShutdownToken enable POST /api/internal/shutdown for `cliff stop`.
+	Shutdown      func()
+	ShutdownToken string
 }
 
 func New(options Options) http.Handler {
@@ -63,12 +66,17 @@ func New(options Options) http.Handler {
 		playitBuild:   newPlayitBuildManager(),
 		logBuffer:     options.LogBuffer,
 		updater:       options.Updater,
+		loginLimiter:  newLoginLimiter(),
+
+		shutdown:      options.Shutdown,
+		shutdownToken: options.ShutdownToken,
 	}
 	if options.SchedulerContext != nil {
 		go api.runScheduler(options.SchedulerContext)
 	}
 
 	mux.HandleFunc("GET /api/health", api.health)
+	mux.HandleFunc("POST /api/internal/shutdown", api.shutdownDaemon)
 	mux.HandleFunc("GET /api/auth/me", api.authMe)
 	mux.HandleFunc("POST /api/auth/setup", api.authSetup)
 	mux.HandleFunc("POST /api/auth/login", api.authLogin)
@@ -111,6 +119,11 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/runtime", api.requireUser(api.runtime))
 	mux.HandleFunc("GET /api/updates/check", api.requireUser(api.updatesCheck))
 	mux.HandleFunc("POST /api/updates/apply", api.requireUser(api.updatesApply))
+	mux.HandleFunc("GET /api/updates/progress", api.requireUser(api.updatesProgress))
+	mux.HandleFunc("GET /api/updates/safety", api.requireUser(api.updatesSafety))
+	mux.HandleFunc("DELETE /api/updates/safety", api.requireUser(api.updatesClearSafety))
+	mux.HandleFunc("GET /api/updates/last-result", api.requireUser(api.updatesLastResult))
+	mux.HandleFunc("DELETE /api/updates/last-result", api.requireUser(api.updatesDismissLastResult))
 	mux.HandleFunc("GET /api/servers/{id}/usage", api.requireUser(api.serverUsage))
 	mux.HandleFunc("POST /api/servers/{id}/start", api.requireUser(api.start))
 	mux.HandleFunc("POST /api/servers/{id}/stop", api.requireUser(api.stop))
@@ -118,12 +131,13 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/servers/{id}/command", api.requireUser(api.commandPresets))
 	mux.HandleFunc("POST /api/servers/{id}/command", api.requireUser(api.command))
 	mux.HandleFunc("GET /api/servers/{id}/backups", api.requireUser(api.backups))
+	mux.HandleFunc("GET /api/servers/{id}/backups/diff", api.requireUser(api.backupDiff))
 	mux.HandleFunc("POST /api/servers/{id}/backups", api.requireUser(api.backupAction))
 	mux.HandleFunc("GET /api/servers/{id}/logs", api.requireUser(api.logs))
 	mux.HandleFunc("GET /api/servers/{id}/console", api.requireUser(api.console))
 	mux.Handle("/", spaFileServer(options.Config.WebDir))
 
-	return withErrorLogging(withCommonHeaders(mux))
+	return withErrorLogging(withCommonHeaders(options.Config.AllowedOrigins, mux))
 }
 
 type apiHandler struct {
@@ -139,6 +153,10 @@ type apiHandler struct {
 	playitBuild   *playitBuildManager
 	logBuffer     *logbuf.Buffer
 	updater       *updater.Manager
+	loginLimiter  *loginLimiter
+
+	shutdown      func()
+	shutdownToken string
 }
 
 type storageUsageCache struct {
@@ -173,7 +191,6 @@ type settingsResponse struct {
 	ServerRoot       string        `json:"serverRoot"`
 	DataDir          string        `json:"dataDir"`
 	LogFile          string        `json:"logFile"`
-	SnapshotsEnabled bool          `json:"snapshotsEnabled"`
 	CurseForgeAPIKey string        `json:"curseForgeApiKey"`
 	Storage          *storageUsage `json:"storage,omitempty"`
 	Access           accessInfo    `json:"access"`
@@ -251,7 +268,6 @@ func (h apiHandler) settings(w http.ResponseWriter, r *http.Request) {
 		ServerRoot:       settings.ServerRoot,
 		DataDir:          h.config.DataDir,
 		LogFile:          filepath.Join(h.config.DataDir, "logs", "daemon.log"),
-		SnapshotsEnabled: settings.SnapshotsEnabled,
 		CurseForgeAPIKey: settings.CurseForgeAPIKey,
 		Access:           h.accessInfo(),
 	}
@@ -616,9 +632,6 @@ func (h apiHandler) updateServer(w http.ResponseWriter, r *http.Request) {
 	if value, ok := numberValue(raw["port"]); ok {
 		next.Port = value
 	}
-	if value, ok := raw["snapshotsEnabled"].(bool); ok {
-		next.SnapshotsEnabled = value
-	}
 	if value, ok := raw["scheduledSnapshotsEnabled"].(bool); ok {
 		next.ScheduledSnapshotsEnabled = value
 	}
@@ -720,6 +733,11 @@ func (h apiHandler) start(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "server not found")
 		return
 	}
+	server, err = h.resolveServerLaunchTarget(r, server)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	server, err = h.resolveJavaForLaunch(r, server)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -762,6 +780,11 @@ func (h apiHandler) restart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid restart body")
 		return
 	}
+	server, err = h.resolveServerLaunchTarget(r, server)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	server, err = h.resolveJavaForLaunch(r, server)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -782,6 +805,18 @@ func (h apiHandler) resolveJavaForLaunch(r *http.Request, server store.Server) (
 	}
 	server.JavaPath = resolved
 	return server, nil
+}
+
+func (h apiHandler) resolveServerLaunchTarget(r *http.Request, server store.Server) (store.Server, error) {
+	launchTarget := process.SuggestLaunchTarget(server.Path, server.LaunchJar)
+	if launchTarget == "" {
+		return server, nil
+	}
+	updated, err := h.store.UpdateServer(r.Context(), server.ID, store.Server{LaunchJar: launchTarget})
+	if err != nil {
+		return server, fmt.Errorf("could not update server launch target: %w", err)
+	}
+	return updated, nil
 }
 
 func (h apiHandler) command(w http.ResponseWriter, r *http.Request) {
@@ -1015,24 +1050,6 @@ func setStaticCacheHeaders(w http.ResponseWriter, requestPath string, spaFallbac
 		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=3600")
-}
-
-func withCommonHeaders(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		if origin := r.Header.Get("Origin"); origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
-		}
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 type statusRecorder struct {

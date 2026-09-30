@@ -21,7 +21,6 @@ export type Settings = {
   serverRoot: string;
   dataDir?: string;
   logFile?: string;
-  snapshotsEnabled: boolean;
   curseForgeApiKey: string;
   storage?: StorageUsage;
   access?: AccessInfo;
@@ -100,7 +99,6 @@ export type ServerRecord = {
   port: number;
   launchJar: string;
   extraArgs: string;
-  snapshotsEnabled: boolean;
   scheduledSnapshotsEnabled: boolean;
   snapshotIntervalMinutes: number;
   lastScheduledSnapshotAt: string;
@@ -222,7 +220,45 @@ export type MinecraftMetadata = {
   loaders: Record<ServerType, LoaderOption[]>;
   loaderCatalog: Record<ServerType, LoaderOption[]>;
 };
-export type Backup = { id: string; reason: string; snapshotPath: string; createdAt: string; sizeBytes: number };
+export type BackupStats = {
+  filesAdded: number;
+  filesModified: number;
+  filesRemoved: number;
+  filesUnchanged: number;
+  bytesStored: number;
+  logicalBytes: number;
+  configChanges: number;
+  contentChanges: number;
+  worldChanges: number;
+  otherChanges: number;
+  ignoredFiles: number;
+};
+export type BackupChange = {
+  path: string;
+  type: "added" | "modified" | "removed" | string;
+  category: "config" | "content" | "world" | "other" | string;
+  size?: number;
+  oldHash?: string;
+  newHash?: string;
+  displayName?: string;
+  version?: string;
+  oldVersion?: string;
+  newVersion?: string;
+};
+export type BackupDiffLine = { type: "context" | "added" | "removed" | string; text: string };
+export type BackupDiff = { path: string; change: BackupChange; lines: BackupDiffLine[]; truncated: boolean };
+export type Backup = {
+  id: string;
+  reason: string;
+  snapshotPath: string;
+  createdAt: string;
+  sizeBytes: number;
+  logicalSizeBytes?: number;
+  scope?: string;
+  stats?: BackupStats;
+  changes?: BackupChange[];
+  summary?: string;
+};
 export type FileEntry = {
   name: string;
   path: string;
@@ -234,6 +270,8 @@ export type FileEntry = {
 export type FileListing = { cwd: string; parent: string; entries: FileEntry[] };
 export type FilePayload = { file: { name: string; path: string; size: number; editable: boolean; content: string } };
 export type ServerProperties = {
+  /** The exact contents of server.properties, comments included. */
+  text: string;
   raw: Record<string, string>;
   eulaAccepted: boolean;
   editable: {
@@ -343,7 +381,15 @@ export type UnsavedChangesRegistration = {
   saveLabel?: string;
   discardLabel?: string;
   canSave?: boolean;
+  /** True while a save is in flight; the save bar shows a spinner label. */
+  saving?: boolean;
+  /** Why Save is disabled; shown in the save bar. */
+  disabledReason?: string;
   onSave?: () => void | Promise<void>;
+  /** Reset the form to its saved values. */
+  onDiscard?: () => void;
+  /** Show the floating save bar for this form. Off for wizards and the file editor. */
+  showSaveBar?: boolean;
 };
 export type CommandPreset = { id: string; command: string; createdAt: string };
 
@@ -359,6 +405,36 @@ export type UpdateCheckResult = {
   builtAt?: string;
   checkedAt: string;
   error?: string;
+  /** Roughly the disk space an update keeps so it can be undone. */
+  safetyCopyBytes?: number;
+};
+
+/** One step of a running update, as reported by the daemon. */
+export type UpdateProgress = {
+  active: boolean;
+  stage: "" | "downloading" | "verifying" | "checking" | "backup" | "stopping" | "installing" | "restarting" | "failed";
+  message: string;
+  fromVersion?: string;
+  toVersion?: string;
+};
+
+/** The copies Cliff keeps so an update can be undone. */
+export type UpdateSafetyInfo = {
+  canRollback: boolean;
+  previousVersionBytes: number;
+  backupCount: number;
+  backupBytes: number;
+  totalBytes: number;
+  backupDir: string;
+};
+
+/** How the last update ended, shown once after Cliff comes back. */
+export type LastUpdateResult = {
+  status: "updated" | "rolled-back" | "failed";
+  from: string;
+  to: string;
+  message: string;
+  at: string;
 };
 
 export type UpdateApplyResult = {
@@ -366,4 +442,13 @@ export type UpdateApplyResult = {
   message: string;
   newVersion?: string;
   restarting: boolean;
+};
+
+export type UploadResult = {
+  name: string;
+  kind: "mod" | "plugin" | "datapack" | "bundle" | "world" | "resourcepack" | "jar" | "unknown";
+  status: "added" | "skipped";
+  message?: string;
+  /** The archive this file was extracted from, for zips of mods. */
+  source?: string;
 };

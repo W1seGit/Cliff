@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "./button";
+import { StatusDot } from "./status-dot";
 
 export interface SelectionToggle {
   label: string;
@@ -30,12 +31,17 @@ export function SelectionBar({ selectedCount, actions, className = "" }: Selecti
   if (selectedCount === 0 && actions.length === 0) return null;
   const classes = `selection-bar ${className}`.trim();
   return (
-    <div className={classes}>
-      <span className="selection-bar-count">{selectedCount} selected</span>
-      <div className="selection-bar-actions">
-        {actions.map((action, i) => (
-          <SplitButton key={i} action={action} />
-        ))}
+    <div className={`save-bar ${classes}`.trim()} role="region" aria-label="Selection">
+      <div className="save-bar-inner">
+        <span className="save-bar-status" role="status" aria-live="polite">
+          <StatusDot tone="accent" />
+          {selectedCount} selected
+        </span>
+        <div className="save-bar-actions">
+          {actions.map((action, i) => (
+            <SplitButton key={i} action={action} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -48,6 +54,7 @@ function SplitButton({ action }: { action: SelectionAction }) {
   if (!toggles || toggles.length === 0) {
     return (
       <Button
+        size="sm"
         variant={action.variant}
         disabled={action.disabled}
         loading={action.loading}
@@ -66,6 +73,7 @@ function SplitButton({ action }: { action: SelectionAction }) {
   return (
     <div className={`split-button ${isDanger ? "danger" : ""}`.trim()}>
       <Button
+        size="sm"
         disabled={action.disabled}
         loading={action.loading}
         loadingText={action.loadingText}

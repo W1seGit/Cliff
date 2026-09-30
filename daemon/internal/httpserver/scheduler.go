@@ -48,7 +48,7 @@ func (h apiHandler) runScheduledSnapshots(ctx context.Context, now time.Time) {
 }
 
 func scheduledSnapshotDue(server store.Server, now time.Time) bool {
-	if !server.SnapshotsEnabled || !server.ScheduledSnapshotsEnabled || server.SnapshotIntervalMinutes <= 0 {
+	if !server.ScheduledSnapshotsEnabled || server.SnapshotIntervalMinutes <= 0 {
 		return false
 	}
 	lastRun, err := time.Parse(time.RFC3339, server.LastScheduledSnapshotAt)

@@ -33,6 +33,14 @@ On Windows:
 | `--log-file` | `CLIFF_LOG_FILE` | `<data-dir>/logs/daemon.log` | Daemon log file |
 | `--log-level` | `CLIFF_LOG_LEVEL` | `info` | Log level: debug, info, warn, error |
 | `--version` | — | — | Print version, commit, and build time |
+| — | `CLIFF_ALLOWED_ORIGINS` | *(none)* | Comma-separated browser origins (e.g. `http://localhost:3000`) allowed to call the API and console WebSocket cross-origin. Same-origin needs no entry. Only needed for the Next.js dev server or a separate frontend host. |
+
+## Security
+
+- **Cross-origin protection:** browser requests are only accepted from the daemon's own origin or `CLIFF_ALLOWED_ORIGINS`. This covers CORS, state-changing requests, and the console WebSocket handshake.
+- **Login rate limiting:** 5 failed logins within 15 minutes lock that IP address and that username out for 15 minutes (HTTP 429 with `Retry-After`). Behind a reverse proxy on the same machine, the client IP is read from `X-Forwarded-For`.
+- **Session cookie:** `HttpOnly`, `SameSite=Lax`, and `Secure` automatically when the request is HTTPS or the proxy sends `X-Forwarded-Proto: https`.
+- **Passwords:** PBKDF2-HMAC-SHA256 (210,000 iterations) via `golang.org/x/crypto`.
 
 ## API Routes
 

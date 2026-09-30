@@ -9,7 +9,7 @@ import (
 
 func TestScheduledSnapshotDue(t *testing.T) {
 	now := time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
-	base := store.Server{SnapshotsEnabled: true, ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 60}
+	base := store.Server{ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 60}
 
 	if !scheduledSnapshotDue(base, now) {
 		t.Fatal("expected server with no previous scheduled snapshot to be due")
@@ -31,12 +31,6 @@ func TestScheduledSnapshotDue(t *testing.T) {
 	disabled.ScheduledSnapshotsEnabled = false
 	if scheduledSnapshotDue(disabled, now) {
 		t.Fatal("expected disabled scheduler to not be due")
-	}
-
-	autoSnapshotsDisabled := base
-	autoSnapshotsDisabled.SnapshotsEnabled = false
-	if scheduledSnapshotDue(autoSnapshotsDisabled, now) {
-		t.Fatal("expected disabled auto snapshots to not be due")
 	}
 
 	noInterval := base

@@ -2,34 +2,36 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ChevronDown, ChevronRight, CircleCheck, Download, LayoutGrid, List, Package, PackagePlus, Puzzle, Search, SlidersHorizontal,
-  TriangleAlert, Upload, Users,
+  ChevronDown, ChevronRight, CircleCheck, Download, LayoutGrid, Layers, List, Package, PackagePlus, Puzzle, Search, SlidersHorizontal,
+  Store, TriangleAlert, Upload, Users, X,
 } from "lucide-react";
 import { compactNumber, formatBytes, serverTypeNeedsLoader, serverTypeNeedsPlugins } from "../lib/utils";
 import {
   fetchModrinthProjectDetails, fetchServerWorlds, fetchWorldDatapackDetails, modUrl, runServerModAction,
-  runWorldAction, searchServerMods, searchWorldDatapacks, uploadServerMod, uploadWorldFile, worldUrl,
+  runWorldAction, searchServerMods, searchWorldDatapacks, worldUrl,
 } from "../lib/runtime-client";
 import { VersionSelect } from "../components/version-select";
+import { platformLogos } from "../components/server-type-presets";
 import type {
   ConfirmRequest, MinecraftMetadata, ModFile, ModSearchResult,
   ModrinthProjectDetails, ServerRecord, WorldInfo, WorldsPayload,
 } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
+import { Page } from "../components/ui/page-layout";
+import { Banner } from "../components/ui/banner";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Table, SortableTh } from "../components/ui/table";
-import { Hint } from "../components/ui/hint";
 import { Pill } from "../components/ui/pill";
 import { FilterBar } from "../components/ui/filter-bar";
 import { SelectionBar } from "../components/ui/selection-bar";
 import { Tabs } from "../components/ui/tabs";
+import { Skeleton } from "../components/ui/skeleton";
+import { UploadTab } from "./mods/upload-tab";
 
 type DependencyWarning = NonNullable<NonNullable<ModFile["metadata"]>["dependencyWarnings"]>[number];
 type DiscoverSource = "marketplace" | "upload";
 type SideFilter = "both" | "server" | "client";
-type MarketFilter = "modrinth" | "curseforge";
 type InstalledItem = {
   id: string;
   type: "mod" | "datapack" | "modpack";
@@ -90,8 +92,59 @@ type DiscoverFiltersState = {
   content: "mod" | "modpack" | "datapack" | "plugin";
   sort: string;
   side: SideFilter;
-  market: MarketFilter;
 };
+
+const contentOptions: Record<"plugin" | "mod" | "modpack" | "datapack", string> = {
+  plugin: "Plugins",
+  mod: "Mods",
+  modpack: "Modpacks",
+  datapack: "Datapacks",
+};
+
+const platformLabels: Record<string, string> = {
+  paper: "Paper", purpur: "Purpur", folia: "Folia", spigot: "Spigot", bukkit: "Bukkit",
+  fabric: "Fabric", forge: "Forge", neoforge: "NeoForge", quilt: "Quilt",
+};
+
+const categoryOptions = [
+  ["adventure", "Adventure"], ["magic", "Magic"], ["optimization", "Optimization"], ["utility", "Utility"],
+  ["decoration", "Decoration"], ["technology", "Technology"], ["worldgen", "Worldgen"], ["food", "Food"],
+  ["equipment", "Equipment"], ["library", "Library"],
+] as const;
+
+const sideOptions: { value: SideFilter; label: string }[] = [
+  { value: "both", label: "Client and server" },
+  { value: "server", label: "Server" },
+  { value: "client", label: "Client" },
+];
+
+function contentChoices(pluginProfile: boolean): DiscoverFiltersState["content"][] {
+  return pluginProfile ? ["plugin", "datapack"] : ["mod", "modpack", "datapack"];
+}
+
+function platformChoices(pluginProfile: boolean): string[] {
+  return pluginProfile
+    ? ["paper", "purpur", "folia", "spigot", "bukkit"]
+    : ["paper", "purpur", "folia", "fabric", "forge", "neoforge", "quilt"];
+}
+
+function PlatformIcon({ platform }: { platform: string }) {
+  const logo = platformLogos[platform];
+  if (!logo) return <span className="discover-opt-glyph" aria-hidden="true">{(platformLabels[platform] ?? platform).slice(0, 1)}</span>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img className="discover-opt-logo" src={logo} alt="" loading="lazy" />
+  );
+}
+
+function FilterOption({ active, icon, onClick, children }: { active: boolean; icon?: React.ReactNode; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button type="button" className={`discover-opt ${active ? "active" : ""}`} aria-pressed={active} onClick={onClick}>
+      {icon}
+      <span>{children}</span>
+    </button>
+  );
+}
 
 /** Shared filter form used by both the desktop sidebar and the mobile collapsible panel. */
 function DiscoverFilters({
@@ -113,100 +166,54 @@ function DiscoverFilters({
   setSelectedWorld: (value: string) => void;
   pluginProfile: boolean;
 }) {
+  const set = (patch: Partial<DiscoverFiltersState>) => updateFilters((current) => ({ ...current, ...patch }));
   return (
     <>
-      <label className="discover-filter-field">
-        <span>Content</span>
-        <Select value={filters.content} onChange={(event) => updateFilters((current) => ({ ...current, content: event.target.value as typeof current.content }))}>
-          {pluginProfile ? (
-            <>
-              <option value="plugin">Plugins</option>
-              <option value="datapack">Datapacks</option>
-            </>
-          ) : (
-            <>
-              <option value="mod">Mods</option>
-              <option value="modpack">Modpacks</option>
-              <option value="datapack">Datapacks</option>
-            </>
-          )}
-        </Select>
-      </label>
+      <div className="discover-group" role="group" aria-label="Content">
+        <span className="discover-group-label">Content</span>
+        {contentChoices(pluginProfile).map((content) => (
+          <FilterOption key={content} active={filters.content === content} onClick={() => set({ content })}>{contentOptions[content]}</FilterOption>
+        ))}
+      </div>
       {filters.content === "datapack" && (
-        <label className="discover-filter-field">
-          <span>Target world</span>
+        <label className="discover-group">
+          <span className="discover-group-label">Target world</span>
           <Select value={selectedWorld} onChange={(event) => setSelectedWorld(event.target.value)}>
             {worlds.map((world) => <option key={world.name} value={world.name}>{world.name}</option>)}
           </Select>
         </label>
       )}
-      <div className="discover-filter-field">
-        <span>Version</span>
-        <VersionSelect value={filters.version} metadata={metadata} metadataError={metadataError} onChange={(value) => updateFilters((current) => ({ ...current, version: value }))} />
+      <div className="discover-group">
+        <span className="discover-group-label">Version</span>
+        <VersionSelect value={filters.version} metadata={metadata} metadataError={metadataError} onChange={(version) => set({ version })} />
       </div>
       {filters.content !== "datapack" && (
         <>
-          <label className="discover-filter-field">
-            <span>Platform</span>
-            <Select value={filters.loader} onChange={(event) => updateFilters((current) => ({ ...current, loader: event.target.value }))}>
-              <option value="">Any</option>
-              {pluginProfile ? (
-                <>
-                  <option value="paper">Paper</option>
-                  <option value="purpur">Purpur</option>
-                  <option value="folia">Folia</option>
-                  <option value="spigot">Spigot</option>
-                  <option value="bukkit">Bukkit</option>
-                </>
-              ) : (
-                <>
-                  <option value="paper">Paper</option>
-                  <option value="purpur">Purpur</option>
-                  <option value="folia">Folia</option>
-                  <option value="fabric">Fabric</option>
-                  <option value="forge">Forge</option>
-                  <option value="neoforge">NeoForge</option>
-                  <option value="quilt">Quilt</option>
-                </>
-              )}
-            </Select>
-          </label>
-          <label className="discover-filter-field">
-            <span>Category</span>
-            <Select value={filters.category} onChange={(event) => updateFilters((current) => ({ ...current, category: event.target.value }))}>
-              <option value="">Any</option>
-              <option value="adventure">Adventure</option>
-              <option value="magic">Magic</option>
-              <option value="optimization">Optimization</option>
-              <option value="utility">Utility</option>
-              <option value="decoration">Decoration</option>
-              <option value="technology">Technology</option>
-              <option value="worldgen">Worldgen</option>
-              <option value="food">Food</option>
-              <option value="equipment">Equipment</option>
-              <option value="library">Library</option>
-            </Select>
-          </label>
+          <div className="discover-group" role="group" aria-label="Platform">
+            <span className="discover-group-label">Platform</span>
+            <FilterOption active={filters.loader === ""} icon={<Layers size={16} className="discover-opt-glyph" aria-hidden="true" />} onClick={() => set({ loader: "" })}>Any</FilterOption>
+            {platformChoices(pluginProfile).map((platform) => (
+              <FilterOption key={platform} active={filters.loader === platform} icon={<PlatformIcon platform={platform} />} onClick={() => set({ loader: platform })}>
+                {platformLabels[platform]}
+              </FilterOption>
+            ))}
+          </div>
+          <div className="discover-group" role="group" aria-label="Side">
+            <span className="discover-group-label">Runs on</span>
+            <div className="discover-segmented">
+              <button type="button" aria-pressed={filters.side === "server"} onClick={() => set({ side: "server" })}>Server</button>
+              <button type="button" aria-pressed={filters.side === "both"} onClick={() => set({ side: "both" })}>Both</button>
+              <button type="button" aria-pressed={filters.side === "client"} onClick={() => set({ side: "client" })}>Client</button>
+            </div>
+          </div>
+          <div className="discover-group" role="group" aria-label="Category">
+            <span className="discover-group-label">Category</span>
+            <FilterOption active={filters.category === ""} onClick={() => set({ category: "" })}>Any</FilterOption>
+            {categoryOptions.map(([value, label]) => (
+              <FilterOption key={value} active={filters.category === value} onClick={() => set({ category: value })}>{label}</FilterOption>
+            ))}
+          </div>
         </>
-      )}
-      <label className="discover-filter-field">
-        <span>Sort</span>
-        <Select value={filters.sort} onChange={(event) => updateFilters((current) => ({ ...current, sort: event.target.value }))}>
-          <option value="relevance">Relevance</option>
-          <option value="downloads">Popular</option>
-          <option value="popularity">Trending</option>
-          <option value="updated">Recently updated</option>
-        </Select>
-      </label>
-      {filters.content !== "datapack" && (
-        <label className="discover-filter-field">
-          <span>Side</span>
-          <Select value={filters.side} onChange={(event) => updateFilters((current) => ({ ...current, side: event.target.value as SideFilter }))}>
-            <option value="both">Client/Server</option>
-            <option value="server">Server</option>
-            <option value="client">Client</option>
-          </Select>
-        </label>
       )}
     </>
   );
@@ -238,14 +245,10 @@ export function ModsPanel({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ModSearchResult[]>([]);
   const [busyId, setBusyId] = useState("");
-  const [uploading, setUploading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreResults, setHasMoreResults] = useState(false);
   const [nextResultOffset, setNextResultOffset] = useState(0);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploadType, setUploadType] = useState<"mod" | "datapack" | null>(null);
-  const [uploadDragActive, setUploadDragActive] = useState(false);
   const [installedQuery, setInstalledQuery] = useState("");
   const [installedType, setInstalledType] = useState<string>("");
   const [installedStatus, setInstalledStatus] = useState<string>("");
@@ -271,15 +274,13 @@ export function ModsPanel({
     content: (serverTypeNeedsPlugins(server.type) ? "plugin" : "mod") as "mod" | "modpack" | "datapack" | "plugin",
     sort: "downloads",
     side: "server" as SideFilter,
-    market: "modrinth" as MarketFilter,
   });
   const activeSearchKeyRef = useRef("");
   const blockedMoreKeyRef = useRef("");
   const loadingMoreRef = useRef(false);
   const resultListRef = useRef<HTMLDivElement | null>(null);
-  const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
-  const busy = Boolean(busyId) || uploading || searching || loadingMore;
+  const busy = Boolean(busyId) || searching || loadingMore;
   const vanillaProfile = !serverTypeNeedsLoader(server.type) && !serverTypeNeedsPlugins(server.type);
   const pluginProfile = serverTypeNeedsPlugins(server.type);
   const worlds = worldsData?.worlds ?? [];
@@ -291,6 +292,12 @@ export function ModsPanel({
     filters.sort !== "downloads",
     filters.side !== "server",
   ].filter(Boolean).length;
+  const activeFilterChips: { key: string; label: string; clear: () => void }[] = [];
+  if (filters.content !== "datapack") {
+    if (filters.loader) activeFilterChips.push({ key: "loader", label: platformLabels[filters.loader] ?? filters.loader, clear: () => setFilters((current) => ({ ...current, loader: "" })) });
+    if (filters.side !== "both") activeFilterChips.push({ key: "side", label: sideOptions.find((option) => option.value === filters.side)?.label ?? filters.side, clear: () => setFilters((current) => ({ ...current, side: "both" })) });
+    if (filters.category) activeFilterChips.push({ key: "category", label: categoryOptions.find(([value]) => value === filters.category)?.[1] ?? filters.category, clear: () => setFilters((current) => ({ ...current, category: "" })) });
+  }
   const modItems: InstalledItem[] = mods.map((mod) => ({
     id: `mod:${mod.enabled ? "enabled" : "disabled"}:${mod.fileName}`,
     type: "mod" as const,
@@ -743,50 +750,6 @@ export function ModsPanel({
     }
   }
 
-  async function uploadMod() {
-    if (!uploadFile || busy || !uploadType) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      const uploadingDatapack = uploadType === "datapack";
-      form.set("action", uploadingDatapack ? "upload-datapack" : "upload");
-      if (uploadingDatapack) form.set("worldName", selectedWorld);
-      form.set("file", uploadFile);
-      const data = uploadingDatapack ? await uploadWorldFile(server.id, form) : await uploadServerMod(server.id, form);
-      setUploadFile(null);
-      setUploadType(null);
-      if ("files" in data && data.files?.length) onMessage(`Uploaded ${data.files.join(", ")}`);
-      else onMessage(uploadingDatapack ? "Uploaded datapack" : `Uploaded ${pluginProfile ? "plugin" : "mod"}`);
-      if (uploadingDatapack) setWorldsData(data as WorldsPayload);
-      else await onRefresh();
-    } catch (error) {
-      onMessage(error instanceof Error ? error.message : "Upload failed");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  function handleUploadFileSelected(file: File | null) {
-    if (!file) {
-      setUploadFile(null);
-      setUploadType(null);
-      return;
-    }
-    const isZip = file.name.toLowerCase().endsWith(".zip");
-    const isJar = file.name.toLowerCase().endsWith(".jar");
-    setUploadFile(file);
-    setUploadType(isZip ? "datapack" : isJar ? "mod" : null);
-  }
-
-  function handleUploadDrop(event: React.DragEvent) {
-    event.preventDefault();
-    event.stopPropagation();
-    setUploadDragActive(false);
-    if (busy) return;
-    const file = event.dataTransfer.files?.[0] ?? null;
-    handleUploadFileSelected(file);
-  }
-
   function switchSource(next: DiscoverSource) {
     if (next === source) return;
     setSource(next);
@@ -801,27 +764,21 @@ export function ModsPanel({
   };
 
   return (
-    <section className="mods-workspace">
-      <div className="mods-page-header">
-        <div className="mods-page-title">
-          <h1><span className="workspace-page-icon"><Puzzle /></span>{pluginProfile ? "Plugins" : "Mods / Plugins"}</h1>
-          <p className="mods-page-subtitle">{pluginProfile ? "Install, enable, and discover plugins and datapacks." : "Install, enable, and discover mods and datapacks."}</p>
-        </div>
-      </div>
-
+    <Page
+      className="mods-workspace"
+      icon={<Puzzle size={20} />}
+      title={pluginProfile ? "Plugins" : "Mods / Plugins"}
+      description={pluginProfile ? "Install, enable, and discover plugins and datapacks." : "Install, enable, and discover mods and datapacks."}
+    >
       {vanillaProfile && (
-        <Hint variant="source" warn>
-          <span>This server type does not load Fabric, Forge, or NeoForge mods. Datapacks still work.</span>
-        </Hint>
+        <Banner variant="warning">This server type does not load Fabric, Forge, or NeoForge mods. Datapacks still work.</Banner>
       )}
       {isRunning && (
-        <Hint variant="source" warn>
-          <span>Server is running — mod and datapack deletion is disabled. Restart the server for mod changes to take effect.</span>
-        </Hint>
+        <Banner variant="warning">The server is running, so mod and datapack deletion is disabled. Restart it for changes to take effect.</Banner>
       )}
 
       {view === "installed" && (
-        <Panel className="mods-list-panel">
+        <div className="mods-list-panel">
           <FilterBar
             fields={[
               {
@@ -923,7 +880,7 @@ export function ModsPanel({
                 const rows = [
                   <tr key={item.id}>
                     <td><Input type="checkbox" aria-label={`Select ${item.fileName}`} checked={selectedInstalled.includes(item.id)} onChange={(event) => setSelectedInstalled((current) => event.target.checked ? [...current, item.id] : current.filter((id) => id !== item.id))} /></td>
-                    <td><Pill variant={item.type === "mod" ? "success" : item.type === "modpack" ? "accent" : "warning"}>{item.type}</Pill></td>
+                    <td><Pill>{item.type}</Pill></td>
                     <td>
                       <div className="installed-mod-cell">
                         {item.type === "modpack" && item.children?.length ? (
@@ -967,7 +924,7 @@ export function ModsPanel({
                               </Button>
                             ) : null}
                           </span>
-                          <small>{item.metadata ? `${item.metadata.source}${item.metadata.versionNumber ? ` / ${item.metadata.versionNumber}` : ""}` : item.fileName}</small>
+                          {item.metadata && <small>{`${item.metadata.source}${item.metadata.versionNumber ? ` / ${item.metadata.versionNumber}` : ""}`}</small>}
                         </span>
                       </div>
                     </td>
@@ -1009,49 +966,33 @@ export function ModsPanel({
               )}
               </tbody>
             </Table>
-          </Panel>
+          </div>
       )}
 
       {view === "discover" && (
         <div className="mods-discover">
           <Tabs
             items={[
-              { id: "marketplace", label: "Marketplace" },
-              { id: "upload", label: "Upload" },
+              { id: "marketplace", label: "Marketplace", icon: <Store size={15} aria-hidden="true" /> },
+              { id: "upload", label: "Upload", icon: <Upload size={15} aria-hidden="true" /> },
             ]}
             activeId={source}
             onChange={(id) => switchSource(id as DiscoverSource)}
           />
 
           {source === "upload" && (
-            <div className="discover-upload">
-              <div className="discover-upload-head">
-                <div>
-                  <h2>Upload</h2>
-                  <p className="muted">Add a local .jar {pluginProfile ? "plugin" : "mod"} or .zip datapack to this server.</p>
-                </div>
-                <Button variant="primary" className="icon-button" disabled={!uploadFile || !uploadType || busy || (uploadType === "datapack" && !selectedWorld)} onClick={uploadMod}><Upload size={16} />{uploading ? "Uploading..." : uploadType ? `Upload ${uploadType === "mod" && pluginProfile ? "plugin" : uploadType}` : "Upload"}</Button>
-              </div>
-              {uploadType === "datapack" && (
-                <label className="discover-filter-field">
-                  <span>Target world</span>
-                  <Select value={selectedWorld} onChange={(event) => setSelectedWorld(event.target.value)}>
-                    {worlds.map((world) => <option key={world.name} value={world.name}>{world.name}</option>)}
-                  </Select>
-                </label>
-              )}
-              <div
-                className={`mod-upload-drop ${uploadDragActive ? "drag-active" : ""}`}
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!busy) setUploadDragActive(true); }}
-                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setUploadDragActive(false); }}
-                onDrop={handleUploadDrop}
-                onClick={() => { if (!busy) uploadInputRef.current?.click(); }}
-              >
-                <Input ref={uploadInputRef} type="file" accept=".jar,.zip" disabled={busy} onChange={(event) => handleUploadFileSelected(event.target.files?.[0] ?? null)} />
-                <strong>{uploadFile ? uploadFile.name : "Drag and drop a .jar or .zip"}</strong>
-                <span className="muted">{uploadFile ? (uploadType ? `${uploadType === "datapack" ? "Datapack" : pluginProfile ? "Plugin" : "Mod"} detected` : "Unrecognized file type") : "or click to browse"}</span>
-              </div>
-            </div>
+            <UploadTab
+              serverId={server.id}
+              pluginProfile={pluginProfile}
+              worlds={worlds}
+              selectedWorld={selectedWorld}
+              onSelectWorld={setSelectedWorld}
+              disabled={busy}
+              onUploaded={async () => {
+                await Promise.all([onRefresh(), loadWorlds()]);
+              }}
+              onMessage={onMessage}
+            />
           )}
 
           {source !== "upload" && (
@@ -1089,11 +1030,28 @@ export function ModsPanel({
                       Filters
                       {mobileFilterCount > 0 && <span className="filter-menu-badge">{mobileFilterCount}</span>}
                     </button>
+                    <Select className="discover-sort" aria-label="Sort" value={filters.sort} onChange={(event) => updateFilters((current) => ({ ...current, sort: event.target.value }))}>
+                      <option value="relevance">Relevance</option>
+                      <option value="downloads">Popular</option>
+                      <option value="popularity">Trending</option>
+                      <option value="updated">Recently updated</option>
+                    </Select>
                     <div className="discover-view-toggle" role="group" aria-label="Results view">
                       <button type="button" className={`discover-view-btn ${viewMode === "list" ? "active" : ""}`} aria-label="List view" aria-pressed={viewMode === "list"} onClick={() => setViewMode("list")}><List size={16} /></button>
                       <button type="button" className={`discover-view-btn ${viewMode === "grid" ? "active" : ""}`} aria-label="Grid view" aria-pressed={viewMode === "grid"} onClick={() => setViewMode("grid")}><LayoutGrid size={16} /></button>
                     </div>
                   </div>
+
+                  {activeFilterChips.length > 0 && (
+                    <div className="discover-active" aria-label="Active filters">
+                      <span className="discover-group-label">Showing</span>
+                      {activeFilterChips.map((chip) => (
+                        <button key={chip.key} type="button" className="discover-chip" onClick={chip.clear} aria-label={`Remove filter ${chip.label}`}>
+                          {chip.label}<X size={12} aria-hidden="true" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Mobile filter panel — collapsible, stays visible while sticky */}
                   <div id="discover-mobile-filters" className={`discover-mobile-filters ${mobileFiltersOpen ? "open" : ""}`}>
@@ -1115,13 +1073,13 @@ export function ModsPanel({
                   <div className="discover-skeletons">
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                       <div key={i} className="discover-card discover-card-skeleton" aria-hidden="true">
-                        <span className="skeleton skeleton-mod-icon" />
+                        <Skeleton variant="mod-icon" />
                         <div className="discover-card-body">
-                          <span className="skeleton skeleton-line wide" />
-                          <span className="skeleton skeleton-line medium" />
-                          <span className="skeleton skeleton-line short" />
+                          <Skeleton width="wide" />
+                          <Skeleton width="medium" />
+                          <Skeleton width="short" />
                         </div>
-                        <span className="skeleton skeleton-button" />
+                        <Skeleton variant="button" />
                       </div>
                     ))}
                   </div>
@@ -1196,7 +1154,7 @@ export function ModsPanel({
                 })}
                 {loadingMore && <div className="mods-empty mini"><strong>Loading more...</strong></div>}
                 {!searching && !loadingMore && hasMoreResults && visibleResults.length > 0 && (
-                  <Button className="load-more-results" type="button" onClick={loadMoreResults}>Load more</Button>
+                  <Button plain className="load-more-results" type="button" onClick={loadMoreResults}>Load more</Button>
                 )}
                 {!searching && !loadingMore && query.trim() && visibleResults.length === 0 && results.length === 0 && (
                   <div className="mods-empty">
@@ -1218,6 +1176,6 @@ export function ModsPanel({
           )}
         </div>
       )}
-    </section>
+    </Page>
   );
 }

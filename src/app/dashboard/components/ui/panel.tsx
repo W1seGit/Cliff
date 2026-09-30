@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { PageHeader } from "./page-header";
 
 export interface PanelProps extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
   as?: "section" | "div";
@@ -29,13 +30,7 @@ export function Panel({
   if (title) {
     return (
       <>
-        <div className="workspace-page-header">
-          <div className="workspace-page-heading">
-            <h2>{icon && <span className="workspace-page-icon">{icon}</span>}{title}</h2>
-            {description && <p>{description}</p>}
-          </div>
-          {headerActions}
-        </div>
+        <PageHeader title={title} description={description} icon={icon} actions={headerActions} />
         {panelElement}
       </>
     );

@@ -5,6 +5,7 @@ import type { RuntimeStatus, RuntimeUsage, ServerHealth, ServerRecord } from "..
 import { formatBytes, joinAddressFor, isPublicAddressActive } from "../lib/utils";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { Button } from "../components/ui/button";
+import { Page } from "../components/ui/page-layout";
 import { Pill } from "../components/ui/pill";
 import { AreaChart } from "../components/ui/area-chart";
 import { fetchServerProperties, fetchServerUsage } from "../lib/runtime-client";
@@ -137,12 +138,18 @@ export function OverviewPanel({
   const healthChecks = health?.checks ?? [];
   const attentionChecks = healthChecks.filter((check) => check.state !== "ok");
 
+  // Type, version and address already live in the header and the join address above,
+  // so this strip only shows facts that appear nowhere else.
+  const pluginServer = ["paper", "purpur", "folia"].includes(selected.type);
   const overviewStats = [
-    { label: "Type", value: selected.type },
-    { label: "Version", value: selected.minecraftVersion },
-    { label: "Port", value: selected.port },
+    { label: "Active world", value: health?.activeWorld || "—" },
     { label: "Worlds", value: health?.counts.worlds ?? "—" },
-    { label: "Mods", value: health ? `${health.counts.mods}${health.counts.disabledMods ? ` (${health.counts.disabledMods} off)` : ""}` : "—" },
+    ...(selected.type === "vanilla" ? [] : [{
+      label: pluginServer ? "Plugins" : "Mods",
+      value: health ? `${health.counts.mods}${health.counts.disabledMods ? ` (${health.counts.disabledMods} off)` : ""}` : "—",
+    }]),
+    { label: "Datapacks", value: health?.counts.datapacks ?? "—" },
+    { label: "Player files", value: health?.counts.playerFiles ?? "—" },
   ];
 
   // Rolling window — right edge is always "now", ticking every 1s.
@@ -198,7 +205,7 @@ export function OverviewPanel({
   const startMarkerTime = (isRunning && runtimeStartMs !== null && runtimeStartMs >= timeStart && runtimeStartMs <= timeEnd) ? runtimeStartMs : null;
 
   return (
-    <section className="overview-layout">
+    <Page className="overview-layout">
       <div className="overview-hero">
         <span className="overview-hero-label">{publicActive ? "Public join address" : "Join address"}</span>
         <button className="overview-hero-address" onClick={() => copyAddress()} aria-label="Copy join address">
@@ -220,7 +227,7 @@ export function OverviewPanel({
         <div className="chart-card-head">
           <div className="chart-card-heading">
             <h2>Server usage</h2>
-            <p>{isRunning && hasChartData ? "live" : (hasChartData ? "historical" : "no data")}</p>
+            {hasChartData && <p>{isRunning ? "live" : "historical"}</p>}
           </div>
           <div className="chart-card-controls">
             <div className="chart-legend">
@@ -250,6 +257,11 @@ export function OverviewPanel({
             </div>
           </div>
         </div>
+        {!hasChartData && (
+          <p className="chart-empty">
+            {isRunning ? "Collecting usage data..." : "CPU, memory and player history will appear here once the server has run."}
+          </p>
+        )}
         <AreaChart
           height={300}
           max={100}
@@ -278,7 +290,7 @@ export function OverviewPanel({
           </div>
           <div className="action-list">
             {attentionChecks.map((check) => (
-              <Button key={check.id} className={`action-item ${check.state}`} onClick={() => check.id === "eula" ? onAcceptEula() : setTab(["launch", "java", "properties", "memory", "port"].includes(check.id) ? "settings" : "overview")}>
+              <Button plain key={check.id} className={`action-item ${check.state}`} onClick={() => check.id === "eula" ? onAcceptEula() : setTab(["launch", "java", "properties", "memory", "port"].includes(check.id) ? "settings" : "overview")}>
                 <span>
                   <strong>{check.label}</strong>
                   <small>{check.detail}</small>
@@ -293,6 +305,6 @@ export function OverviewPanel({
       {!health && (
         <p className="muted overview-scanning">Scanning server folder...</p>
       )}
-    </section>
+    </Page>
   );
 }

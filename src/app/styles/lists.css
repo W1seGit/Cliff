@@ -1,102 +1,124 @@
 /* Lists */
-.access-list, .world-list, .datapack-list, .file-list { display: grid; gap: 0; }
-
-.access-row, .world-card, .datapack-row, .file-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 0;
-  border-radius: 0;
-  background: transparent;
-  border-bottom: 1px solid var(--border-hairline);
-}
-
-.access-row:last-child, .world-card:last-child, .datapack-row:last-child, .file-row:last-child {
-  border-bottom: 0;
-}
-
-.access-row span, .file-row span { min-width: 0; }
-.access-row small, .world-card small, .datapack-row small { color: var(--text-secondary); font-size: 12px; }
-
-.world-card { padding: 12px 0; }
-.world-card.active { background: transparent; }
-.world-card-main {
+.backup-date-cell {
   display: grid;
-  gap: 3px;
-  flex: 1;
+  gap: 2px;
+}
+.backup-summary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
+  color: var(--text-secondary);
+  font-weight: 400;
   text-align: left;
 }
-.world-card-main:hover:not(:disabled) { background: transparent; opacity: 0.7; }
-.world-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-
-.worlds-layout { align-items: start; }
-.worlds-list-panel { display: flex; flex-direction: column; gap: 16px; }
-.worlds-list-panel .world-list { flex: 1 1 auto; }
-.backups-list-panel { display: flex; flex-direction: column; gap: 16px; }
-.files-list-panel { display: flex; flex-direction: column; gap: 16px; }
-
-.world-import-form {
-  display: grid;
-  gap: 10px;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
+.backup-summary-button:hover { color: var(--text); }
+.backup-summary-button svg {
+  color: var(--text-secondary);
+  transition: transform 120ms ease;
 }
-
-.world-import-form h3 { margin: 0; font-size: 13px; color: var(--text-secondary); }
-
-.datapacks-panel { display: flex; flex-direction: column; gap: 12px; }
-
-.world-target-select { margin: 0 0 4px; }
-
-.datapack-actions {
-  display: flex;
+.backup-summary-button svg.expanded {
+  transform: rotate(180deg);
+}
+.backup-details-row td {
+  padding-top: 0;
+}
+.backup-details {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.backup-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  flex-wrap: wrap;
 }
-
-.datapack-upload-form,
-.datapack-search-form {
+.backup-stats-grid span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.backup-stats-grid strong {
+  color: var(--text);
+}
+.backup-change-list {
   display: grid;
-  gap: 10px;
-  padding: 0;
-  border-radius: 0;
-  background: transparent;
+  gap: 6px;
 }
-
-.form-actions {
-  display: flex;
+.backup-change-item {
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+.backup-change-item code {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.backup-change-kind {
+  color: var(--text-secondary);
+}
+.backup-change-kind.content { color: var(--accent); }
+.backup-change-kind.config { color: var(--success); }
+.backup-change-kind.world { color: var(--warning); }
+.backup-change-actions {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
   justify-content: flex-end;
 }
-
-.datapack-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 10px; }
-.datapack-row > span:first-child { display: grid; gap: 2px; }
-
-.file-manager {
+.backup-change-actions button {
+  min-height: 28px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.backup-diff-view {
   display: grid;
-  gap: 16px;
-  min-width: 0;
+  max-height: min(62vh, 620px);
+  overflow: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
-
-.file-manager > .panel {
-  min-width: 0;
+.backup-diff-line {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 24px;
+  padding: 3px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.035);
 }
-
-.file-row-actions { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; padding: 6px; }
-.file-row-actions > input { align-self: center; margin: 0 4px; }
-.file-open-button {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-  padding: 6px;
-  background: transparent;
-  text-align: left;
+.backup-diff-line:last-child {
+  border-bottom: 0;
 }
-.file-open-button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.03); }
+.backup-diff-line span {
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.backup-diff-line code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.backup-diff-line.added {
+  background: color-mix(in srgb, var(--running) 12%, transparent);
+}
+.backup-diff-line.added span {
+  color: var(--running);
+}
+.backup-diff-line.removed {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+.backup-diff-line.removed span {
+  color: var(--danger);
+}
 

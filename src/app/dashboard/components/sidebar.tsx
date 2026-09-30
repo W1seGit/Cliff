@@ -3,9 +3,9 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Archive, ChevronDown, ChevronLeft, ChevronRight,
+  Archive, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
   FolderOpen, Globe, LayoutDashboard, LogOut, MoreHorizontal,
-  Package, Plus, Puzzle, RadioTower, Search, Settings, Terminal, Upload, UserRound, Users,
+  Package, Plus, Puzzle, RadioTower, Search, Settings, SlidersHorizontal, Terminal, Upload, UserRound, Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -13,6 +13,8 @@ import { api, externalApiUrl, serverTypeSupportsContent, publicAccessStorageKey 
 import type { RuntimeStatus, ServerRecord, User } from "../lib/types";
 import { fetchPlayitAgent } from "../lib/runtime-client";
 import { ServerAvatar } from "./server-avatar";
+import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
+import { Skeleton } from "./ui/skeleton";
 
 type NavItem = { id: string; label: string; Icon: LucideIcon; requiresContent?: boolean };
 type ModsChildItem = { id: "mods/installed" | "mods/discover"; label: string; Icon: LucideIcon };
@@ -32,12 +34,7 @@ const serverNavItems: NavItem[] = [
   { id: "backups", label: "Backups", Icon: Archive },
   { id: "players", label: "Players", Icon: Users },
   { id: "public-access", label: "Public Access", Icon: RadioTower },
-  { id: "settings", label: "Settings", Icon: Settings },
-];
-
-const utilityNavItems: NavItem[] = [
-  { id: "import", label: "Import server", Icon: Upload },
-  { id: "create", label: "Create server", Icon: Plus },
+  { id: "settings", label: "Settings", Icon: SlidersHorizontal },
 ];
 
 const modsChildItems: ModsChildItem[] = [
@@ -111,14 +108,10 @@ export function Sidebar({
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [switcherPosition, setSwitcherPosition] = useState({ top: 0, left: 0 });
   const [switcherQuery, setSwitcherQuery] = useState("");
-  const [accountOpen, setAccountOpen] = useState(false);
-  const [accountPosition, setAccountPosition] = useState({ top: 0, left: 0 });
   const [modsOpen, setModsOpen] = useState<boolean | null>(null);
   const [publicAccessStatus, setPublicAccessStatus] = useState<"off" | "loading" | "on">("off");
   const switcherRef = useRef<HTMLButtonElement | null>(null);
-  const accountRef = useRef<HTMLButtonElement | null>(null);
   const switcherMenuWidth = 290;
-  const accountMenuWidth = 220;
   const closeMobileSidebar = () => {
     if (typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches) setCollapsed(true);
   };
@@ -145,7 +138,6 @@ export function Sidebar({
     const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
     const preferredTop = rect.bottom + 6;
     const top = Math.max(8, Math.min(preferredTop, window.innerHeight - menuHeight - 8));
-    setAccountOpen(false);
     setMenuPosition({ top, left });
     setServerActionMenu(serverActionMenu === serverId ? "" : serverId);
   }
@@ -164,32 +156,10 @@ export function Sidebar({
     const menuHeight = Math.min(380, window.innerHeight - rect.bottom - 16);
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - switcherMenuWidth - 8));
     const top = Math.max(8, Math.min(rect.bottom + 6, window.innerHeight - menuHeight - 8));
-    setAccountOpen(false);
     setServerActionMenu("");
     setSwitcherQuery("");
     setSwitcherPosition({ top, left });
     setSwitcherOpen(true);
-  }
-
-  function openAccount() {
-    const button = accountRef.current;
-    if (!button || typeof window === "undefined") {
-      setAccountOpen((open) => !open);
-      return;
-    }
-    if (accountOpen) {
-      setAccountOpen(false);
-      return;
-    }
-    const rect = button.getBoundingClientRect();
-    const menuHeight = 124;
-    const abovePreferred = rect.top - menuHeight - 12;
-    const top = Math.max(8, Math.min(abovePreferred, window.innerHeight - menuHeight - 8));
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - accountMenuWidth - 8));
-    setSwitcherOpen(false);
-    setServerActionMenu("");
-    setAccountPosition({ top, left });
-    setAccountOpen(true);
   }
 
   useEffect(() => {
@@ -222,34 +192,7 @@ export function Sidebar({
     };
   }, [serverActionMenu, switcherOpen, setServerActionMenu]);
 
-  useEffect(() => {
-    if (!accountOpen) return;
-    function closeOnOutside(event: PointerEvent) {
-      const target = event.target as HTMLElement | null;
-      if (target?.closest(".account-menu, .account-button")) return;
-      setAccountOpen(false);
-    }
-    function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setAccountOpen(false);
-    }
-    function closeOnViewportChange() {
-      setAccountOpen(false);
-    }
-    document.addEventListener("pointerdown", closeOnOutside);
-    document.addEventListener("keydown", closeOnEscape);
-    window.addEventListener("resize", closeOnViewportChange);
-    window.addEventListener("scroll", closeOnViewportChange, true);
-    return () => {
-      document.removeEventListener("pointerdown", closeOnOutside);
-      document.removeEventListener("keydown", closeOnEscape);
-      window.removeEventListener("resize", closeOnViewportChange);
-      window.removeEventListener("scroll", closeOnViewportChange, true);
-    };
-  }, [accountOpen]);
-
-  const isUtilityTab = tab === "app" || tab === "account" || tab === "import" || tab === "create";
   const navItems = showSelectedServer && selected ? serverNavItems : [];
-  const utilityActiveItem = utilityNavItems.find((item) => item.id === tab);
   const modsActive = tab === "mods" || tab === "mods/installed" || tab === "mods/discover";
   const modsExpanded = modsOpen ?? modsActive;
 
@@ -367,10 +310,10 @@ export function Sidebar({
             </>
           ) : loading ? (
             <>
-              <span className="skeleton skeleton-dot" />
+              <Skeleton variant="dot" />
               <span className="server-switcher-meta">
-                <span className="skeleton skeleton-line wide" />
-                <span className="skeleton skeleton-line short" />
+                <Skeleton width="wide" />
+                <Skeleton width="short" />
               </span>
               <ChevronDown size={14} className="server-switcher-caret" aria-hidden="true" />
             </>
@@ -390,7 +333,7 @@ export function Sidebar({
       <nav className="sidebar-nav" aria-label="Server sections">
         {navItems.map((item) => {
           const disabled = item.requiresContent && selected ? !serverTypeSupportsContent(selected.type) : false;
-          const active = item.id === "mods" ? modsActive : tab === item.id;
+          const active = item.id === "mods" ? modsActive : tab === item.id || tab.startsWith(`${item.id}/`);
           const Icon = item.Icon;
           if (item.id === "mods") {
             return (
@@ -446,42 +389,43 @@ export function Sidebar({
             </button>
           );
         })}
-        {isUtilityTab && (
-          <button
-            className={`sidebar-nav-item active`}
-            onClick={() => handleUtilityPick(tab)}
-          >
-            <span className="sidebar-nav-icon">{utilityActiveItem ? <utilityActiveItem.Icon size={17} /> : <Settings size={17} />}</span>
-            <span className="sidebar-nav-label">{utilityActiveItem ? utilityActiveItem.label : tab === "app" ? "App settings" : tab === "account" ? "Manage account" : tab}</span>
-          </button>
-        )}
-        {!showSelectedServer && !isUtilityTab && !loading && servers.length > 0 && (
+        {!showSelectedServer && !loading && servers.length > 0 && (
           <p className="sidebar-nav-hint muted">Select a server to see its sections.</p>
         )}
       </nav>
 
       <div className="sidebar-footer">
         <button
-          ref={accountRef}
-          className="account-button"
-          aria-haspopup="menu"
-          aria-expanded={accountOpen}
-          onClick={() => openAccount()}
-          title={collapsed ? user.username : undefined}
+          className={`sidebar-nav-item ${tab === "app" ? "active" : ""}`}
+          onClick={() => handleUtilityPick("app")}
+          title={collapsed ? "App settings" : undefined}
         >
-          <span className="account-avatar" aria-hidden="true">{(user.username[0] ?? "?").toUpperCase()}</span>
-          {!collapsed && <span className="account-name">{user.username}</span>}
+          <span className="sidebar-nav-icon"><Settings size={17} /></span>
+          <span className="sidebar-nav-label">App settings</span>
         </button>
+        <Menu
+          side="top"
+          align="start"
+          onOpenChange={(open) => {
+            if (open) {
+              setSwitcherOpen(false);
+              setServerActionMenu("");
+            }
+          }}
+          trigger={
+            <button className={`account-button ${tab === "account" ? "active" : ""}`} title={collapsed ? user.username : undefined}>
+              <span className="account-avatar" aria-hidden="true">{(user.username[0] ?? "?").toUpperCase()}</span>
+              {!collapsed && <span className="account-name">{user.username}</span>}
+              {!collapsed && <ChevronUp size={14} className="account-chevron" aria-hidden="true" />}
+            </button>
+          }
+        >
+          <MenuItem icon={<UserRound size={16} />} onSelect={() => { setSwitcherOpen(false); setTab("account"); closeMobileSidebar(); }}>Manage account</MenuItem>
+          <MenuSeparator />
+          <MenuItem icon={<LogOut size={16} />} onSelect={logout}>Logout</MenuItem>
+        </Menu>
       </div>
     </aside>
-
-    {accountOpen && (
-      <FloatingMenu className="floating-menu account-menu" position={accountPosition} width={accountMenuWidth}>
-        <button role="menuitem" onClick={() => { setAccountOpen(false); setSwitcherOpen(false); setTab("account"); closeMobileSidebar(); }}><UserRound size={16} />Manage account</button>
-        <button role="menuitem" onClick={() => { setAccountOpen(false); setSwitcherOpen(false); setTab("app"); closeMobileSidebar(); }}><Settings size={16} />App settings</button>
-        <button role="menuitem" onClick={logout}><LogOut size={16} />Logout</button>
-      </FloatingMenu>
-    )}
 
     {switcherOpen && (
       <FloatingMenu className="server-switcher-menu" position={switcherPosition} width={switcherMenuWidth}>
@@ -536,9 +480,9 @@ export function Sidebar({
 
     {openMenuServer && (
       <FloatingMenu className="floating-menu server-menu" position={menuPosition} width={150}>
-        <button role="menuitem" onClick={() => onRename(openMenuServer)}>Rename</button>
-        <button role="menuitem" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => onDuplicate(openMenuServer)}>Clone server</button>
-        <button role="menuitem" className="danger-button" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => onDelete(openMenuServer)}>Delete</button>
+        <button role="menuitem" onClick={() => { setSwitcherOpen(false); onRename(openMenuServer); }}>Rename</button>
+        <button role="menuitem" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => { setSwitcherOpen(false); onDuplicate(openMenuServer); }}>Clone server</button>
+        <button role="menuitem" className="danger-button" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => { setSwitcherOpen(false); onDelete(openMenuServer); }}>Delete</button>
       </FloatingMenu>
     )}
     </>

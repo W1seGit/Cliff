@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  CheckCircle2, Clipboard, Loader2, RadioTower, XCircle,
+  ArrowLeft, CheckCircle2, Clipboard, Download, Link2, Loader2, RadioTower, Waypoints, XCircle,
 } from "lucide-react";
 import {
   checkPlayitDeps as checkPlayitDepsAction,
@@ -30,6 +30,9 @@ import { Hint } from "../components/ui/hint";
 import { Toggle } from "../components/ui/toggle";
 import { JoinAddress } from "../components/ui/join-address";
 import { ConsoleView } from "../components/ui/console-view";
+import { Skeleton } from "../components/ui/skeleton";
+import { EmptyState } from "../components/ui/empty-state";
+import { Page } from "../components/ui/page-layout";
 
 type InstallState = "not-installed" | "installing" | "installed" | "failed";
 type ClaimState = "starting-agent" | "waiting-for-claim-link" | "claim-link-ready" | "waiting-for-user-to-claim" | "claimed" | "failed";
@@ -255,8 +258,8 @@ function MacBuildFlow({
           ))}
         </div>
         <div className="public-access-flow-actions public-access-install-flow-actions">
-          <Button variant="primary" className="public-access-install-button" onClick={onInstallDeps}>Yes, install</Button>
-          <Button className="public-access-install-button" onClick={onCancel}>No, cancel</Button>
+          <Button variant="primary" size="lg" onClick={onInstallDeps}>Yes, install</Button>
+          <Button size="lg" onClick={onCancel}>No, cancel</Button>
         </div>
         <Hint warn>Xcode Command Line Tools may show a system popup dialog — click Install when it appears.</Hint>
       </div>
@@ -308,8 +311,8 @@ function MacBuildFlow({
         </div>
         <p className="public-access-mac-build-copy">{errorMsg || "The Playit agent could not be built. Check the logs above for details."}</p>
         <div className="public-access-flow-actions public-access-install-flow-actions">
-          <Button variant="primary" className="public-access-install-button" onClick={onRetry}>Try again</Button>
-          <Button className="public-access-install-button" onClick={onCancel}>Cancel</Button>
+          <Button variant="primary" size="lg" onClick={onRetry}>Try again</Button>
+          <Button size="lg" onClick={onCancel}>Cancel</Button>
         </div>
       </div>
     );
@@ -373,6 +376,7 @@ export function PublicAccessPanel({
   const publicAccessRunning = configured && config.enabled !== false && agentRunning && tunnelReady;
   const publicAccessLoading = configured && config.enabled !== false && agentRunning && !tunnelReady;
   const flowSteps = ["Install Agent", "Connect Account", "Create Tunnel"];
+  const flowStepIcons = [<Download key="install" size={15} />, <Link2 key="connect" size={15} />, <Waypoints key="tunnel" size={15} />];
   const setupStepValid = [agentInstalled, config.claimed, Boolean(config.publicAddress)];
   const setupActive = mode === "setup" || setupOpen;
 
@@ -830,18 +834,27 @@ export function PublicAccessPanel({
 
   if (setupActive) {
     return (
-      <section className="public-access-setup-view">
+      <Page
+        className="public-access-setup-view"
+        title="Set up Public Access"
+        description={`Let friends join ${server.name} from anywhere, with no router setup.`}
+        icon={<RadioTower size={20} />}
+        actions={mode === "setup" && onBack ? <Button iconLeft={<ArrowLeft size={14} />} onClick={onBack}>Back to Public Access</Button> : undefined}
+        tabs={
         <Tabs
           ariaLabel="Public access setup steps"
           items={flowSteps.map((label, index) => ({
             id: String(index),
-            label: `${index + 1}. ${label}`,
+            label,
+            icon: flowStepIcons[index],
             disabled: index > 0 && !setupStepValid[index - 1],
             extraClassName: setupStepValid[index] && index !== setupStep ? "done" : "",
           }))}
           activeId={String(setupStep)}
           onChange={(id) => goToSetupStep(Number(id))}
         />
+        }
+      >
 
         {setupStep === 0 && (
           <div className="form-section">
@@ -875,11 +888,11 @@ export function PublicAccessPanel({
               <div className="public-access-flow-actions public-access-install-flow-actions">
                 {agentInstalled ? (
                   <>
-                    <Button className="public-access-install-button" disabled={uninstallBusy} onClick={uninstallAgent} loading={uninstallBusy} loadingText="Uninstalling...">Uninstall Agent</Button>
-                    <Button variant="primary" className="public-access-install-button" onClick={() => goToSetupStep(1)}>Next</Button>
+                    <Button size="lg" disabled={uninstallBusy} onClick={uninstallAgent} loading={uninstallBusy} loadingText="Uninstalling...">Uninstall Agent</Button>
+                    <Button variant="primary" size="lg" onClick={() => goToSetupStep(1)}>Next</Button>
                   </>
                 ) : macBuildPhase === "idle" ? (
-                  <Button variant="primary" className="public-access-install-button" disabled={installState === "installing"} onClick={installAgent} loading={installState === "installing"} loadingText="Installing...">Install Playit Agent</Button>
+                  <Button variant="primary" size="lg" disabled={installState === "installing"} onClick={installAgent} loading={installState === "installing"} loadingText="Installing...">Install Playit Agent</Button>
                 ) : null}
               </div>
           </div>
@@ -895,8 +908,8 @@ export function PublicAccessPanel({
                     <p>Your Playit agent is claimed and ready to create a public tunnel.</p>
                   </div>
                   <div className="public-access-flow-actions public-access-install-flow-actions">
-                    <Button className="public-access-install-button" disabled={resetBusy} onClick={resetProcess} loading={resetBusy} loadingText="Resetting...">Reset setup</Button>
-                    <Button variant="primary" className="public-access-install-button" onClick={() => goToSetupStep(2)}>Next</Button>
+                    <Button size="lg" disabled={resetBusy} onClick={resetProcess} loading={resetBusy} loadingText="Resetting...">Reset setup</Button>
+                    <Button variant="primary" size="lg" onClick={() => goToSetupStep(2)}>Next</Button>
                   </div>
                 </>
               ) : (
@@ -920,10 +933,10 @@ export function PublicAccessPanel({
                     </Button>
                   </div>
                   <div className="public-access-flow-actions public-access-install-flow-actions">
-                    <Button variant="primary" className="public-access-install-button" disabled={!validClaimUrl(config.claimUrl) || config.claimed} onClick={() => { setClaimState("waiting-for-user-to-claim"); open(config.claimUrl); }}>
+                    <Button variant="primary" size="lg" disabled={!validClaimUrl(config.claimUrl) || config.claimed} onClick={() => { setClaimState("waiting-for-user-to-claim"); open(config.claimUrl); }}>
                       Open Claim Link
                     </Button>
-                    <Button className="public-access-install-button" disabled={!agentInstalled || resetBusy} onClick={resetProcess} loading={resetBusy} loadingText="Resetting...">Reset setup</Button>
+                    <Button size="lg" disabled={!agentInstalled || resetBusy} onClick={resetProcess} loading={resetBusy} loadingText="Resetting...">Reset setup</Button>
                   </div>
                   {agentError ? <Hint warn>{agentError}</Hint> : null}
                 </>
@@ -944,10 +957,10 @@ export function PublicAccessPanel({
                     <Input className="public-access-claim-url-input" value={config.publicAddress} readOnly />
                   </div>
                   <div className="public-access-flow-actions public-access-install-flow-actions">
-                    <Button className="public-access-install-button" onClick={() => open(playitLinks.tunnelSetup)}>
+                    <Button size="lg" onClick={() => open(playitLinks.tunnelSetup)}>
                       Open Playit Tunnel Setup
                     </Button>
-                    <Button variant="primary" className="public-access-install-button" onClick={() => (mode === "setup" ? onBack?.() : setSetupOpen(false))}>
+                    <Button variant="primary" size="lg" onClick={() => (mode === "setup" ? onBack?.() : setSetupOpen(false))}>
                       Done
                     </Button>
                   </div>
@@ -974,11 +987,11 @@ export function PublicAccessPanel({
                     </Button>
                   </div>
                   <div className="public-access-flow-actions public-access-install-flow-actions">
-                    <Button className="public-access-install-button" disabled={!config.claimed} onClick={() => open(playitLinks.tunnelSetup)}>
+                    <Button size="lg" disabled={!config.claimed} onClick={() => open(playitLinks.tunnelSetup)}>
                       Open Playit Tunnel Setup
                     </Button>
                     {tunnelState === "failed" || tunnelState === "waiting-for-tunnel" ? (
-                      <Button variant="primary" className="public-access-install-button" disabled={tunnelState === "waiting-for-tunnel"} onClick={checkTunnelAddressAgain}>Check Again</Button>
+                      <Button variant="primary" size="lg" disabled={tunnelState === "waiting-for-tunnel"} onClick={checkTunnelAddressAgain}>Check Again</Button>
                     ) : null}
                   </div>
                   {tunnelState === "failed" ? (
@@ -991,31 +1004,34 @@ export function PublicAccessPanel({
           </div>
         )}
 
-      </section>
+      </Page>
     );
   }
 
+  const openSetup = () => {
+    if (onConfigure) onConfigure();
+    else { setSetupOpen(true); goToSetupStep(config.claimed ? 2 : agentInstalled ? 1 : 0); }
+  };
+
   return (
-    <Panel className="public-access-panel public-access-layout" title="Public Access" description="Expose this server to the internet so friends can join remotely." icon={<RadioTower />} headerActions={
+    <Panel className="public-access-panel public-access-layout" title="Public Access" description="Expose this server to the internet so friends can join remotely." icon={<RadioTower />} headerActions={configured ? (
       <Toolbar>
-        <Button variant="primary" onClick={() => { if (onConfigure) onConfigure(); else { setSetupOpen(true); goToSetupStep(config.claimed ? 2 : agentInstalled ? 1 : 0); } }}>
-          {configured ? "Manage setup" : "Configure Public Access"}
-        </Button>
+        <Button variant="primary" onClick={openSetup}>Manage setup</Button>
       </Toolbar>
-    }>
+    ) : undefined}>
       {loadingConfig ? (
         <div className="public-access-skeleton" aria-hidden="true">
           <div className="public-access-skeleton-row">
-            <div className="skeleton skeleton-line short" />
-            <div className="skeleton skeleton-line medium" />
+            <Skeleton width="short" />
+            <Skeleton width="medium" />
           </div>
           <div className="public-access-skeleton-toggle">
-            <div className="skeleton skeleton-line wide" />
-            <div className="skeleton skeleton-toggle" />
+            <Skeleton width="wide" />
+            <Skeleton variant="toggle" />
           </div>
           <div className="public-access-skeleton-stats">
-            <div className="skeleton skeleton-stat" />
-            <div className="skeleton skeleton-stat" />
+            <Skeleton variant="stat" />
+            <Skeleton variant="stat" />
           </div>
         </div>
       ) : configured ? (
@@ -1056,12 +1072,12 @@ export function PublicAccessPanel({
           ) : null}
         </>
       ) : (
-        <div className="public-access-empty-state">
-          <div className="public-access-empty-copy">
-            <h3>Your server is currently not configured for public access.</h3>
-            <p>Public Access uses Playit to create a secure tunnel, allowing your friends to join this server from anywhere without requiring you to configure router port forwarding.</p>
-          </div>
-        </div>
+        <EmptyState
+          icon={<RadioTower size={22} />}
+          title="Public access is off"
+          description="Public Access uses Playit to create a secure tunnel, so friends can join from anywhere without router port forwarding."
+          action={<Button variant="primary" onClick={openSetup}>Configure Public Access</Button>}
+        />
       )}
     </Panel>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ClipboardCheck, Cpu, Layers, Tag } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange, validPort } from "../lib/utils";
 import { createServerProfile } from "../lib/runtime-client";
 import { ExtraArgsPresetRow, JavaPresetRow, MemoryPresetRow } from "../components/preset-rows";
@@ -11,6 +12,8 @@ import type { MinecraftMetadata, ServerType, UnsavedChangesRegistration } from "
 import { Input } from "../components/ui/input";
 import { Panel } from "../components/ui/panel";
 import { Hint } from "../components/ui/hint";
+import { Banner } from "../components/ui/banner";
+import { KeyValueList } from "../components/ui/setting-row";
 import { WizardTabs, WizardActions } from "../components/ui/wizard";
 import { FieldGrid } from "../components/ui/field-grid";
 
@@ -49,12 +52,16 @@ export function CreatePanel({
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState(0);
 
+  const submittingLabel = type === "forge" || type === "neoforge"
+    ? `Installing ${type === "neoforge" ? "NeoForge" : "Forge"}...`
+    : "Creating...";
   const effectiveMinecraftVersion = minecraftVersion || metadata?.latest.release || "";
   const needsLoader = serverTypeNeedsLoader(type);
   const memoryValid = validMemoryRange(minMemoryMb, maxMemoryMb);
   const portValid = validPort(port);
   const canSubmit = Boolean(metadata && name.trim() && effectiveMinecraftVersion && (!needsLoader || loaderVersion) && memoryValid && portValid && !busy);
   const createSteps = ["Type", "Version", "Resources", "Review"];
+  const createStepIcons = [<Layers key="type" size={14} />, <Tag key="version" size={14} />, <Cpu key="resources" size={14} />, <ClipboardCheck key="review" size={14} />];
   const createStepValid = [
     Boolean(name.trim()),
     Boolean(metadata && effectiveMinecraftVersion && (!needsLoader || loaderVersion)),
@@ -105,10 +112,10 @@ export function CreatePanel({
 
   return (
     <Panel className="form-grid utility-wizard-panel wizard-panel">
-      <h2>Create server profile</h2>
       <div className="wizard-header">
         <WizardTabs
           steps={createSteps}
+          icons={createStepIcons}
           currentStep={step}
           canVisitStep={canVisitStep}
           stepValid={createStepValid}
@@ -122,7 +129,7 @@ export function CreatePanel({
           canContinue={canContinue}
           canSubmit={canSubmit}
           submitLabel="Create profile"
-          submittingLabel="Creating..."
+          submittingLabel={submittingLabel}
           onBack={() => setStep((current) => Math.max(0, current - 1))}
           onContinue={() => setStep((current) => Math.min(createSteps.length - 1, current + 1))}
           onSubmit={submit}
@@ -171,7 +178,7 @@ export function CreatePanel({
             <summary>Advanced launch settings</summary>
             <Input label="Java runtime" value={javaPath} onChange={(event) => setJavaPath(event.target.value)} />
             <JavaPresetRow javaPath={javaPath} onApply={setJavaPath} />
-            <Hint>Auto-managed installs and uses the Java version required by this Minecraft profile on first start.</Hint>
+            <Hint>Auto-managed installs the Java version this profile needs during setup or first start.</Hint>
             <Input label="Extra args" value={extraArgs} onChange={(event) => setExtraArgs(event.target.value)} />
             <ExtraArgsPresetRow extraArgs={extraArgs} onApply={setExtraArgs} />
           </details>
@@ -179,16 +186,17 @@ export function CreatePanel({
       )}
 
       {step === 3 && (
-        <div className="form-section">
-          <h3>Review</h3>
-          <div className="wizard-review-grid">
-            <div><span>Type</span><strong>{type}</strong></div>
-            <div><span>Minecraft</span><strong>{effectiveMinecraftVersion}</strong></div>
-            <div><span>Loader</span><strong>{loaderVersion || "None"}</strong></div>
-            <div><span>Port</span><strong>{port}</strong></div>
-            <div><span>Memory</span><strong>{minMemoryMb}M / {maxMemoryMb}M</strong></div>
-          </div>
-          <Hint warn={!canSubmit}>{canSubmit ? "Profile valid." : "Complete the previous steps to create."}</Hint>
+        <div className="review-step">
+          <KeyValueList
+            items={[
+              { key: "type", label: "Type", value: type },
+              { key: "mc", label: "Minecraft", value: effectiveMinecraftVersion, mono: true },
+              { key: "loader", label: "Loader", value: loaderVersion || "None", mono: Boolean(loaderVersion) },
+              { key: "port", label: "Port", value: port, mono: true },
+              { key: "memory", label: "Memory", value: `${minMemoryMb} MB min, ${maxMemoryMb} MB max` },
+            ]}
+          />
+          {!canSubmit && <Banner variant="warning">Complete the previous steps to create the server.</Banner>}
         </div>
       )}
     </Panel>

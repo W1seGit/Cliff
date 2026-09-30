@@ -13,6 +13,8 @@ import (
 )
 
 type serverPropertiesPayload struct {
+	// Text is the exact contents of server.properties, comments included.
+	Text         string                   `json:"text"`
 	Raw          map[string]string        `json:"raw"`
 	EULAAccepted bool                     `json:"eulaAccepted"`
 	Editable     serverPropertiesEditable `json:"editable"`
@@ -75,6 +77,19 @@ func (h apiHandler) updateServerProperties(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "invalid properties body")
 		return
 	}
+	if text, ok := input["text"].(string); ok {
+		// The dashboard edits the real file: keep comments, order and spacing.
+		if err := validatePropertiesText(text); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := writeServerPropertiesText(server, text); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		h.finishPropertiesUpdate(w, r, server, input)
+		return
+	}
 	editableInput := input
 	if value, ok := input["editable"].(map[string]any); ok {
 		editableInput = value
@@ -95,6 +110,12 @@ func (h apiHandler) updateServerProperties(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	h.finishPropertiesUpdate(w, r, server, input)
+}
+
+// finishPropertiesUpdate applies the EULA flag, syncs the stored port, and
+// replies with the fresh file contents.
+func (h apiHandler) finishPropertiesUpdate(w http.ResponseWriter, r *http.Request, server store.Server, input map[string]any) {
 	if value, ok := input["eulaAccepted"].(bool); ok {
 		if err := os.WriteFile(filepath.Join(server.Path, "eula.txt"), []byte("eula="+strconv.FormatBool(value)+"\n"), 0o644); err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -111,8 +132,14 @@ func (h apiHandler) updateServerProperties(w http.ResponseWriter, r *http.Reques
 }
 
 func readServerPropertiesPayload(server store.Server) serverPropertiesPayload {
-	raw := readPropertiesRaw(filepath.Join(server.Path, "server.properties"))
+	propertiesPath := filepath.Join(server.Path, "server.properties")
+	raw := readPropertiesRaw(propertiesPath)
+	text := ""
+	if data, err := os.ReadFile(propertiesPath); err == nil {
+		text = string(data)
+	}
 	return serverPropertiesPayload{
+		Text:         text,
 		Raw:          raw,
 		EULAAccepted: readEULAAccepted(filepath.Join(server.Path, "eula.txt")),
 		Editable: serverPropertiesEditable{
@@ -146,7 +173,7 @@ func readPropertiesRaw(path string) map[string]string {
 			continue
 		}
 		key, value, _ := strings.Cut(line, "=")
-		raw[key] = value
+		raw[strings.TrimSpace(key)] = strings.TrimLeft(value, " \t")
 	}
 	return raw
 }
@@ -305,4 +332,57 @@ func propertyString(value any) string {
 	default:
 		return strings.TrimSpace(fmt.Sprint(value))
 	}
+}
+
+const maxPropertiesTextBytes = 512 * 1024
+
+// validatePropertiesText checks a whole server.properties file before it is
+// written, so a typo cannot leave the server unable to start. It reports the
+// first problem with a line number.
+func validatePropertiesText(text string) error {
+	if len(text) > maxPropertiesTextBytes {
+		return httpError("server.properties is too large")
+	}
+	if strings.ContainsRune(text, 0) {
+		return httpError("server.properties cannot contain binary data")
+	}
+	limits := map[string][2]int{
+		"max-players":         {1, 1000},
+		"server-port":         {1, 65535},
+		"view-distance":       {2, 32},
+		"simulation-distance": {2, 32},
+	}
+	for index, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(strings.TrimRight(line, "\r"))
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "!") {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		key = strings.TrimSpace(key)
+		if !found || key == "" {
+			return httpError("Line " + strconv.Itoa(index+1) + " must look like key=value")
+		}
+		value = strings.TrimSpace(value)
+		if limit, ok := limits[key]; ok && value != "" {
+			number, err := strconv.Atoi(value)
+			if err != nil || number < limit[0] || number > limit[1] {
+				return httpError("Line " + strconv.Itoa(index+1) + ": " + key + " must be a number from " + strconv.Itoa(limit[0]) + " to " + strconv.Itoa(limit[1]))
+			}
+		}
+		if key == "level-name" && value == "" {
+			return httpError("Line " + strconv.Itoa(index+1) + ": level-name cannot be empty")
+		}
+	}
+	return nil
+}
+
+// writeServerPropertiesText saves the file exactly as given.
+func writeServerPropertiesText(server store.Server, text string) error {
+	if err := os.MkdirAll(server.Path, 0o755); err != nil {
+		return err
+	}
+	if text != "" && !strings.HasSuffix(text, "\n") {
+		text += "\n"
+	}
+	return os.WriteFile(filepath.Join(server.Path, "server.properties"), []byte(text), 0o644)
 }

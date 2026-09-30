@@ -20,6 +20,10 @@ import (
 	"github.com/W1seGit/Cliff/daemon/internal/store"
 )
 
+// readyTimeout is the fallback for servers that never print a "Done (" line:
+// after this long we stop reporting "starting" and treat the server as running.
+var readyTimeout = 10 * time.Minute
+
 type Lifecycle string
 
 const (
@@ -30,7 +34,9 @@ const (
 )
 
 const (
-	startupWait             = 5 * time.Second
+	// startupGrace is how long Start waits to catch a server that dies right
+	// away (bad Java, missing files). It does not mean the server is ready.
+	startupGrace            = 2 * time.Second
 	maxRetainedLogLines     = 1000
 	maxRetainedLogLineBytes = 16 * 1024
 	maxUsageSamples         = 36
@@ -275,9 +281,10 @@ func (m *Manager) Start(server store.Server) (Status, error) {
 	go m.scanOutput(proc, stderr)
 	go m.wait(proc)
 	go m.sampleLoop(proc)
+	go m.readyWatchdog(proc)
 
 	_ = args
-	status, err := m.waitForStartup(proc, startupWait)
+	status, err := m.waitForStartup(proc, startupGrace)
 	if err != nil {
 		return status, err
 	}
@@ -614,8 +621,23 @@ func (m *Manager) waitForStartup(proc *managedProcess, timeout time.Duration) (S
 	case <-proc.exited:
 		return m.StatusForLight(proc.serverID), errors.New("server exited during startup. Check the console for details.")
 	case <-timer.C:
+		// Still booting. Report "starting" and let the "Done (" line, an exit,
+		// or the ready watchdog decide what happens next.
+		return m.StatusForLight(proc.serverID), nil
+	}
+}
+
+// readyWatchdog gives up waiting for the ready message after readyTimeout so a
+// server that never prints "Done (" does not stay "starting" forever.
+func (m *Manager) readyWatchdog(proc *managedProcess) {
+	timer := time.NewTimer(readyTimeout)
+	defer timer.Stop()
+	select {
+	case <-proc.ready:
+	case <-proc.exited:
+	case <-timer.C:
+		m.pushLog(proc, fmt.Sprintf("Cliff: no ready message after %s, treating the server as running", readyTimeout.Round(time.Second)))
 		m.markRunning(proc)
-		return m.StatusLight(), nil
 	}
 }
 
@@ -1197,13 +1219,21 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 	}
 	var command string
 	var args []string
+	javaPath := strings.TrimSpace(server.JavaPath)
+	isScript := (runtime.GOOS == "windows" && strings.HasSuffix(lower, ".bat")) || strings.HasSuffix(lower, ".sh")
 	switch {
-	case runtime.GOOS == "windows" && strings.HasSuffix(lower, ".bat"):
-		command = "cmd.exe"
-		args = []string{"/c", server.LaunchJar}
-	case strings.HasSuffix(lower, ".sh"):
-		command = "sh"
-		args = []string{server.LaunchJar}
+	case isScript:
+		// Prefer running the script's own java line directly (managed Java, our
+		// memory settings, no trailing pause). Fall back to running the script.
+		if direct, directArgs, ok := directScriptCommand(launchPath, javaPath, server.MinMemoryMB, server.MaxMemoryMB, splitArgs(server.ExtraArgs)); ok {
+			command, args = direct, directArgs
+		} else if strings.HasSuffix(lower, ".bat") {
+			command = "cmd.exe"
+			args = []string{"/c", launchPath}
+		} else {
+			command = "sh"
+			args = []string{launchPath}
+		}
 	default:
 		command = strings.TrimSpace(server.JavaPath)
 		if command == "" || command == "auto" || strings.HasPrefix(command, "managed:") {
@@ -1223,6 +1253,10 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 	}
 
 	cmd := exec.Command(command, args...)
+	if isScript {
+		// Scripts (and the java they call) must see the managed Java first.
+		cmd.Env = javaEnvironment(javaPath)
+	}
 	return cmd, args, strings.Join(append([]string{command}, args...), " "), nil
 }
 
@@ -1243,7 +1277,19 @@ func isInstallerLaunchJar(lower string) bool {
 	return strings.Contains(lower, "installer")
 }
 
+// SuggestLaunchTarget returns a usable replacement when a persisted profile
+// still points at a loader installer jar.
+func SuggestLaunchTarget(serverPath string, launchTarget string) string {
+	if !isInstallerLaunchJar(strings.ToLower(launchTarget)) {
+		return ""
+	}
+	return detectBetterLaunchTarget(serverPath)
+}
+
 func detectBetterLaunchTarget(serverPath string) string {
+	if target := detectPlatformLaunchScript(serverPath, runtime.GOOS); target != "" {
+		return target
+	}
 	entries, err := os.ReadDir(serverPath)
 	if err != nil {
 		return ""
@@ -1268,6 +1314,20 @@ func detectBetterLaunchTarget(serverPath string) string {
 	for _, jar := range jars {
 		if !isInstallerLaunchJar(strings.ToLower(jar)) {
 			return jar
+		}
+	}
+	return ""
+}
+
+func detectPlatformLaunchScript(serverPath string, goos string) string {
+	names := []string{"run.sh", "start.sh", "start.command", "server.sh"}
+	if goos == "windows" {
+		names = []string{"run.bat", "start.bat", "server.bat"}
+	}
+	for _, name := range names {
+		info, err := os.Stat(filepath.Join(serverPath, name))
+		if err == nil && !info.IsDir() {
+			return name
 		}
 	}
 	return ""

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Modal } from "./ui/modal";
-import { Toggle } from "./ui/toggle";
+import { ToggleRow } from "./ui/setting-row";
 import { fetchServerProperties, saveServerProperties } from "../lib/runtime-client";
 
 export function EulaModal({
@@ -74,13 +74,7 @@ export function EulaModal({
       busy={busy}
       form
     >
-      <div className="settings-toggle-row eula-toggle-row">
-        <div className="settings-toggle-copy">
-          <strong>Accept Minecraft EULA</strong>
-          <span>Required before the server can start.</span>
-        </div>
-        <Toggle checked={accepted} onChange={setAccepted} disabled={busy} aria-label="Accept Minecraft EULA" />
-      </div>
+      <ToggleRow label="Accept Minecraft EULA" description="Required before the server can start." checked={accepted} onChange={setAccepted} disabled={busy} />
     </Modal>
   );
 }

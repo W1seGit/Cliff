@@ -230,10 +230,6 @@ func (h apiHandler) worldAction(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "Modrinth project id is required")
 			return
 		}
-		if err := h.createAutoSnapshot(r.Context(), server, "before installing Modrinth datapack into "+input.WorldName); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
 		files, err := h.installModrinthDatapack(r, server, input.WorldName, input.ProjectID, input.VersionID)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())

@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Globe, RotateCw, Upload } from "lucide-react";
+import { Download, Globe, MoreHorizontal, Power, RotateCw, Trash2, Upload } from "lucide-react";
 import { fetchServerWorlds, runWorldAction, uploadWorldFile, worldUrl } from "../lib/runtime-client";
 import type { ConfirmRequest, ServerRecord, WorldsPayload } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
+import { Page } from "../components/ui/page-layout";
+import { Banner } from "../components/ui/banner";
+import { IconButton } from "../components/ui/icon-button";
+import { Menu, MenuItem, MenuSeparator } from "../components/ui/menu";
 import { Input } from "../components/ui/input";
 import { Modal } from "../components/ui/modal";
-import { Hint } from "../components/ui/hint";
 import { Table, SortableTh } from "../components/ui/table";
 import { Pill } from "../components/ui/pill";
 import { FilterBar } from "../components/ui/filter-bar";
@@ -121,14 +123,12 @@ export function WorldsPanel({
   }
 
   return (
-    <section className="worlds-layout">
-      <Panel
-        className="worlds-list-panel"
-        title="Worlds"
-        description="Manage saved worlds and their datapacks."
-        icon={<Globe />}
-      >
-        {isRunning && <Hint warn>World changes are safest while stopped.</Hint>}
+    <Page
+      className="worlds-page"
+      title="Worlds"
+      description="Manage saved worlds and their datapacks."
+      icon={<Globe size={20} />}
+      toolbar={
         <FilterBar
           fields={[
             {
@@ -155,12 +155,15 @@ export function WorldsPanel({
           ]}
           actions={
             <>
-              <Button onClick={() => load().catch((error) => onMessage(error.message))}><RotateCw size={14} />Refresh</Button>
-              <Button variant="primary" onClick={() => setShowImport(true)}><Upload size={14} />Import world</Button>
+              <Button iconLeft={<RotateCw size={14} />} onClick={() => load().catch((error) => onMessage(error.message))}>Refresh</Button>
+              <Button variant="primary" iconLeft={<Upload size={14} />} onClick={() => setShowImport(true)}>Import world</Button>
             </>
           }
         />
-        {selectedWorlds.length > 0 && (
+      }
+    >
+      {isRunning && <Banner variant="warning">World changes are safest while the server is stopped.</Banner>}
+      {selectedWorlds.length > 0 && (
           <SelectionBar
             selectedCount={selectedWorlds.length}
             actions={[
@@ -184,32 +187,43 @@ export function WorldsPanel({
         <Table>
           <thead>
             <tr>
-              <th><Input type="checkbox" aria-label="Select all worlds" checked={allFilteredSelected} onChange={(event) => setSelectedWorlds(event.target.checked ? filteredWorlds.map((w) => w.name) : [])} /></th>
+              <th className="col-check"><Input type="checkbox" aria-label="Select all worlds" checked={allFilteredSelected} onChange={(event) => setSelectedWorlds(event.target.checked ? filteredWorlds.map((w) => w.name) : [])} /></th>
               <SortableTh label="Status" sortKey="status" activeSort={worldSortKey} sortDir={worldSortDir} onSort={handleSort} />
               <SortableTh label="Name" sortKey="name" activeSort={worldSortKey} sortDir={worldSortDir} onSort={handleSort} />
               <SortableTh label="Player Files" sortKey="players" activeSort={worldSortKey} sortDir={worldSortDir} onSort={handleSort} />
               <SortableTh label="Datapacks" sortKey="datapacks" activeSort={worldSortKey} sortDir={worldSortDir} onSort={handleSort} />
-              <th><span className="table-count">{filteredWorlds.length} of {data?.worlds.length ?? 0}</span></th>
+              <th className="col-actions"><span className="table-count">{filteredWorlds.length} of {data?.worlds.length ?? 0}</span></th>
             </tr>
           </thead>
           <tbody>
             {filteredWorlds.map((world) => (
               <tr key={world.name}>
-                <td><Input type="checkbox" aria-label={`Select ${world.name}`} checked={selectedWorlds.includes(world.name)} onChange={(event) => setSelectedWorlds((current) => event.target.checked ? [...current, world.name] : current.filter((name) => name !== world.name))} /></td>
+                <td className="col-check"><Input type="checkbox" aria-label={`Select ${world.name}`} checked={selectedWorlds.includes(world.name)} onChange={(event) => setSelectedWorlds((current) => event.target.checked ? [...current, world.name] : current.filter((name) => name !== world.name))} /></td>
                 <td>
                   <Pill variant={world.active ? "success" : "default"}>
                     {world.active ? "active" : "available"}
                   </Pill>
                 </td>
                 <td><strong>{world.name}</strong></td>
-                <td>{world.playerFiles}</td>
-                <td>{world.datapacks.length}</td>
-                <td></td>
+                <td className="col-num">{world.playerFiles}</td>
+                <td className="col-num">{world.datapacks.length}</td>
+                <td className="col-actions">
+                  <span className="row-actions">
+                    <Menu
+                      trigger={<IconButton size="sm" aria-label={`Actions for ${world.name}`}><MoreHorizontal size={16} /></IconButton>}
+                    >
+                      <MenuItem icon={<Power size={15} />} disabled={world.active} onSelect={() => { void makeActive(world.name).catch((error) => onMessage(error.message)); }}>Make active</MenuItem>
+                      <MenuItem icon={<Download size={15} />} onSelect={() => window.open(worldUrl(server.id, `?download=${encodeURIComponent(world.name)}`), "_blank")}>Download</MenuItem>
+                      <MenuSeparator />
+                      <MenuItem danger icon={<Trash2 size={15} />} disabled={world.active} onSelect={() => removeWorld(world.name)}>Delete</MenuItem>
+                    </Menu>
+                  </span>
+                </td>
               </tr>
             ))}
             {data && filteredWorlds.length === 0 && (
               <tr>
-                <td colSpan={6} className="muted">No worlds match.</td>
+                <td colSpan={6} className="table-empty">No worlds match.</td>
               </tr>
             )}
           </tbody>
@@ -227,7 +241,6 @@ export function WorldsPanel({
           <Input label="World zip" type="file" accept=".zip" onChange={(event) => setWorldZip(event.target.files?.[0] ?? null)} />
           <Input label="Name (optional)" value={worldImportName} onChange={(event) => setWorldImportName(event.target.value)} placeholder="Use zip name" />
         </Modal>
-      </Panel>
-    </section>
+    </Page>
   );
 }

@@ -3,7 +3,7 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: var(--z-modal);
   display: grid;
   place-items: center;
   padding: 20px;
@@ -117,8 +117,29 @@
   font-size: 13px;
 }
 
-.update-modal-later {
+.update-skip {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.update-skip input {
+  flex: none;
+  margin-top: 2px;
+}
+
+.update-skip small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-secondary);
   font-size: 12px;
+  line-height: 1.4;
 }
 
 @media (max-width: 520px) {
@@ -225,3 +246,115 @@
   font-size: 11px;
 }
 
+
+/* Update progress: one line per step */
+.update-progress {
+  display: grid;
+  gap: 12px;
+}
+
+.update-steps {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.update-steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 2px;
+  color: var(--text-tertiary);
+}
+
+.update-step-icon {
+  display: grid;
+  flex: none;
+  width: 18px;
+  height: 20px;
+  place-items: center;
+}
+
+.update-step-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.update-step-text strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.update-step-text small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.update-steps li.done { color: var(--text-secondary); }
+.update-steps li.done .update-step-icon { color: var(--running); }
+.update-steps li.active { color: var(--text); }
+.update-steps li.active .update-step-icon { color: var(--accent); }
+.update-steps li.active .update-step-text strong { font-weight: 600; }
+.update-steps li.failed { color: var(--danger); }
+
+.update-progress-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--text);
+  font-size: 13px;
+}
+
+/* The reassurance about what is kept and why */
+.update-safety-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  box-shadow: inset 0 0 0 1px var(--border-hairline);
+  font-size: 13px;
+}
+
+.update-safety-note svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--running);
+}
+
+.update-safety-note p {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.update-safety-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.update-safety-lead svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--running);
+}
+
+.update-safety-lead code {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 12px;
+  white-space: nowrap;
+}

@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Terminal, ArrowDownToLine } from "lucide-react";
-import { sendRuntimeCommand } from "../lib/runtime-client";
+import { ArrowDownToLine, Download, Terminal } from "lucide-react";
+import { fetchServerProperties, logsUrl, sendRuntimeCommand } from "../lib/runtime-client";
 import type { RuntimeStatus, ServerRecord } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
-import { Hint } from "../components/ui/hint";
+import { Page } from "../components/ui/page-layout";
+import { StatusDot } from "../components/ui/status-dot";
+import { CopyButton } from "../components/ui/copy-button";
+import { Banner } from "../components/ui/banner";
 import { Input } from "../components/ui/input";
 
 type ConsoleLine = {
@@ -93,18 +95,31 @@ export function ConsolePanel({
     }
   }, [logLines.length]);
 
-  // Detect EULA-related log lines from the server and prompt the user to
-  // accept the EULA via a modal instead of sending them to settings.
+  // Detect the server's "you need to agree to the EULA" message and offer the
+  // accept dialog. The message stays in the log after the EULA is accepted, so
+  // ask the server whether it is really unaccepted before prompting; otherwise
+  // every visit to this tab would re-open the dialog until the next start.
   const eulaPromptedRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
   useEffect(() => {
     if (eulaPromptedRef.current || logLines.length === 0) return;
     const recent = logLines.slice(-30);
     const detected = recent.some((line) => /eula/i.test(line) && /agree|accept|need/i.test(line));
-    if (detected) {
-      eulaPromptedRef.current = true;
-      onAcceptEula();
-    }
-  }, [logLines, onAcceptEula]);
+    if (!detected) return;
+    eulaPromptedRef.current = true;
+    fetchServerProperties(selected.id)
+      .then((properties) => {
+        if (mountedRef.current && !properties.eulaAccepted) onAcceptEula();
+      })
+      .catch(() => {
+        // If the check fails, fall back to prompting so a real EULA problem is not hidden.
+        if (mountedRef.current) onAcceptEula();
+      });
+  }, [logLines, onAcceptEula, selected.id]);
 
   // Reset the EULA prompt tracker when the server starts running again so
   // the modal can reappear if the EULA issue recurs on a later start.
@@ -144,17 +159,31 @@ export function ConsolePanel({
   }
 
   return (
-    <Panel
-      className="console-panel"
+    <Page
+      className="console-page"
       title="Console"
       description="Send commands and read live output from the server."
-      icon={<Terminal />}
+      icon={<Terminal size={20} />}
+      toolbar={
+        <div className="console-toolbar">
+          <span className="console-state">
+            <StatusDot tone={isRunning ? "running" : "neutral"} />
+            {isRunning ? "Live output" : logLines.length ? "Last output" : "Not running"}
+          </span>
+          <span className="console-toolbar-actions">
+            <CopyButton text={logLines.join("\n")} label="Copy log" onError={() => onMessage("Copy failed")} />
+            <Button size="sm" iconLeft={<Download size={14} />} href={logsUrl(selected.id, "?download=1")} download>
+              Download
+            </Button>
+          </span>
+        </div>
+      }
     >
-
       {anotherServerRunning && (
-        <Hint warn>Console commands are disabled because {runningServer?.name ?? "another server"} is running.</Hint>
+        <Banner variant="warning">Console commands are disabled because {runningServer?.name ?? "another server"} is running.</Banner>
       )}
 
+      <div className="console-card">
       <div className="console-wrapper">
         <div className="console" ref={consoleRef} onScroll={() => {
           if (consoleRef.current) {
@@ -193,9 +222,10 @@ export function ConsolePanel({
             value={command}
             onChange={(event) => setCommand(event.target.value)}
           />
-          <Button disabled={!isRunning || !trimmedCommand || Boolean(busyAction) || anotherServerRunning} loading={busyAction === "command"} loadingText="Sending...">Send</Button>
+          <Button variant="primary" size="sm" disabled={!isRunning || !trimmedCommand || Boolean(busyAction) || anotherServerRunning} loading={busyAction === "command"} loadingText="Sending...">Send</Button>
         </div>
       </form>
-    </Panel>
+      </div>
+    </Page>
   );
 }

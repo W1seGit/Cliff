@@ -9,7 +9,7 @@
   padding: clamp(36px, 6vw, 96px);
   background:
     radial-gradient(circle at 76% 34%, rgba(28, 123, 255, 0.28), transparent 30%),
-    radial-gradient(circle at 38% 36%, rgba(91, 141, 239, 0.12), transparent 34%),
+    radial-gradient(circle at 38% 36%, rgba(4, 163, 251, 0.12), transparent 34%),
     #030810;
 }
 
@@ -75,7 +75,7 @@
 
 .not-found-divider span {
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(91, 141, 239, 0.5), transparent);
+  background: linear-gradient(90deg, transparent, rgba(4, 163, 251, 0.5), transparent);
 }
 
 .not-found-divider i {
