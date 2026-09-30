@@ -419,6 +419,19 @@
   color: var(--text);
 }
 
+/* Quiet text link: the shared link-button fill is too heavy for a back link */
+.page-header-back .button-link,
+.page-header-back .button-link:hover:not(.disabled) {
+  background: transparent;
+  box-shadow: none;
+}
+
+.page-header-back .button-link:hover:not(.disabled) {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .page-header-row {
   display: flex;
   align-items: flex-start;
