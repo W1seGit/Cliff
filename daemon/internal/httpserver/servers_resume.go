@@ -72,14 +72,14 @@ func (h apiHandler) internalResumeServers(w http.ResponseWriter, r *http.Request
 	}
 	results := make([]resumeResult, 0, len(input.ServerIDs))
 	for _, id := range input.ServerIDs {
-		results = append(results, h.resumeServer(r, id))
+		results = append(results, h.resumeServer(r.Context(), id))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
-func (h apiHandler) resumeServer(r *http.Request, id string) resumeResult {
+func (h apiHandler) resumeServer(ctx context.Context, id string) resumeResult {
 	result := resumeResult{ID: id, Name: id}
-	server, ok, err := h.store.GetServer(r.Context(), id)
+	server, ok, err := h.store.GetServer(ctx, id)
 	if err != nil || !ok {
 		result.Status, result.Message = "failed", "the server no longer exists"
 		slog.Warn("could not start a server again after the update", "server", id, "reason", result.Message)
@@ -95,9 +95,9 @@ func (h apiHandler) resumeServer(r *http.Request, id string) resumeResult {
 		slog.Warn("did not start a server again after the update", "server", id, "name", server.Name, "reason", result.Message)
 		return result
 	}
-	launch, err := h.resolveServerLaunchTarget(r, server)
+	launch, err := h.resolveServerLaunchTargetCtx(ctx, server)
 	if err == nil {
-		launch, err = h.resolveJavaForLaunch(r, launch)
+		launch, err = h.resolveJavaForLaunchCtx(ctx, launch)
 	}
 	if err == nil {
 		_, err = h.process.Start(launch)

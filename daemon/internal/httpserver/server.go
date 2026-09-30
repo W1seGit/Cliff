@@ -70,9 +70,12 @@ func New(options Options) http.Handler {
 
 		shutdown:      options.Shutdown,
 		shutdownToken: options.ShutdownToken,
+
+		createProgress: newCreateProgressStore(),
 	}
 	if options.SchedulerContext != nil {
 		go api.runScheduler(options.SchedulerContext)
+		go api.resumeAfterRestart(options.SchedulerContext)
 	}
 
 	mux.HandleFunc("GET /api/health", api.health)
@@ -101,6 +104,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/daemon-logs", api.requireUser(api.daemonLogs))
 	mux.HandleFunc("GET /api/servers", api.requireUser(api.servers))
 	mux.HandleFunc("POST /api/servers", api.requireUser(api.createServer))
+	mux.HandleFunc("GET /api/create-progress/{id}", api.requireUser(api.createProgressHandler))
 	mux.HandleFunc("GET /api/servers/{id}", api.requireUser(api.serverDetail))
 	mux.HandleFunc("GET /api/servers/{id}/health", api.requireUser(api.serverHealth))
 	mux.HandleFunc("PATCH /api/servers/{id}", api.requireUser(api.updateServer))
@@ -121,6 +125,8 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/runtime", api.requireUser(api.runtime))
 	mux.HandleFunc("GET /api/updates/check", api.requireUser(api.updatesCheck))
 	mux.HandleFunc("POST /api/updates/apply", api.requireUser(api.updatesApply))
+	mux.HandleFunc("POST /api/daemon/stop", api.requireUser(api.daemonStop))
+	mux.HandleFunc("POST /api/daemon/restart", api.requireUser(api.daemonRestart))
 	mux.HandleFunc("GET /api/updates/progress", api.requireUser(api.updatesProgress))
 	mux.HandleFunc("GET /api/updates/servers", api.requireUser(api.updatesServers))
 	mux.HandleFunc("GET /api/updates/safety", api.requireUser(api.updatesSafety))
@@ -160,6 +166,8 @@ type apiHandler struct {
 
 	shutdown      func()
 	shutdownToken string
+
+	createProgress *createProgressStore
 }
 
 type storageUsageCache struct {
@@ -808,7 +816,11 @@ func (h apiHandler) restart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h apiHandler) resolveJavaForLaunch(r *http.Request, server store.Server) (store.Server, error) {
-	resolved, err := javamanager.Resolver{DataDir: h.config.DataDir}.Resolve(r.Context(), server.JavaPath, server.MinecraftVersion)
+	return h.resolveJavaForLaunchCtx(r.Context(), server)
+}
+
+func (h apiHandler) resolveJavaForLaunchCtx(ctx context.Context, server store.Server) (store.Server, error) {
+	resolved, err := javamanager.Resolver{DataDir: h.config.DataDir}.Resolve(ctx, server.JavaPath, server.MinecraftVersion)
 	if err != nil {
 		return server, fmt.Errorf("managed Java setup failed: %w", err)
 	}
@@ -817,11 +829,15 @@ func (h apiHandler) resolveJavaForLaunch(r *http.Request, server store.Server) (
 }
 
 func (h apiHandler) resolveServerLaunchTarget(r *http.Request, server store.Server) (store.Server, error) {
+	return h.resolveServerLaunchTargetCtx(r.Context(), server)
+}
+
+func (h apiHandler) resolveServerLaunchTargetCtx(ctx context.Context, server store.Server) (store.Server, error) {
 	launchTarget := process.SuggestLaunchTarget(server.Path, server.LaunchJar)
 	if launchTarget == "" {
 		return server, nil
 	}
-	updated, err := h.store.UpdateServer(r.Context(), server.ID, store.Server{LaunchJar: launchTarget})
+	updated, err := h.store.UpdateServer(ctx, server.ID, store.Server{LaunchJar: launchTarget})
 	if err != nil {
 		return server, fmt.Errorf("could not update server launch target: %w", err)
 	}

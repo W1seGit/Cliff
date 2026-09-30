@@ -1,6 +1,6 @@
 "use client";
 
-import { HardDrive, ScrollText, Package, Coffee, Download } from "lucide-react";
+import { HardDrive, ScrollText, Package, Coffee, Download, Power } from "lucide-react";
 import { browserOrigin, externalApiBase } from "../lib/utils";
 import { useHashSection } from "../lib/use-hash-section";
 import type { ConfirmRequest, MinecraftMetadata, Settings, UnsavedChangesRegistration, UpdateCheckResult, User } from "../lib/types";
@@ -11,9 +11,10 @@ import { JavaTab } from "./app-settings/java-tab";
 import { LogsTab } from "./app-settings/logs-tab";
 import { StorageTab } from "./app-settings/storage-tab";
 import { UpdatesTab } from "./app-settings/updates-tab";
-import { useDaemonLogs, useJavaRuntimes, useTypeVersionCounts, useUpdates } from "./app-settings/hooks";
+import { ServiceTab } from "./app-settings/service-tab";
+import { useDaemonControl, useDaemonLogs, useJavaRuntimes, useTypeVersionCounts, useUpdates } from "./app-settings/hooks";
 
-const sections = ["general", "java", "network", "logs", "updates"] as const;
+const sections = ["general", "java", "network", "logs", "updates", "service"] as const;
 type SettingsSection = (typeof sections)[number];
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { id: "network", label: "Network & Storage", icon: <HardDrive size={16} aria-hidden="true" /> },
   { id: "logs", label: "Logs", icon: <ScrollText size={16} aria-hidden="true" /> },
   { id: "updates", label: "Updates", icon: <Download size={16} aria-hidden="true" /> },
+  { id: "service", label: "Service", icon: <Power size={16} aria-hidden="true" /> },
 ];
 
 type AppSettingsPanelProps = {
@@ -53,6 +55,7 @@ function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCh
   const versions = useTypeVersionCounts(true);
   const logs = useDaemonLogs(section === "logs", onMessage);
   const updates = useUpdates(updateCheck, onMessage);
+  const daemon = useDaemonControl(onMessage, onConfirm);
 
   const lanAddresses = settings.access?.lanAddresses ?? [];
   const backendUrl = externalApiBase() || (typeof window !== "undefined" ? browserOrigin() : "");
@@ -125,6 +128,9 @@ function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCh
             onConfirm: updates.clearSafety,
           })}
         />
+      </SettingsSectionPanel>
+      <SettingsSectionPanel idPrefix={idPrefix} id="service" activeId={section}>
+        <ServiceTab busy={daemon.busy} stopped={daemon.stopped} onRestart={daemon.restart} onStop={daemon.stop} />
       </SettingsSectionPanel>
     </SettingsLayout>
   );

@@ -309,7 +309,10 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     setRuntime(nextRuntime);
   }, []);
 
-  const setTab = useCallback((nextTab: string, nextServerId = selectedId) => {
+  const setTab = useCallback((nextTab: string, requestedServerId?: string) => {
+    // On a page opened straight from /app-settings no server id is stored yet, but the
+    // sidebar still shows the first server. Use that one so the menu keeps working.
+    const nextServerId = requestedServerId || selectedId || selected?.id || "";
     const targetServer = servers.find((server) => server.id === nextServerId) ?? selected;
     let resolvedTab = nextTab;
     if (isModsTab(resolvedTab) && targetServer && !serverTypeSupportsContent(targetServer.type)) {
@@ -830,8 +833,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
           {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
           {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
-          {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-          {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onSwitchMode={() => setTab("create")} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onSwitchMode={() => setTab("import")} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
         </div>
       </section>
       {unsavedChange?.showSaveBar && (

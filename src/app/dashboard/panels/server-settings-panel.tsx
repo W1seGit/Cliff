@@ -1,21 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Cpu, Gamepad2, Server, SlidersHorizontal, Wrench } from "lucide-react";
+import { Cpu, Gamepad2, Server, SlidersHorizontal } from "lucide-react";
 import { serverTypeNeedsLoader, validMemoryRange } from "../lib/utils";
 import { fetchServerProperties, runFileAction, saveServerProperties, serverFileUrl, updateServerProfile, uploadServerFile } from "../lib/runtime-client";
 import { useHashSection } from "../lib/use-hash-section";
 import { editableFromRaw, parsePropertiesText, sameProperties, setPropertyInText, validatePropertiesText } from "../lib/properties-text";
 import type { MinecraftMetadata, ServerProperties, ServerPropertiesEditable, ServerRecord, UnsavedChangesRegistration } from "../lib/types";
-import { Banner, Card, PageHeader, SettingsLayout, SettingsSectionPanel, SkeletonRows } from "../components/ui";
+import { Banner, Card, Disclosure, PageHeader, SettingsLayout, SettingsSectionPanel, SkeletonRows } from "../components/ui";
 import { ImageCropModal } from "../components/ui/image-crop-modal";
 import { notifyServerIconUpdated } from "../components/server-avatar";
 import { EulaCard, GameplayCard, RulesCard, WorldCard } from "./server-settings/game-sections";
 import { ServerListCard } from "./server-settings/server-list-card";
 import { ProfileGeneralCard, ProfileVersionCard, RuntimeSections } from "./server-settings/profile-sections";
-import { PropertiesEditorCard } from "./server-settings/properties-editor";
+import { PropertiesEditorPanel } from "./server-settings/properties-editor";
 
-const settingsSections = ["game", "profile", "runtime", "advanced"] as const;
+const settingsSections = ["game", "profile", "runtime"] as const;
 type SettingsSection = (typeof settingsSections)[number];
 
 const editablePropertyMap = {
@@ -143,7 +143,6 @@ export function ServerSettingsPanel({
     eulaAccepted !== properties.eulaAccepted ||
     sortedRecordJson(draft) !== sortedRecordJson(savedEditable)
   )) || iconDirty;
-  const advancedDirty = Boolean(properties && !sameProperties(propsText, properties.text ?? ""));
   const profileSectionDirty = profile.name !== server.name ||
     profile.type !== server.type ||
     profile.minecraftVersion !== server.minecraftVersion ||
@@ -309,7 +308,6 @@ export function ServerSettingsPanel({
     { id: "game", label: "Game", icon: <Gamepad2 size={16} aria-hidden="true" />, dirty: gameDirty },
     { id: "profile", label: "Profile", icon: <Server size={16} aria-hidden="true" />, dirty: profileSectionDirty },
     { id: "runtime", label: "Runtime", icon: <Cpu size={16} aria-hidden="true" />, dirty: runtimeDirty },
-    { id: "advanced", label: "Advanced", icon: <Wrench size={16} aria-hidden="true" />, dirty: advancedDirty },
   ];
   const header = <PageHeader title="Settings" icon={<SlidersHorizontal size={20} aria-hidden="true" />} description="Configure game behavior and the server profile." />;
 
@@ -344,7 +342,15 @@ export function ServerSettingsPanel({
           />
           <WorldCard draft={draft} setField={setField} />
           <GameplayCard draft={draft} setField={setField} />
-          <RulesCard draft={draft} setField={setField} />
+          <RulesCard draft={draft} setField={setField}>
+            <Disclosure
+              title="Advanced"
+              description="Edit the raw server.properties file"
+              forceOpen={propsIssues.length > 0}
+            >
+              <PropertiesEditorPanel serverId={server.id} value={propsText} onChange={setPropsText} issues={propsIssues} running={isRunning} />
+            </Disclosure>
+          </RulesCard>
         </SettingsSectionPanel>
         <SettingsSectionPanel idPrefix={idPrefix} id="profile" activeId={activeSection}>
           {profileNote}
@@ -354,9 +360,6 @@ export function ServerSettingsPanel({
         <SettingsSectionPanel idPrefix={idPrefix} id="runtime" activeId={activeSection}>
           {profileNote}
           <RuntimeSections profile={profile} setProfile={setProfile} />
-        </SettingsSectionPanel>
-        <SettingsSectionPanel idPrefix={idPrefix} id="advanced" activeId={activeSection}>
-          <PropertiesEditorCard serverId={server.id} value={propsText} onChange={setPropsText} issues={propsIssues} running={isRunning} />
         </SettingsSectionPanel>
       </SettingsLayout>
       <ImageCropModal

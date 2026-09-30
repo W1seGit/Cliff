@@ -1,6 +1,7 @@
 "use client";
 
 import type { ServerProperties } from "../../lib/types";
+import type React from "react";
 import { Card, FieldGrid, Input, Select, ToggleRow } from "../../components/ui";
 import { rangeError } from "./validation";
 
@@ -75,7 +76,7 @@ export function GameplayCard({ draft, setField }: { draft: Editable; setField: S
   );
 }
 
-export function RulesCard({ draft, setField }: { draft: Editable; setField: SetField }) {
+export function RulesCard({ draft, setField, children }: { draft: Editable; setField: SetField; children?: React.ReactNode }) {
   return (
     <Card title="Rules" description="Performance limits and server rules.">
       <FieldGrid columns={2}>
@@ -105,6 +106,7 @@ export function RulesCard({ draft, setField }: { draft: Editable; setField: SetF
         <ToggleRow label="Command blocks" description="Enable command block functionality." checked={draft.enableCommandBlock} onChange={(checked) => setField("enableCommandBlock", checked)} />
         <ToggleRow label="Allow flight" description="Let players fly in survival mode." checked={draft.allowFlight} onChange={(checked) => setField("allowFlight", checked)} />
       </div>
+      {children}
     </Card>
   );
 }

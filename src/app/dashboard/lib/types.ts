@@ -262,6 +262,8 @@ export type Backup = {
 export type FileEntry = {
   name: string;
   path: string;
+  /** Why Safe mode keeps this from being moved, renamed or deleted. */
+  protected?: string;
   type: "directory" | "file";
   size: number;
   updatedAt: string;
@@ -426,6 +428,14 @@ export type UpdateSafetyInfo = {
   backupBytes: number;
   totalBytes: number;
   backupDir: string;
+};
+
+/** Progress of one create, clone or import, as reported by the daemon. */
+export type OperationSnapshot = {
+  steps: { id: string; label: string; state: "pending" | "active" | "done" | "failed" }[];
+  detail: string;
+  error?: string;
+  done: boolean;
 };
 
 /** A server an update would stop. */
