@@ -2023,7 +2023,32 @@ func downloadFile(r *http.Request, requestURL string, destination string) error 
 	return closeErr
 }
 
+// ensureNotInside refuses a copy whose destination lives inside its source.
+// Importing a folder that contains the server storage would otherwise copy
+// itself into itself until the disk fills.
+func ensureNotInside(source string, target string) error {
+	absSource, err := filepath.Abs(source)
+	if err != nil {
+		return err
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	relative, err := filepath.Rel(absSource, absTarget)
+	if err != nil {
+		return nil // different volumes cannot be nested
+	}
+	if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+		return errors.New("That folder contains Cliff's own server storage. Choose the server's folder itself, not a parent folder.")
+	}
+	return nil
+}
+
 func copyDirectory(source string, target string) error {
+	if err := ensureNotInside(source, target); err != nil {
+		return err
+	}
 	return filepath.WalkDir(source, func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
