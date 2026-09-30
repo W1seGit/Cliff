@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, FolderPlus, FilePlus, Plus, Trash2, Upload } from "lucide-react";
-import { formatBytes, joinDisplayPath, shortDate } from "../lib/utils";
+import { ArrowLeft, File as FileIcon, FilePlus, FileText, Folder, FolderOpen, FolderPlus, Plus, Trash2, Upload } from "lucide-react";
+import { formatBytes, shortDate } from "../lib/utils";
 import { fetchServerFile, runFileAction, uploadServerFile } from "../lib/runtime-client";
 import type { ConfirmRequest, FileListing, FilePayload, ServerRecord, UnsavedChangesRegistration } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
-import { Toolbar } from "../components/ui/toolbar";
-import { Checkbox } from "../components/ui/checkbox";
+import { Page } from "../components/ui/page-layout";
+import { Breadcrumb } from "../components/ui/breadcrumb";
+import { Table } from "../components/ui/table";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { SelectionBar } from "../components/ui/selection-bar";
@@ -29,7 +29,11 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
   const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
   const fileDirty = Boolean(openFile?.editable && content !== openFile.content);
   const saveFileRef = useRef<() => Promise<boolean>>(async () => false);
-  useEffect(() => { saveFileRef.current = saveFile; });
+  const discardEditsRef = useRef<() => void>(() => undefined);
+  useEffect(() => {
+    saveFileRef.current = saveFile;
+    discardEditsRef.current = () => { if (openFile) setContent(openFile.content); };
+  });
 
   useEffect(() => {
     loadPath().catch((error) => onMessage(error.message));
@@ -42,11 +46,15 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
       label: openFile.name,
       dirty: true,
       message: `${openFile.name} has unsaved changes. Save before leaving, or discard them?`,
+      showSaveBar: true,
       canSave: !busy,
+      saving: busy === "save",
+      saveLabel: "Save file",
       onSave: async () => {
         const saved = await saveFileRef.current();
         if (!saved) throw new Error("Save failed");
       },
+      onDiscard: () => discardEditsRef.current(),
     } : null);
     return () => onUnsavedChange(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,38 +194,48 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
     .filter((entry) => !query.trim() || entry.name.toLowerCase().includes(query.trim().toLowerCase()))
     .toSorted((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "directory" ? -1 : 1)) ?? [];
 
-  const currentFolderPath = listing ? joinDisplayPath(server.path, listing.cwd) : server.path;
   const allEntriesSelected = entries.length > 0 && entries.every((entry) => selectedPaths.includes(entry.path));
+  const cwdParts = (listing?.cwd ?? "").split(/[\\/]/).filter(Boolean);
+  const crumbs = [
+    { label: "Server files", onClick: cwdParts.length > 0 ? () => loadPath("") : undefined },
+    ...cwdParts.map((part, index) => ({
+      label: part,
+      onClick: index < cwdParts.length - 1 ? () => loadPath(cwdParts.slice(0, index + 1).join("/")) : undefined,
+    })),
+  ];
 
   if (openFile) {
+    const fileCrumbs = openFile.path.split(/[\\/]/).filter(Boolean);
     return (
-      <section className="file-manager file-manager-editor">
-        <Panel className="editor-panel">
-          <Toolbar spread>
-            <div>
-              <h2>{openFile.name}</h2>
-              <p className="muted">{formatBytes(openFile.size)}</p>
-            </div>
-            <Toolbar>
-              <Button disabled={Boolean(busy)} onClick={() => guardFileDiscard(() => { setOpenFile(null); setContent(""); })}>Back to files</Button>
-              <Button variant="primary" disabled={!openFile.editable || Boolean(busy)} onClick={saveFile} loading={busy === "save"} loadingText="Saving...">Save</Button>
-              <Button variant="danger" disabled={Boolean(busy)} onClick={() => onConfirm({
-                title: "Delete file", message: `${openFile.name} will be removed.`, confirmLabel: "Delete", dangerous: true,
-                onConfirm: () => deletePath(openFile.path, openFile.name),
-              })} loading={busy === `delete:${openFile.path}`} loadingText="Deleting...">Delete</Button>
-            </Toolbar>
-          </Toolbar>
-          <Textarea className="file-editor" value={content} onChange={(event) => setContent(event.target.value)} disabled={!openFile.editable} />
-        </Panel>
-      </section>
+      <Page
+        className="file-editor-page"
+        title={openFile.name}
+        description={`${formatBytes(openFile.size)}${fileCrumbs.length > 1 ? ` · ${fileCrumbs.slice(0, -1).join("/")}` : ""}${openFile.editable ? "" : " · read-only"}`}
+        icon={<FileText size={20} />}
+        actions={
+          <>
+            <Button iconLeft={<ArrowLeft size={14} />} disabled={Boolean(busy)} onClick={() => guardFileDiscard(() => { setOpenFile(null); setContent(""); })}>
+              Back to files
+            </Button>
+            <Button variant="danger-ghost" aria-label={`Delete ${openFile.name}`} title="Delete file" disabled={Boolean(busy)} onClick={() => onConfirm({
+              title: "Delete file", message: `${openFile.name} will be removed.`, confirmLabel: "Delete", dangerous: true,
+              onConfirm: () => deletePath(openFile.path, openFile.name),
+            })} loading={busy === `delete:${openFile.path}`} loadingText="Deleting..."><Trash2 size={15} /></Button>
+          </>
+        }
+      >
+        <Textarea className="file-editor" value={content} onChange={(event) => setContent(event.target.value)} disabled={!openFile.editable} spellCheck={false} aria-label={`Contents of ${openFile.name}`} />
+      </Page>
     );
   }
 
   return (
-    <section className="file-manager">
-      <Panel className="files-list-panel" title="Files" description="Browse, edit, and manage files in your server folder." icon={<FolderOpen />}>
-        <div className="compact-path">{currentFolderPath}</div>
-
+    <Page
+      className="files-page"
+      title="Files"
+      description="Browse, edit, and manage files in your server folder."
+      icon={<FolderOpen size={20} />}
+      toolbar={
         <FilterBar
           fields={[
             {
@@ -231,7 +249,7 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
           ]}
           actions={
             <Menu
-              trigger={<Button variant="primary"><Plus size={14} />Add</Button>}
+              trigger={<Button variant="primary" iconLeft={<Plus size={14} />}>Add</Button>}
             >
               <MenuItem icon={<Upload size={15} />} onSelect={() => setAddModal("upload")}>Upload file</MenuItem>
               <MenuItem icon={<FolderPlus size={15} />} onSelect={() => setAddModal("folder")}>New folder</MenuItem>
@@ -239,51 +257,83 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
             </Menu>
           }
         />
+      }
+    >
+      <Breadcrumb items={crumbs} disabled={Boolean(busy)} />
 
-        <div className="file-list">
-          {entries.length > 0 && (
-            <div className="selection-actions">
-              <Checkbox compact checked={allEntriesSelected} onChange={(checked) => setSelectedPaths(checked ? entries.map((entry) => entry.path) : [])} label="Select all" />
-              {selectedPaths.length > 0 && (
-                <SelectionBar
-                  selectedCount={selectedPaths.length}
-                  actions={[
-                    {
-                      label: "Delete selected",
-                      variant: "danger",
-                      disabled: Boolean(busy),
-                      onClick: () => onConfirm({
-                        title: "Delete selected entries",
-                        message: `${selectedPaths.length} selected file entr${selectedPaths.length === 1 ? "y" : "ies"} will be removed.`,
-                        confirmLabel: "Delete selected",
-                        dangerous: true,
-                        onConfirm: deleteSelectedPaths,
-                      }),
-                    },
-                  ]}
-                />
-              )}
-            </div>
-          )}
+      {selectedPaths.length > 0 && (
+        <div className="table-selection">
+          <SelectionBar
+            selectedCount={selectedPaths.length}
+            actions={[
+              {
+                label: "Delete selected",
+                variant: "danger",
+                disabled: Boolean(busy),
+                onClick: () => onConfirm({
+                  title: "Delete selected entries",
+                  message: `${selectedPaths.length} selected file entr${selectedPaths.length === 1 ? "y" : "ies"} will be removed.`,
+                  confirmLabel: "Delete selected",
+                  dangerous: true,
+                  onConfirm: deleteSelectedPaths,
+                }),
+              },
+            ]}
+          />
+        </div>
+      )}
+
+      <Table className="files-table">
+        <thead>
+          <tr>
+            <th className="col-check">
+              <Input type="checkbox" aria-label="Select all" checked={allEntriesSelected} disabled={entries.length === 0} onChange={(event) => setSelectedPaths(event.target.checked ? entries.map((entry) => entry.path) : [])} />
+            </th>
+            <th>Name</th>
+            <th>Size</th>
+            <th>Modified</th>
+            <th className="col-actions"><span className="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
           {listing?.parent !== undefined && listing.cwd && (
-            <Button plain className="file-row" disabled={Boolean(busy)} onClick={() => loadPath(listing.parent)}><span>..</span><small>parent</small></Button>
+            <tr>
+              <td className="col-check" />
+              <td colSpan={4}>
+                <Button plain className="cell-link" disabled={Boolean(busy)} onClick={() => loadPath(listing.parent)}>
+                  <ArrowLeft size={15} /><span className="cell-link-name">Parent folder</span>
+                </Button>
+              </td>
+            </tr>
           )}
           {entries.map((entry) => (
-            <div className="file-row file-row-actions" key={entry.path}>
-              <Input type="checkbox" aria-label={`Select ${entry.name}`} checked={selectedPaths.includes(entry.path)} onChange={(event) => setSelectedPaths((current) => event.target.checked ? [...current, entry.path] : current.filter((item) => item !== entry.path))} />
-              <Button plain className="file-open-button" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
-                <span>{entry.type === "directory" ? "📁" : entry.editable ? "📝" : "📄"} {entry.name}</span>
-                <small>{entry.type === "file" ? `${formatBytes(entry.size)}${entry.editable ? " · editable" : ""}` : "Folder"} · {shortDate(entry.updatedAt)}</small>
-              </Button>
-              <Button variant="danger-ghost" aria-label={`Delete ${entry.name}`} title="Delete" disabled={Boolean(busy)} onClick={() => onConfirm({
-                title: entry.type === "directory" ? "Delete folder" : "Delete file", message: `${entry.name} will be removed.${entry.type === "directory" ? " This also removes everything inside it." : ""}`, confirmLabel: "Delete", dangerous: true,
-                onConfirm: () => deletePath(entry.path, entry.name),
-              })} loading={busy === `delete:${entry.path}`} loadingText="Deleting..."><Trash2 size={15} /></Button>
-            </div>
+            <tr key={entry.path}>
+              <td className="col-check">
+                <Input type="checkbox" aria-label={`Select ${entry.name}`} checked={selectedPaths.includes(entry.path)} onChange={(event) => setSelectedPaths((current) => event.target.checked ? [...current, entry.path] : current.filter((item) => item !== entry.path))} />
+              </td>
+              <td>
+                <Button plain className="cell-link" disabled={Boolean(busy)} onClick={() => openEntry(entry)}>
+                  {entry.type === "directory" ? <Folder size={16} /> : entry.editable ? <FileText size={16} /> : <FileIcon size={16} />}
+                  <span className="cell-link-name">{entry.name}</span>
+                </Button>
+              </td>
+              <td className="col-num">{entry.type === "file" ? formatBytes(entry.size) : "—"}</td>
+              <td className="col-num">{shortDate(entry.updatedAt)}</td>
+              <td className="col-actions">
+                <span className="row-actions">
+                  <Button variant="danger-ghost" size="sm" aria-label={`Delete ${entry.name}`} title="Delete" disabled={Boolean(busy)} onClick={() => onConfirm({
+                    title: entry.type === "directory" ? "Delete folder" : "Delete file", message: `${entry.name} will be removed.${entry.type === "directory" ? " This also removes everything inside it." : ""}`, confirmLabel: "Delete", dangerous: true,
+                    onConfirm: () => deletePath(entry.path, entry.name),
+                  })} loading={busy === `delete:${entry.path}`} loadingText="..."><Trash2 size={15} /></Button>
+                </span>
+              </td>
+            </tr>
           ))}
-          {entries.length === 0 && listing && <p className="muted">No entries match.</p>}
-        </div>
-      </Panel>
+          {entries.length === 0 && listing && (
+            <tr><td colSpan={5} className="table-empty">{query.trim() ? "No files match your filter." : "This folder is empty."}</td></tr>
+          )}
+        </tbody>
+      </Table>
 
       <Modal
         isOpen={addModal === "upload"}
@@ -323,6 +373,6 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
       >
         <Input label="File name" disabled={Boolean(busy)} placeholder="new-file.txt" value={newFileName} onChange={(event) => setNewFileName(event.target.value)} autoFocus />
       </Modal>
-    </section>
+    </Page>
   );
 }

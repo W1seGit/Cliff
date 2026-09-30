@@ -6,10 +6,11 @@ import { formatBytes, formatDate, formatDateTime } from "../lib/utils";
 import { backupUrl, fetchBackupDiff, runBackupAction, updateServerProfile } from "../lib/runtime-client";
 import type { Backup, BackupChange, BackupDiff, ConfirmRequest, ServerRecord } from "../lib/types";
 import { Button } from "../components/ui/button";
-import { Panel } from "../components/ui/panel";
+import { Page } from "../components/ui/page-layout";
+import { Banner } from "../components/ui/banner";
+import { IconButton } from "../components/ui/icon-button";
 import { Modal } from "../components/ui/modal";
 import { Input } from "../components/ui/input";
-import { Hint } from "../components/ui/hint";
 import { Table } from "../components/ui/table";
 import { FilterBar } from "../components/ui/filter-bar";
 import { SelectionBar } from "../components/ui/selection-bar";
@@ -168,11 +169,32 @@ export function BackupsPanel({
   ];
 
   return (
-    <Panel
-      className="backups-list-panel"
+    <Page
+      className="backups-page"
       title="Backups"
       description="Point-in-time snapshots you can restore or export."
-      icon={<Archive />}
+      icon={<Archive size={20} />}
+      toolbar={
+      <FilterBar
+        fields={[
+          {
+            key: "search",
+            label: "Search snapshots",
+            type: "text",
+            placeholder: "Search snapshots",
+            value: backupQuery,
+            onChange: setBackupQuery,
+          },
+        ]}
+        actions={
+          <>
+            <Button className="backups-settings-action" iconLeft={<CalendarClock size={14} />} onClick={() => setShowSettings(true)}>Auto backups</Button>
+            <Button disabled={Boolean(busyAction) || isRunning} iconLeft={<Download size={14} />} onClick={() => window.open(backupUrl(server.id, "?current=1"), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download the current server folder as a zip"}>Download server</Button>
+            <Button variant="primary" disabled={Boolean(busyAction)} iconLeft={<Camera size={14} />} onClick={() => setShowCreateSnapshot(true)}>Create snapshot</Button>
+          </>
+        }
+      />
+      }
     >
       <Modal
         isOpen={showCreateSnapshot}
@@ -297,28 +319,7 @@ export function BackupsPanel({
         )}
       </Modal>
 
-      {isRunning && <Hint warn>Stop the server before restoring or exporting. Snapshots can still be created while running.</Hint>}
-      <FilterBar
-        fields={[
-          {
-            key: "search",
-            label: "Search snapshots",
-            type: "text",
-            placeholder: "Search snapshots",
-            value: backupQuery,
-            onChange: setBackupQuery,
-          },
-        ]}
-        actions={
-          <>
-            <Button className="backups-settings-action" onClick={() => setShowSettings(true)}><CalendarClock size={14} />Auto backups</Button>
-            <div className="backups-action-pair">
-              <Button disabled={Boolean(busyAction) || isRunning} onClick={() => window.open(backupUrl(server.id, "?current=1"), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download the current server folder as a zip"}><Download size={14} />Download server</Button>
-              <Button variant="primary" disabled={Boolean(busyAction)} onClick={() => setShowCreateSnapshot(true)}><Camera size={14} />Create snapshot</Button>
-            </div>
-          </>
-        }
-      />
+      {isRunning && <Banner variant="warning">Stop the server before restoring or exporting. Snapshots can still be created while running.</Banner>}
       {selectedBackups.length > 0 && (
         <SelectionBar
           selectedCount={selectedBackups.length}
@@ -340,7 +341,7 @@ export function BackupsPanel({
       )}
       <Table>
         <thead>
-          <tr><th><Input type="checkbox" aria-label="Select all snapshots" checked={allFilteredSelected} onChange={(event) => setSelectedBackups(event.target.checked ? filteredBackups.map((backup) => backup.id) : [])} /></th><th>Created</th><th>Reason</th><th>Changes</th><th>Stored</th><th>Logical</th><th><span className="table-count">{filteredBackups.length} of {backups.length}</span></th></tr>
+          <tr><th className="col-check"><Input type="checkbox" aria-label="Select all snapshots" checked={allFilteredSelected} onChange={(event) => setSelectedBackups(event.target.checked ? filteredBackups.map((backup) => backup.id) : [])} /></th><th>Created</th><th>Reason</th><th>Changes</th><th>Stored</th><th className="col-actions"><span className="table-count">{filteredBackups.length} of {backups.length}</span></th></tr>
         </thead>
         <tbody>
           {filteredBackups.map((backup) => {
@@ -349,7 +350,7 @@ export function BackupsPanel({
             return (
               <Fragment key={backup.id}>
                 <tr>
-                  <td><Input type="checkbox" aria-label={`Select snapshot ${backup.id}`} checked={selectedBackups.includes(backup.id)} onChange={(event) => setSelectedBackups((current) => event.target.checked ? [...current, backup.id] : current.filter((id) => id !== backup.id))} /></td>
+                  <td className="col-check"><Input type="checkbox" aria-label={`Select snapshot ${backup.id}`} checked={selectedBackups.includes(backup.id)} onChange={(event) => setSelectedBackups((current) => event.target.checked ? [...current, backup.id] : current.filter((id) => id !== backup.id))} /></td>
                   <td>
                     <div className="backup-date-cell">
                       <span>{formatDateTime(backup.createdAt)}</span>
@@ -363,19 +364,18 @@ export function BackupsPanel({
                       <span>{backup.summary || "Legacy snapshot"}</span>
                     </button>
                   </td>
-                  <td>{formatBytes(backup.sizeBytes)}</td>
-                  <td>{formatBytes(backup.logicalSizeBytes ?? backup.sizeBytes)}</td>
-                  <td>
+                  <td className="col-num" title={`${formatBytes(backup.logicalSizeBytes ?? backup.sizeBytes)} before deduplication`}>{formatBytes(backup.sizeBytes)}</td>
+                  <td className="col-actions">
                     <div className="row-actions">
-                      <Button disabled={Boolean(busyAction) || isRunning} onClick={() => window.open(backupUrl(server.id, `?download=${encodeURIComponent(backup.id)}`), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download this revision"}><Download size={14} /></Button>
-                      <Button disabled={Boolean(busyAction) || isRunning} onClick={() => onConfirm({
+                      <IconButton size="sm" aria-label="Download snapshot" disabled={Boolean(busyAction) || isRunning} onClick={() => window.open(backupUrl(server.id, `?download=${encodeURIComponent(backup.id)}`), "_blank")} title={isRunning ? "Stop the server before downloading" : "Download this revision"}><Download size={15} /></IconButton>
+                      <IconButton size="sm" aria-label="Restore snapshot" disabled={Boolean(busyAction) || isRunning} onClick={() => onConfirm({
                         title: "Restore snapshot",
                         message: `Restore ${backup.reason}? Cliff will create a safety snapshot first, then replace the server folder with this revision.`,
                         confirmLabel: "Restore",
                         dangerous: true,
                         onConfirm: async () => { await action({ action: "restore", backupId: backup.id }, "restore"); },
-                      })} title={isRunning ? "Stop the server before restoring" : "Restore this revision"}><RotateCcw size={14} /></Button>
-                      <Button variant="danger-ghost" aria-label="Delete snapshot" title="Delete this revision" disabled={Boolean(busyAction)} onClick={() => onConfirm({
+                      })} title={isRunning ? "Stop the server before restoring" : "Restore this revision"}><RotateCcw size={15} /></IconButton>
+                      <Button variant="danger-ghost" size="sm" aria-label="Delete snapshot" title="Delete this revision" disabled={Boolean(busyAction)} onClick={() => onConfirm({
                         title: "Delete snapshot",
                         message: `${backup.reason} will be permanently removed.`,
                         confirmLabel: "Delete",
@@ -387,7 +387,7 @@ export function BackupsPanel({
                 </tr>
                 {expanded && (
                   <tr className="backup-details-row">
-                    <td colSpan={7}>
+                    <td colSpan={6}>
                       <div className="backup-details">
                         <div className="backup-stats-grid">
                           <span><strong>{backup.stats?.filesAdded ?? 0}</strong> added</span>
@@ -427,9 +427,9 @@ export function BackupsPanel({
               </Fragment>
             );
           })}
-          {backups.length === 0 && <tr><td colSpan={7} className="muted">No snapshots yet.</td></tr>}
+          {backups.length === 0 && <tr><td colSpan={6} className="table-empty">No snapshots yet. Create one before you change anything risky.</td></tr>}
         </tbody>
       </Table>
-    </Panel>
+    </Page>
   );
 }

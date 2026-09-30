@@ -37,6 +37,13 @@
 /* Quiet destructive action for rows and tables: red on hover, not a solid block. */
 .danger-ghost {
   min-height: var(--control-h);
+}
+
+.danger-ghost.btn-sm {
+  min-height: 28px;
+}
+
+.danger-ghost {
   background: transparent;
   box-shadow: none;
   color: var(--text-secondary);
