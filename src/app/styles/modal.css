@@ -349,3 +349,12 @@
   margin-top: 3px;
   color: var(--running);
 }
+
+.update-safety-lead code {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  font-size: 12px;
+  white-space: nowrap;
+}

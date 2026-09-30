@@ -176,7 +176,7 @@ export function UpdateResultModal({ result, onDone }: { result: LastUpdateResult
       )}
       {!updated && (
         <p className="update-modal-hint muted">
-          Your servers, worlds and settings were not changed. You can try the update again later from App Settings &gt; Updates.
+          You can try the update again later from App Settings &gt; Updates.
         </p>
       )}
     </Modal>

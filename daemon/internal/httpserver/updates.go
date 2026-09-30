@@ -67,7 +67,9 @@ func (h apiHandler) updatesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.updater.Apply(r.Context(), updater.ApplyHooks{BeforeSwap: h.prepareForUpdate})
+	// An update the user started keeps going if they close the tab; it reports its
+	// outcome the next time the dashboard opens.
+	result, err := h.updater.Apply(context.WithoutCancel(r.Context()), updater.ApplyHooks{BeforeSwap: h.prepareForUpdate})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
