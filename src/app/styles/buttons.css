@@ -55,7 +55,7 @@ a.btn.btn-sm {
 .btn:not(.primary):not(.danger-button):not(.danger-ghost),
 .icon-button:not(.icon-only):not(.primary):not(.danger-button) {
   background: transparent;
-  box-shadow: inset 0 0 0 1px var(--border);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .btn:not(.primary):not(.danger-button):not(.danger-ghost):hover:not(:disabled),

@@ -449,6 +449,13 @@
   gap: var(--space-2);
 }
 
+/* Header actions share one size so a solid Start and an outlined More line up. */
+.server-header-actions button {
+  height: var(--control-h);
+  min-width: 92px;
+  font-weight: 600;
+}
+
 /* Running server: a subtle blue wash on the header so state reads at a glance. */
 .server-header {
   transition: background var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
