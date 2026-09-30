@@ -25,6 +25,8 @@ type restartPlan struct {
 	WebDir        string
 	ExpectVersion string
 	FromVersion   string
+	// ResumeIDs are the servers that were running before the update.
+	ResumeIDs []string
 }
 
 func (p restartPlan) startArgs() []string {
@@ -91,6 +93,8 @@ func runUpdateWatchdog(args []string) {
 	fs := flag.NewFlagSet(updater.WatchdogCommand, flag.ExitOnError)
 	var plan restartPlan
 	var timeoutSeconds int
+	var resume string
+	fs.StringVar(&resume, "resume-servers", "", "")
 	fs.StringVar(&plan.Binary, "binary", "", "")
 	fs.StringVar(&plan.Host, "host", "", "")
 	fs.IntVar(&plan.Port, "port", 8080, "")
@@ -101,6 +105,11 @@ func runUpdateWatchdog(args []string) {
 	fs.StringVar(&plan.FromVersion, "from-version", "", "")
 	fs.IntVar(&timeoutSeconds, "timeout-seconds", 60, "")
 	fs.Parse(args)
+	for _, id := range strings.Split(resume, ",") {
+		if id = strings.TrimSpace(id); id != "" {
+			plan.ResumeIDs = append(plan.ResumeIDs, id)
+		}
+	}
 
 	logPath := filepath.Join(plan.DataDir, "logs", "update-watchdog.log")
 	_ = os.MkdirAll(filepath.Dir(logPath), 0o755)
@@ -116,11 +125,15 @@ func runUpdateWatchdog(args []string) {
 	logf("watching the restart: expecting v%s on port %d (rolling back to v%s if it does not come up)", plan.ExpectVersion, plan.Port, plan.FromVersion)
 	if waitForVersion(plan.Port, plan.ExpectVersion, time.Duration(timeoutSeconds)*time.Second) {
 		logf("v%s is up and healthy", plan.ExpectVersion)
+		restarted, notRestarted := resumeServers(plan.Port, plan.DataDir, plan.ResumeIDs)
+		logf("servers started again: %v; not started: %v", restarted, notRestarted)
+		message := fmt.Sprintf("Cliff was updated to v%s and is running normally.", strings.TrimPrefix(plan.ExpectVersion, "v"))
+		if extra := resumeSummary(restarted, notRestarted); extra != "" {
+			message += " " + extra
+		}
 		_ = updater.WriteUpdateResult(plan.DataDir, updater.UpdateResult{
-			Status:  "updated",
-			From:    plan.FromVersion,
-			To:      plan.ExpectVersion,
-			Message: fmt.Sprintf("Cliff was updated to v%s and is running normally.", strings.TrimPrefix(plan.ExpectVersion, "v")),
+			Status: "updated", From: plan.FromVersion, To: plan.ExpectVersion,
+			Message: message, Restarted: restarted, NotRestarted: notRestarted,
 		})
 		return
 	}
@@ -137,11 +150,15 @@ func runUpdateWatchdog(args []string) {
 		os.Exit(1)
 	}
 	logf("v%s restored and running", plan.FromVersion)
+	restarted, notRestarted := resumeServers(plan.Port, plan.DataDir, plan.ResumeIDs)
+	logf("servers started again: %v; not started: %v", restarted, notRestarted)
+	message := fmt.Sprintf("Cliff v%s did not start correctly, so v%s was restored automatically. Your worlds and settings were not changed.", strings.TrimPrefix(plan.ExpectVersion, "v"), strings.TrimPrefix(plan.FromVersion, "v"))
+	if extra := resumeSummary(restarted, notRestarted); extra != "" {
+		message += " " + extra
+	}
 	_ = updater.WriteUpdateResult(plan.DataDir, updater.UpdateResult{
-		Status:  "rolled-back",
-		From:    plan.FromVersion,
-		To:      plan.ExpectVersion,
-		Message: fmt.Sprintf("Cliff v%s did not start correctly, so v%s was restored automatically. Your servers, worlds and settings were not changed.", strings.TrimPrefix(plan.ExpectVersion, "v"), strings.TrimPrefix(plan.FromVersion, "v")),
+		Status: "rolled-back", From: plan.FromVersion, To: plan.ExpectVersion,
+		Message: message, Restarted: restarted, NotRestarted: notRestarted,
 	})
 }
 
@@ -150,8 +167,11 @@ func runUpdateWatchdog(args []string) {
 func runUpdate(args []string) {
 	fs := flag.NewFlagSet("update", flag.ExitOnError)
 	var checkOnly bool
+	var yes bool
 	var dataDir string
 	var webDir string
+	fs.BoolVar(&yes, "yes", false, "skip the confirmation when a server is running")
+	fs.BoolVar(&yes, "y", false, "skip the confirmation when a server is running (shorthand)")
 	fs.BoolVar(&checkOnly, "check", false, "only check for updates, don't apply")
 	fs.StringVar(&dataDir, "data-dir", os.Getenv("CLIFF_DATA_DIR"), "panel data directory (default: <install-dir>/data)")
 	fs.StringVar(&webDir, "web-dir", os.Getenv("CLIFF_WEB_DIR"), "static dashboard directory")
@@ -230,6 +250,23 @@ func runUpdate(args []string) {
 		plan.Port = info.Port
 	}
 
+	// A running server is stopped by the update. Say so and ask first.
+	var running []serverRef
+	if wasRunning {
+		running = fetchRunningServers(plan.Port, dataDir)
+	}
+	if len(running) > 0 {
+		plan.ResumeIDs = serverIDs(running)
+		fmt.Printf("\nMinecraft server %s is running.\n", serverNames(running))
+		fmt.Println("The update stops it (the world is saved first) and starts it again afterwards.")
+		fmt.Println("Players are disconnected for about a minute.")
+		if !yes && !confirmPrompt("Type 'yes' to update now: ") {
+			fmt.Println("Update cancelled. Nothing was changed.")
+			return
+		}
+		fmt.Println()
+	}
+
 	// Say what is happening at each step.
 	step := 0
 	mgr.SetStageHook(func(stage string, message string) {
@@ -280,9 +317,14 @@ func runUpdate(args []string) {
 	if wasRunning {
 		fmt.Println("  [+] Starting the new version and checking that it runs...")
 		if startAndVerify(plan, plan.ExpectVersion, os.Stdout) {
+			restarted, notRestarted := bringServersBack(plan)
+			message := fmt.Sprintf("Cliff was updated to v%s and is running normally.", strings.TrimPrefix(plan.ExpectVersion, "v"))
+			if extra := resumeSummary(restarted, notRestarted); extra != "" {
+				message += " " + extra
+			}
 			_ = updater.WriteUpdateResult(dataDir, updater.UpdateResult{
 				Status: "updated", From: plan.FromVersion, To: plan.ExpectVersion,
-				Message: fmt.Sprintf("Cliff was updated to v%s and is running normally.", strings.TrimPrefix(plan.ExpectVersion, "v")),
+				Message: message, Restarted: restarted, NotRestarted: notRestarted,
 			})
 		} else {
 			fmt.Fprintf(os.Stderr, "\nThe new version (v%s) did not start correctly. Going back to v%s...\n", strings.TrimPrefix(plan.ExpectVersion, "v"), strings.TrimPrefix(plan.FromVersion, "v"))
@@ -291,7 +333,8 @@ func runUpdate(args []string) {
 				fmt.Fprintln(os.Stderr, "Run 'cliff rollback', then 'cliff start'.")
 				os.Exit(1)
 			}
-			fmt.Fprintf(os.Stderr, "v%s is running again. Your servers, worlds and settings were not changed.\n", strings.TrimPrefix(plan.FromVersion, "v"))
+			fmt.Fprintf(os.Stderr, "v%s is running again. Your worlds and settings were not changed.\n", strings.TrimPrefix(plan.FromVersion, "v"))
+			bringServersBack(plan)
 			os.Exit(1)
 		}
 	}
@@ -301,6 +344,22 @@ func runUpdate(args []string) {
 		fmt.Println("Cliff was not running before the update; start it with 'cliff start'.")
 	}
 	printSafetyNote(mgr)
+}
+
+// bringServersBack starts the servers that were running before the update and says how that went.
+func bringServersBack(plan restartPlan) (restarted []string, notRestarted []string) {
+	if len(plan.ResumeIDs) == 0 {
+		return nil, nil
+	}
+	fmt.Println("  [+] Starting your Minecraft server again...")
+	restarted, notRestarted = resumeServers(plan.Port, plan.DataDir, plan.ResumeIDs)
+	if len(restarted) > 0 {
+		fmt.Printf("      Started again: %s\n", strings.Join(restarted, ", "))
+	}
+	for _, problem := range notRestarted {
+		fmt.Fprintf(os.Stderr, "      Could not start again: %s. Start it from the dashboard.\n", problem)
+	}
+	return restarted, notRestarted
 }
 
 // printSafetyNote tells the user what was kept for undoing an update and how to remove it.

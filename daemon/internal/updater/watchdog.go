@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // WatchdogParams describes the update a watchdog process supervises.
@@ -17,6 +18,8 @@ type WatchdogParams struct {
 	ExpectVersion  string
 	FromVersion    string
 	TimeoutSeconds int
+	// ResumeServerIDs are the servers that were running before the update, to start again afterwards.
+	ResumeServerIDs []string
 }
 
 // WatchdogCommand is the hidden subcommand the previous version runs to watch a restart.
@@ -36,6 +39,7 @@ func (p WatchdogParams) Args(binary string) []string {
 		"--expect-version", p.ExpectVersion,
 		"--from-version", p.FromVersion,
 		"--timeout-seconds", fmt.Sprint(p.TimeoutSeconds),
+		"--resume-servers", strings.Join(p.ResumeServerIDs, ","),
 	}
 }
 

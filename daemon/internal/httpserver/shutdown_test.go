@@ -3,6 +3,7 @@ package httpserver
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -69,5 +70,43 @@ func TestShutdownDaemonDisabledWithoutToken(t *testing.T) {
 	handler.shutdownDaemon(recorder, shutdownRequest("127.0.0.1:4000", "anything"))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 when shutdown is not configured, got %d", recorder.Code)
+	}
+}
+
+func TestInternalServerEndpointsNeedTheTokenAndALocalCaller(t *testing.T) {
+	handler := apiHandler{shutdownToken: "secret"}
+	cases := []struct {
+		name   string
+		remote string
+		token  string
+		status int
+	}{
+		{"remote caller", "203.0.113.5:4000", "secret", http.StatusNotFound},
+		{"missing token", "127.0.0.1:4000", "", http.StatusForbidden},
+		{"wrong token", "127.0.0.1:4000", "nope", http.StatusForbidden},
+		{"local caller with the token", "127.0.0.1:4000", "secret", http.StatusOK},
+	}
+	for _, tc := range cases {
+		request := httptest.NewRequest(http.MethodGet, "/api/internal/running-servers", nil)
+		request.RemoteAddr = tc.remote
+		if tc.token != "" {
+			request.Header.Set(ShutdownTokenHeader, tc.token)
+		}
+		recorder := httptest.NewRecorder()
+		handler.internalRunningServers(recorder, request)
+		if recorder.Code != tc.status {
+			t.Fatalf("running-servers, %s: expected %d, got %d", tc.name, tc.status, recorder.Code)
+		}
+
+		post := httptest.NewRequest(http.MethodPost, "/api/internal/resume-servers", strings.NewReader(`{"serverIds":[]}`))
+		post.RemoteAddr = tc.remote
+		if tc.token != "" {
+			post.Header.Set(ShutdownTokenHeader, tc.token)
+		}
+		recorder = httptest.NewRecorder()
+		handler.internalResumeServers(recorder, post)
+		if recorder.Code != tc.status {
+			t.Fatalf("resume-servers, %s: expected %d, got %d", tc.name, tc.status, recorder.Code)
+		}
 	}
 }

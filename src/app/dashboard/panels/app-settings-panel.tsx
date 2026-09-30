@@ -112,6 +112,7 @@ function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCh
           progress={updates.progress}
           installError={updates.installError}
           failedStage={updates.failedStage}
+          runningServers={updates.runningServers}
           safety={updates.safety}
           clearing={updates.clearing}
           onCheck={updates.checkNow}

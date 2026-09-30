@@ -428,6 +428,9 @@ export type UpdateSafetyInfo = {
   backupDir: string;
 };
 
+/** A server an update would stop. */
+export type RunningServer = { id: string; name: string; lifecycle: string };
+
 /** How the last update ended, shown once after Cliff comes back. */
 export type LastUpdateResult = {
   status: "updated" | "rolled-back" | "failed";
@@ -435,6 +438,10 @@ export type LastUpdateResult = {
   to: string;
   message: string;
   at: string;
+  /** Servers that were running before the update and are running again. */
+  restarted?: string[];
+  /** Servers that could not be started again, each with the reason. */
+  notRestarted?: string[];
 };
 
 export type UpdateApplyResult = {

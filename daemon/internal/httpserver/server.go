@@ -77,6 +77,8 @@ func New(options Options) http.Handler {
 
 	mux.HandleFunc("GET /api/health", api.health)
 	mux.HandleFunc("POST /api/internal/shutdown", api.shutdownDaemon)
+	mux.HandleFunc("GET /api/internal/running-servers", api.internalRunningServers)
+	mux.HandleFunc("POST /api/internal/resume-servers", api.internalResumeServers)
 	mux.HandleFunc("GET /api/auth/me", api.authMe)
 	mux.HandleFunc("POST /api/auth/setup", api.authSetup)
 	mux.HandleFunc("POST /api/auth/login", api.authLogin)
@@ -120,6 +122,7 @@ func New(options Options) http.Handler {
 	mux.HandleFunc("GET /api/updates/check", api.requireUser(api.updatesCheck))
 	mux.HandleFunc("POST /api/updates/apply", api.requireUser(api.updatesApply))
 	mux.HandleFunc("GET /api/updates/progress", api.requireUser(api.updatesProgress))
+	mux.HandleFunc("GET /api/updates/servers", api.requireUser(api.updatesServers))
 	mux.HandleFunc("GET /api/updates/safety", api.requireUser(api.updatesSafety))
 	mux.HandleFunc("DELETE /api/updates/safety", api.requireUser(api.updatesClearSafety))
 	mux.HandleFunc("GET /api/updates/last-result", api.requireUser(api.updatesLastResult))

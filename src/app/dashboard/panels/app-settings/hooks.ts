@@ -180,6 +180,11 @@ export function useUpdates(initial: UpdateCheckResult | null | undefined, onMess
   const installer = useUpdateInstaller(onMessage);
   const [safety, setSafety] = useState<UpdateSafetyInfo | null>(null);
   const [clearing, setClearing] = useState(false);
+  const { refreshRunningServers } = installer;
+
+  useEffect(() => {
+    void refreshRunningServers();
+  }, [refreshRunningServers]);
 
   useEffect(() => {
     let alive = true;
@@ -225,6 +230,7 @@ export function useUpdates(initial: UpdateCheckResult | null | undefined, onMess
     installError: installer.error,
     failedStage: installer.failedStage,
     install: installer.install,
+    runningServers: installer.runningServers,
     safety,
     clearing,
     clearSafety,

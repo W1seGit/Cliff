@@ -73,6 +73,10 @@ type UpdateResult struct {
 	To      string `json:"to"`
 	Message string `json:"message"`
 	At      string `json:"at"`
+	// Restarted lists the servers that were running before the update and are running again.
+	Restarted []string `json:"restarted,omitempty"`
+	// NotRestarted lists servers that could not be started again, each with the reason.
+	NotRestarted []string `json:"notRestarted,omitempty"`
 }
 
 func updateResultPath(dataDir string) string {

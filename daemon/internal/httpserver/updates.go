@@ -2,10 +2,12 @@ package httpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/buildinfo"
@@ -67,6 +69,28 @@ func (h apiHandler) updatesApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A running server is stopped by the update, so the caller must say that is fine.
+	var input struct {
+		ConfirmStopServers bool `json:"confirmStopServers"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&input)
+	running := h.runningServers(r.Context())
+	if len(running) > 0 && !input.ConfirmStopServers {
+		writeJSON(w, http.StatusConflict, map[string]any{
+			"error":   "A Minecraft server is running. The update stops it and starts it again afterwards.",
+			"code":    "servers_running",
+			"servers": running,
+		})
+		return
+	}
+	resumeIDs := make([]string, 0, len(running))
+	for _, server := range running {
+		resumeIDs = append(resumeIDs, server.ID)
+	}
+	if len(resumeIDs) > 0 {
+		slog.Info("update will stop running servers and start them again", "servers", strings.Join(resumeIDs, ","))
+	}
+
 	// An update the user started keeps going if they close the tab; it reports its
 	// outcome the next time the dashboard opens.
 	result, err := h.updater.Apply(context.WithoutCancel(r.Context()), updater.ApplyHooks{BeforeSwap: h.prepareForUpdate})
@@ -83,14 +107,15 @@ func (h apiHandler) updatesApply(w http.ResponseWriter, r *http.Request) {
 		// The old version watches the restart. If the new one does not come up
 		// healthy, it puts the old one back and starts it again.
 		watchdogErr := h.updater.StartWatchdog(updater.WatchdogParams{
-			Host:           h.config.Host,
-			Port:           h.config.Port,
-			DataDir:        h.config.DataDir,
-			ServerRoot:     h.config.ServerRoot,
-			WebDir:         h.config.WebDir,
-			ExpectVersion:  result.NewVersion,
-			FromVersion:    buildinfo.Version,
-			TimeoutSeconds: 45,
+			Host:            h.config.Host,
+			Port:            h.config.Port,
+			DataDir:         h.config.DataDir,
+			ServerRoot:      h.config.ServerRoot,
+			WebDir:          h.config.WebDir,
+			ExpectVersion:   result.NewVersion,
+			FromVersion:     buildinfo.Version,
+			TimeoutSeconds:  45,
+			ResumeServerIDs: resumeIDs,
 		})
 		if watchdogErr != nil {
 			slog.Warn("update will restart without an automatic rollback", "error", watchdogErr)

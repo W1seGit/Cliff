@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -206,6 +207,20 @@ func (m *Manager) IsRunning(serverID string) bool {
 	defer m.mu.Unlock()
 	proc := m.running[serverID]
 	return proc != nil && proc.lifecycle != LifecycleStopped
+}
+
+// RunningServerIDs lists the servers that are starting, running or stopping.
+func (m *Manager) RunningServerIDs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids := make([]string, 0, len(m.running))
+	for id, proc := range m.running {
+		if proc != nil && proc.lifecycle != LifecycleStopped {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return ids
 }
 
 func (m *Manager) Logs(serverID string) []string {
