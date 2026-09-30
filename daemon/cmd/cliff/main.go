@@ -170,6 +170,7 @@ func runDaemon() {
 		os.Exit(1)
 	}
 	defer closeLog()
+	closeCrashReports := startCrashReports(filepath.Dir(logFile))
 
 	slog.Info("daemon starting", "version", buildinfo.Current().Version, "pid", os.Getpid(), "logFile", logFile, "logLevel", logLevel)
 
@@ -195,6 +196,7 @@ func runDaemon() {
 	manager := process.NewManager(cfg.DataDir)
 	daemonCtx, daemonCancel := context.WithCancel(context.Background())
 	defer daemonCancel()
+	startRuntimeGuard(daemonCtx)
 
 	// Initialize the auto-updater.
 	binaryPath, _ := os.Executable()
@@ -229,6 +231,9 @@ func runDaemon() {
 		Addr:              net.JoinHostPort(cfg.Host, fmt.Sprint(cfg.Port)),
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		// Panics in a request handler are recovered by net/http; log them here
+		// so they reach daemon.log with the stack instead of only stderr.
+		ErrorLog: slog.NewLogLogger(slog.Default().Handler(), slog.LevelError),
 	}
 
 	listener, err := net.Listen("tcp", server.Addr)
@@ -263,6 +268,7 @@ func runDaemon() {
 	}
 	manager.Shutdown(25 * time.Second)
 	slog.Info("daemon stopped")
+	closeCrashReports()
 }
 
 func printVersion() {

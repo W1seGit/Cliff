@@ -1026,7 +1026,7 @@ func spaFileServer(root string) http.Handler {
 			fullPath := filepath.Join(root, requestPath)
 			if info, err := os.Stat(fullPath); err == nil && !info.IsDir() {
 				setStaticCacheHeaders(w, r.URL.Path, false)
-				http.ServeFile(w, r, fullPath)
+				serveStaticFile(w, r, fullPath)
 				return
 			}
 		}
@@ -1034,7 +1034,7 @@ func spaFileServer(root string) http.Handler {
 		indexPath := filepath.Join(root, "index.html")
 		if _, err := os.Stat(indexPath); err == nil {
 			setStaticCacheHeaders(w, r.URL.Path, true)
-			http.ServeFile(w, r, indexPath)
+			serveStaticFile(w, r, indexPath)
 			return
 		}
 

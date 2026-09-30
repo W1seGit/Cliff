@@ -3,7 +3,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Archive, ChevronDown, ChevronLeft, ChevronRight, ChevronUp,
+  Archive, ChevronDown, Copy, Pencil, Trash2, ChevronLeft, ChevronRight, ChevronUp,
   FolderOpen, Globe, LayoutDashboard, LogOut, MoreHorizontal,
   Package, Plus, Puzzle, RadioTower, Search, Settings, SlidersHorizontal, Terminal, Upload, UserRound, Users,
 } from "lucide-react";
@@ -479,10 +479,11 @@ export function Sidebar({
     )}
 
     {openMenuServer && (
-      <FloatingMenu className="floating-menu server-menu" position={menuPosition} width={150}>
-        <button role="menuitem" onClick={() => { setSwitcherOpen(false); onRename(openMenuServer); }}>Rename</button>
-        <button role="menuitem" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => { setSwitcherOpen(false); onDuplicate(openMenuServer); }}>Clone server</button>
-        <button role="menuitem" className="danger-button" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => { setSwitcherOpen(false); onDelete(openMenuServer); }}>Delete</button>
+      <FloatingMenu className="floating-menu server-menu" position={menuPosition} width={170}>
+        <button role="menuitem" onClick={() => { setSwitcherOpen(false); onRename(openMenuServer); }}><Pencil size={15} />Rename</button>
+        <button role="menuitem" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => { setSwitcherOpen(false); onDuplicate(openMenuServer); }}><Copy size={15} />Clone server</button>
+        <div className="server-menu-divider" role="separator" />
+        <button role="menuitem" className="server-menu-danger" disabled={serverIsRunning(runtime, openMenuServer.id)} onClick={() => { setSwitcherOpen(false); onDelete(openMenuServer); }}><Trash2 size={15} />Delete</button>
       </FloatingMenu>
     )}
     </>

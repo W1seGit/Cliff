@@ -74,12 +74,29 @@
 .server-menu-button:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
 
 .server-menu {
-  min-width: 150px;
+  min-width: 170px;
 }
 
 .server-menu button {
   width: 100%;
   font-weight: 500;
+  font-size: 13px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  box-shadow: none;
+}
+
+.server-menu button svg { color: var(--text-tertiary); flex: none; }
+.server-menu button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.server-menu .server-menu-danger,
+.server-menu .server-menu-danger svg { color: var(--danger); }
+.server-menu .server-menu-danger:hover:not(:disabled) { background: rgba(255, 99, 99, 0.12); }
+
+.server-menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border-soft);
 }
 
 .server-name {
