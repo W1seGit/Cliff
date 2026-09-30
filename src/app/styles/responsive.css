@@ -318,8 +318,7 @@
   }
 
   /* Split various grids to single column */
-  .split-fields, .toggle-grid, .command-row, .connection-card, .datapack-row, .world-card, .world-actions, .file-actions, .backup-create-row, .search-bar, .mod-filter-bar, .console-toolbar, .overview-status-stats, .runtime-snapshot { grid-template-columns: 1fr; display: grid; }
-  .console-toolbar > * { flex: none; }
+  .split-fields, .toggle-grid, .command-row, .connection-card, .datapack-row, .world-card, .world-actions, .file-actions, .backup-create-row, .search-bar, .mod-filter-bar, .overview-status-stats, .runtime-snapshot { grid-template-columns: 1fr; display: grid; }
 }
 
 /* ── Phone ──────────────────────────────────────────────────── */
@@ -399,11 +398,9 @@
      scroll container (workspace no longer has height:100vh). Console
      containers should flow naturally with the page instead of creating
      their own nested scroll areas. */
-  .console-panel {
-    /* Fill the viewport so the page doesn't scroll — only the console
-       log area scrolls internally. Account for sticky header (~62px),
-       sticky tabs (~44px), toolbar, input, and padding. */
-    height: calc(100dvh - 200px);
+  .console-page {
+    /* Fill the viewport so the page doesn't scroll; only the log area does. */
+    height: calc(100dvh - 240px);
     min-height: 300px;
   }
   /* Standalone ConsoleView (daemon logs in app settings) — cap height

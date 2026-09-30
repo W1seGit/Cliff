@@ -32,6 +32,26 @@ button:active:not(:disabled) {
   padding: 0 14px;
 }
 
+/* An <a> styled as a button (Button with href). */
+a.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+a.btn.btn-sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: var(--text-xs);
+}
+
 .btn:not(.primary):not(.danger-button):not(.danger-ghost),
 .icon-button:not(.icon-only):not(.primary):not(.danger-button) {
   background: transparent;

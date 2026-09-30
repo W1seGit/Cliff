@@ -5,6 +5,7 @@ import type { RuntimeStatus, RuntimeUsage, ServerHealth, ServerRecord } from "..
 import { formatBytes, joinAddressFor, isPublicAddressActive } from "../lib/utils";
 import { copyTextToClipboard } from "../lib/clipboard";
 import { Button } from "../components/ui/button";
+import { Page } from "../components/ui/page-layout";
 import { Pill } from "../components/ui/pill";
 import { AreaChart } from "../components/ui/area-chart";
 import { fetchServerProperties, fetchServerUsage } from "../lib/runtime-client";
@@ -204,7 +205,7 @@ export function OverviewPanel({
   const startMarkerTime = (isRunning && runtimeStartMs !== null && runtimeStartMs >= timeStart && runtimeStartMs <= timeEnd) ? runtimeStartMs : null;
 
   return (
-    <section className="overview-layout">
+    <Page className="overview-layout">
       <div className="overview-hero">
         <span className="overview-hero-label">{publicActive ? "Public join address" : "Join address"}</span>
         <button className="overview-hero-address" onClick={() => copyAddress()} aria-label="Copy join address">
@@ -304,6 +305,6 @@ export function OverviewPanel({
       {!health && (
         <p className="muted overview-scanning">Scanning server folder...</p>
       )}
-    </section>
+    </Page>
   );
 }
