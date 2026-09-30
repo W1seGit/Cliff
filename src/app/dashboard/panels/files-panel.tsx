@@ -262,8 +262,7 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
       <Breadcrumb items={crumbs} disabled={Boolean(busy)} />
 
       {selectedPaths.length > 0 && (
-        <div className="table-selection">
-          <SelectionBar
+        <SelectionBar
             selectedCount={selectedPaths.length}
             actions={[
               {
@@ -279,8 +278,7 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
                 }),
               },
             ]}
-          />
-        </div>
+        />
       )}
 
       <Table className="files-table">
@@ -321,10 +319,10 @@ export function FilesPanel({ server, onConfirm, onMessage, onUnsavedChange }: { 
               <td className="col-num">{shortDate(entry.updatedAt)}</td>
               <td className="col-actions">
                 <span className="row-actions">
-                  <Button variant="danger-ghost" size="sm" aria-label={`Delete ${entry.name}`} title="Delete" disabled={Boolean(busy)} onClick={() => onConfirm({
+                  {selectedPaths.length === 0 && <Button variant="danger-ghost" size="sm" aria-label={`Delete ${entry.name}`} title="Delete" disabled={Boolean(busy)} onClick={() => onConfirm({
                     title: entry.type === "directory" ? "Delete folder" : "Delete file", message: `${entry.name} will be removed.${entry.type === "directory" ? " This also removes everything inside it." : ""}`, confirmLabel: "Delete", dangerous: true,
                     onConfirm: () => deletePath(entry.path, entry.name),
-                  })} loading={busy === `delete:${entry.path}`} loadingText="..."><Trash2 size={15} /></Button>
+                  })} loading={busy === `delete:${entry.path}`} loadingText="..."><Trash2 size={15} /></Button>}
                 </span>
               </td>
             </tr>

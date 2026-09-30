@@ -190,18 +190,6 @@ tr:focus-within .row-actions,
   font-weight: 500;
 }
 
-/* Selection actions above a table */
-.table-selection {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border-hairline);
-}
-
 .backup-date-cell span {
   white-space: nowrap;
 }

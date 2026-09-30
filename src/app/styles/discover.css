@@ -224,7 +224,7 @@
 }
 
 .discover-opt:hover { background: var(--surface); color: var(--text); }
-.discover-opt.active { background: var(--surface-2); color: var(--text); box-shadow: inset 2px 0 0 var(--accent); }
+.discover-opt.active { background: var(--surface-2); color: var(--text); }
 .discover-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .discover-opt-logo {
@@ -249,6 +249,32 @@
 }
 
 svg.discover-opt-glyph { background: none; }
+
+/* Two connected buttons, each half the width */
+.discover-segmented {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  overflow: hidden;
+}
+
+.discover-segmented button {
+  min-height: var(--control-h);
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--dur-fast, 120ms) ease, color var(--dur-fast, 120ms) ease;
+}
+
+.discover-segmented button + button { box-shadow: inset 1px 0 0 var(--border-strong); }
+.discover-segmented button:hover { color: var(--text); background: var(--surface); }
+.discover-segmented button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); font-weight: 600; }
+.discover-segmented button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .discover-sort { width: auto; min-width: 150px; }
 

@@ -114,8 +114,8 @@ const categoryOptions = [
 
 const sideOptions: { value: SideFilter; label: string }[] = [
   { value: "both", label: "Client and server" },
-  { value: "server", label: "Server only" },
-  { value: "client", label: "Client only" },
+  { value: "server", label: "Server" },
+  { value: "client", label: "Client" },
 ];
 
 function contentChoices(pluginProfile: boolean): DiscoverFiltersState["content"][] {
@@ -200,9 +200,10 @@ function DiscoverFilters({
           </div>
           <div className="discover-group" role="group" aria-label="Side">
             <span className="discover-group-label">Runs on</span>
-            {sideOptions.map((option) => (
-              <FilterOption key={option.value} active={filters.side === option.value} onClick={() => set({ side: option.value })}>{option.label}</FilterOption>
-            ))}
+            <div className="discover-segmented">
+              <button type="button" aria-pressed={filters.side === "server"} onClick={() => set({ side: filters.side === "server" ? "both" : "server" })}>Server</button>
+              <button type="button" aria-pressed={filters.side === "client"} onClick={() => set({ side: filters.side === "client" ? "both" : "client" })}>Client</button>
+            </div>
           </div>
           <div className="discover-group" role="group" aria-label="Category">
             <span className="discover-group-label">Category</span>

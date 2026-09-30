@@ -456,21 +456,35 @@
   font-weight: 600;
 }
 
-/* Running server: a subtle blue wash on the header so state reads at a glance. */
-.server-header {
-  transition: background var(--dur-base) var(--ease), box-shadow var(--dur-base) var(--ease);
+/* Server state on the header: a blue dot grid that breathes while starting and holds steady once running. */
+.server-header::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  background-image: radial-gradient(circle, var(--accent) 1.3px, transparent 2px);
+  background-size: 14px 14px;
+  background-position: 7px 7px;
+  -webkit-mask-image: linear-gradient(to right, transparent 15%, #000 85%);
+  mask-image: linear-gradient(to right, transparent 15%, #000 85%);
+  transition: opacity var(--dur-base) var(--ease);
 }
 
-.server-header.is-running {
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 30%, transparent);
+.server-header.is-running::before { opacity: 0.6; }
+.server-header.is-running { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+
+.server-header.is-starting::before { animation: header-breathe 2.6s ease-in-out infinite; }
+.server-header.is-starting { box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 25%, transparent); }
+
+@keyframes header-breathe {
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.85; }
 }
 
-@media (max-width: 900px) {
-  .server-header.is-running {
-    background: color-mix(in srgb, var(--accent) 10%, rgba(11, 13, 16, 0.92));
-    box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 30%, transparent);
-  }
+@media (prefers-reduced-motion: reduce) {
+  .server-header.is-starting::before { animation: none; opacity: 0.3; }
 }
 
 /* Icon tile used by PageBand in place of a server avatar */

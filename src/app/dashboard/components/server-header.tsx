@@ -68,7 +68,7 @@ export function ServerHeader({
   const statusClass = isRunning ? (lifecycle === "running" ? "on" : "busy") : anotherServerRunning ? "busy" : "";
 
   return (
-    <header className={`server-header ${isRunning && lifecycle === "running" ? "is-running" : ""}`.trim()} aria-label="Server context">
+    <header className={`server-header ${isRunning && lifecycle === "running" && !pending ? "is-running" : ""} ${lifecycle === "starting" || pending === "start" || pending === "restart" ? "is-starting" : ""}`.replace(/\s+/g, " ").trim()} aria-label="Server context">
       <button className="mobile-sidebar-button" aria-label="Open sidebar" onClick={onOpenSidebar}>
         <MenuIcon size={18} />
       </button>
