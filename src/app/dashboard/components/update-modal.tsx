@@ -114,7 +114,7 @@ export function UpdateModal({
               <p>
                 Before installing, Cliff copies its own settings database (a few KB) and keeps the current version
                 {update.safetyCopyBytes ? ` (about ${formatSize(update.safetyCopyBytes)} of disk)` : ""}. If the new version does not start,
-                Cliff puts the old one back automatically. Your servers and worlds are never copied or changed. You can delete the
+                Cliff puts the old one back automatically. Your worlds are never copied or changed. You can delete the
                 kept copies in App Settings &gt; Updates.
               </p>
             </div>
