@@ -80,18 +80,6 @@
   white-space: nowrap;
 }
 
-.server-switcher-status-text {
-  color: var(--text-secondary);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.server-switcher-sep {
-  color: var(--text-tertiary);
-  opacity: 0.6;
-}
-
 .server-switcher-detail {
   min-width: 0;
   overflow: hidden;

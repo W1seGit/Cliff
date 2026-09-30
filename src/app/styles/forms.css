@@ -97,34 +97,6 @@
 
 .field-note.warn { color: var(--warning); }
 
-.important-check {
-  padding: 12px 14px;
-  border-radius: var(--radius-xs);
-  background: var(--warning-bg);
-  color: var(--warning);
-  font-weight: 500;
-}
-
-.split-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.toggle-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-}
-
-.toggle-grid .check {
-  flex-direction: row;
-  font-weight: 400;
-  color: var(--text);
-}
-
-.toggle-grid input { width: auto; }
-
 /* Presets */
 .preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .preset-row > span { color: var(--text-secondary); font-size: 12px; font-weight: 500; }

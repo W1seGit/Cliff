@@ -2,7 +2,7 @@
 
 /* ── Tablet: collapse sidebar to overlay ─────────────────────── */
 @media (max-width: 1100px) {
-  .grid-2, .players-layout, .activity-layout, .profile-version-strip, .server-type-presets, .preset-row > div, .metadata-loader-grid, .metadata-health-grid, .access-columns, .import-detection, .schedule-row {
+  .server-type-presets, .preset-row > div, .import-detection {
     grid-template-columns: 1fr;
   }
   .wizard-review-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -50,7 +50,6 @@
     width: auto;
     margin-bottom: 18px;
   }
-  .sidebar.collapsed .sidebar-app-name { display: none; }
   .sidebar.collapsed .sidebar-brand { display: inline-flex; }
   .sidebar.collapsed .server-switcher-wrap,
   .sidebar.collapsed .sidebar-nav,
@@ -177,7 +176,7 @@
   .server-header-actions .server-header-action-label {
     display: none;
   }
-  .control-strip, .control-strip-actions { display: grid; grid-template-columns: 1fr; }
+  .control-strip { display: grid; grid-template-columns: 1fr; }
 
   /* Tabs — keep desktop underline style, just make sticky + scrollable */
   .tabs {
@@ -285,24 +284,10 @@
     min-width: 0;
   }
   /* Make buttons inside wrapper elements (e.g. more-menu-wrap) fill their container */
-  .filter-bar-actions .more-menu-wrap {
-    display: flex;
-  }
-  .filter-bar-actions .more-menu-wrap > button {
-    flex: 1 1 0;
-    min-width: 0;
-  }
   /* Backups panel — Settings button on its own full-width row, then
      Download + Create snapshot share the next row equally. */
   .filter-bar-actions > .backups-settings-action {
     flex: 1 1 100%;
-  }
-  .filter-bar-actions > .backups-action-pair {
-    flex: 1 1 100%;
-  }
-  .filter-bar-actions > .backups-action-pair > * {
-    flex: 1 1 0;
-    min-width: 0;
   }
   /* Make the filter button fill its row on mobile. The flex property
      must go on .filter-menu-wrap (the actual flex item of
@@ -318,7 +303,7 @@
   }
 
   /* Split various grids to single column */
-  .split-fields, .toggle-grid, .command-row, .connection-card, .datapack-row, .world-card, .world-actions, .file-actions, .backup-create-row, .search-bar, .mod-filter-bar, .overview-status-stats, .runtime-snapshot { grid-template-columns: 1fr; display: grid; }
+  .connection-card, .search-bar { grid-template-columns: 1fr; display: grid; }
 }
 
 /* ── Phone ──────────────────────────────────────────────────── */
@@ -326,8 +311,7 @@
   .overview-layout { grid-template-columns: 1fr; }
   .discover-results.grid-view { grid-template-columns: 1fr; }
   .skeleton-graph-grid,
-  .skeleton-card-grid,
-  .usage-number-grid { grid-template-columns: 1fr; }
+  .skeleton-card-grid { grid-template-columns: 1fr; }
 
   /* Overview stat cards — stack vertically */
   .overview-stat-cards {
@@ -369,9 +353,6 @@
   .chart-legend {
     gap: 10px;
     font-size: 11px;
-  }
-  .chart-card-stat {
-    font-size: 20px;
   }
   .area-chart.has-y-axis .area-chart-plot {
     padding-left: 36px;
@@ -436,10 +417,6 @@
     margin: 8px -16px 0;
     padding: 12px 16px;
   }
-  .tool-card-main {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
   .mc-server-preview {
     grid-template-columns: 52px minmax(0, 1fr) auto;
   }
@@ -450,9 +427,6 @@
   .mc-server-stats {
     font-size: 12px;
   }
-  .tool-card-main button {
-    width: 100%;
-  }
   .not-found-page {
     padding: 28px 18px;
   }
@@ -460,12 +434,6 @@
     min-width: 0;
     width: 100%;
     max-width: 280px;
-  }
-  .inline-check {
-    width: 100%;
-  }
-  .dns-records > div {
-    grid-template-columns: 1fr;
   }
   .wizard-review-grid { grid-template-columns: 1fr; }
 }

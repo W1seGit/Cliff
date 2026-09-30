@@ -30,7 +30,7 @@
 }
 
 /* Buttons used as whole rows keep their own look. */
-.file-row, .file-open-button, .action-item, .table-load-more, .load-more-results {
+.action-item, .table-load-more, .load-more-results {
   min-height: 0;
 }
 
@@ -676,9 +676,9 @@
 }
 
 /* Links inside cards, banners and rows */
-.card a:not(.button-link),
-.banner a:not(.button-link),
-.setting-row a:not(.button-link) {
+.card a:not(.button-link):not(.btn),
+.banner a:not(.button-link):not(.btn),
+.setting-row a:not(.button-link):not(.btn) {
   color: var(--accent);
 }
 

@@ -138,25 +138,6 @@
   box-shadow: var(--shadow-menu), inset 0 0 0 1px var(--border-soft);
 }
 
-.account-menu-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 10px 10px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-}
-
-.account-menu-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 700;
-  font-size: 14px;
-  color: var(--text);
-}
-
 .floating-menu button {
   display: flex;
   align-items: center;

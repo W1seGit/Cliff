@@ -381,7 +381,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     if (refreshBusy) return;
     setRefreshBusy(true);
     try {
-      await loadDashboard({ includeSettings: true, includeSettingsStorage: tab === "app", includeHealth: tab === "overview" });
+      await loadDashboard({ includeSettings: true, includeSettingsStorage: false, includeHealth: tab === "overview" });
       await refreshSelected(selected?.id, {
         clear: false,
         includeMods: isModsTab(tab),
@@ -576,7 +576,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
   }, []);
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      refresh({ includeSettings: true, includeSettingsStorage: tab === "app", includeHealth: tab === "overview" })
+      refresh({ includeSettings: true, includeSettingsStorage: false, includeHealth: tab === "overview" })
         .catch((error) => setMessage(error.message))
         .finally(() => setInitialLoading(false));
     }, 0);

@@ -1,22 +1,6 @@
 /* Result cards */
 /* Result cards */
-.result-list { display: grid; gap: 10px; margin-top: 12px; }
-.result-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
-.result-head strong { font-size: 14px; font-weight: 600; }
 .result small { color: var(--text-secondary); }
-.result-badges, .compat-strip {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.result-badges span, .compat-strip span {
-  padding: 4px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: var(--surface-2);
-}
-.result-meta { color: var(--accent); font-size: 12px; }
 
 .source-hint {
   display: flex;
@@ -48,25 +32,6 @@
 .import-detection span { color: var(--text); font-size: 12px; opacity: 0.8; }
 .import-detection strong { color: var(--text); font-weight: 600; }
 .import-detection .wide { grid-column: 1 / -1; color: var(--warning); opacity: 1; }
-
-.import-source-card {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  box-shadow: none;
-  border: 1px solid var(--border-hairline);
-}
-
-.import-source-card > strong {
-  color: var(--text);
-  font-size: 14px;
-}
-
-.hidden-file-input {
-  display: none;
-}
 
 .import-source-description {
   margin: 0 0 4px;
@@ -256,66 +221,6 @@
   margin-top: 0;
 }
 
-.wizard-steps {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 6px;
-  padding: 5px;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  box-shadow: none;
-  border: 1px solid var(--border-hairline);
-}
-
-.wizard-steps button {
-  position: relative;
-  min-height: 40px;
-  justify-content: flex-start;
-  padding: 9px 11px 9px 13px;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
-  box-shadow: none;
-  transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
-}
-
-.wizard-steps button::before {
-  content: "";
-  position: absolute;
-  inset: 8px auto 8px 0;
-  width: 2px;
-  border-radius: 99px;
-  background: transparent;
-  transition: background 160ms ease;
-}
-
-.wizard-steps button:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--surface-2);
-}
-
-.wizard-steps button.active {
-  color: var(--text);
-  background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 38%, var(--border));
-}
-
-.wizard-steps button.active::before {
-  background: var(--accent);
-}
-
-.wizard-steps button.done {
-  color: var(--text);
-  background: color-mix(in srgb, var(--success) 8%, transparent);
-}
-
-.wizard-steps button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .wizard-actions {
   display: flex;
   justify-content: flex-end;
@@ -387,7 +292,6 @@
     animation: none;
   }
 
-  .wizard-steps button,
   .wizard-review-grid > div {
     transition: none;
   }

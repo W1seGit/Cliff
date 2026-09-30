@@ -37,13 +37,16 @@ export function StorageTab({
   const free = storage?.freeBytes ?? null;
   const usedPercent = total && free != null ? Math.min(100, Math.max(0, Math.round(((total - free) / total) * 100))) : null;
 
+  // Sizes come from walking the server folders, which can take a while on a big
+  // install, so the page renders first and these fill in when they arrive.
+  const pending = "Calculating...";
   const usageItems: KeyValueItem[] = [
-    { key: "root", label: "Server storage", value: storage?.rootExists ? formatBytes(storage.serverRootSizeBytes) : "missing" },
-    { key: "registered", label: "Registered servers", value: formatBytes(storage?.registeredServerSizeBytes ?? 0) },
-    { key: "snapshots", label: "Snapshots", value: formatBytes(storage?.snapshotsSizeBytes ?? 0) },
-    { key: "backups", label: "Backups", value: storage?.backupCount ?? 0 },
-    { key: "free", label: "Disk free", value: free == null ? "unknown" : formatBytes(free) },
-    { key: "total", label: "Disk total", value: total == null ? "unknown" : formatBytes(total) },
+    { key: "root", label: "Server storage", value: !storage ? pending : storage.rootExists ? formatBytes(storage.serverRootSizeBytes) : "missing" },
+    { key: "registered", label: "Registered servers", value: !storage ? pending : formatBytes(storage.registeredServerSizeBytes ?? 0) },
+    { key: "snapshots", label: "Snapshots", value: !storage ? pending : formatBytes(storage.snapshotsSizeBytes ?? 0) },
+    { key: "backups", label: "Backups", value: !storage ? pending : storage.backupCount ?? 0 },
+    { key: "free", label: "Disk free", value: !storage ? pending : free == null ? "unknown" : formatBytes(free) },
+    { key: "total", label: "Disk total", value: !storage ? pending : total == null ? "unknown" : formatBytes(total) },
   ];
 
   const networkItems: KeyValueItem[] = [

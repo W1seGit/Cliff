@@ -44,11 +44,29 @@ Wizards and the file editor register without `showSaveBar`; they keep their own 
 
 ## Page layout
 
-Every page renders inside the same shell: the sidebar, then a header band, then content.
+Every page renders inside the same shell (sidebar, then a header band, then content), and every page body uses `Page`:
 
-- Server pages use `ServerHeader`. Pages that are not about one server (App settings, Account, Create, Import) use `PageBand` (`components/page-band.tsx`), which shares the server header's layout.
-- Inside the content, `PageHeader` titles a panel, and `Tabs` (underline style) switch sections. Settings pages use `SettingsLayout`, which is the same tab style plus icons and unsaved-changes dots.
-- Group content in outlined `Card`s (hairline border, transparent fill). Do not add filled panels or a second navigation style.
+```
+Page
+  header    title, one-line description, [one primary action]
+  tabs      optional section switcher (Tabs, underline style, with icons)
+  toolbar   search and filters left, secondary actions right (FilterBar)
+  body      Cards, or a flush Table
+```
+
+- Server pages get their header band from `ServerHeader`; pages that are not about one server (App settings, Account, Create, Import) use `PageBand`.
+- `.page-frame` (in `dashboard-client.tsx`) centers everything at `--layout-max`; a page never sets its own width.
+- Lists are `Table` (styled once in `styles/data-table.css`): quiet header, hairline rows, `row-actions` that brighten on hover or focus, and `col-check` / `col-num` / `col-actions` for cell alignment. Put row actions in a ghost `IconButton` or `Menu`, never a row of solid buttons.
+- Group content in outlined `Card`s (hairline border, transparent fill).
+
+## Design language
+
+Dark, flat and hairline-defined. Depth comes from spacing and 1px borders; shadows only on floating layers (menu, modal, save bar).
+
+- **One accent.** `--accent` is for the single primary action per view, the focus ring, the active nav marker, links and selected state. Icons are neutral (`--icon`).
+- **Status is a dot plus text** (`StatusDot`, `Pill` status variants), never a filled tinted badge. There is one neutral tag pill.
+- **Buttons:** primary (solid, at most one per view), default (outlined), ghost (icons, row actions), danger (outlined red, or `danger-ghost` in rows). Use `Button`; `plain` opts out for buttons that style themselves.
+- **Density:** 36px controls (`--control-h`), 40px rows (`--row-h`), type from `--text-xs`..`--text-2xl`, spacing from `--space-*`.
 
 ## Rules of thumb
 

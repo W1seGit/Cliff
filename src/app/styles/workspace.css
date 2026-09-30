@@ -25,16 +25,6 @@
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.eyebrow {
-  display: inline-flex;
-  margin-bottom: 6px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
 .toolbar {
   display: flex;
   align-items: center;
@@ -78,8 +68,6 @@
 
 .control-strip-note { color: var(--text-secondary); font-size: 12px; }
 
-.control-strip-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-
 .control-strip .danger-button {
   background: var(--danger-bg);
   color: var(--danger);
@@ -87,8 +75,6 @@
 }
 
 .control-strip .danger-button:hover:not(:disabled) { background: var(--danger-hover); }
-
-.more-menu-wrap { position: relative; }
 .more-menu {
   position: fixed;
   z-index: 1000;

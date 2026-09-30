@@ -155,7 +155,7 @@ export function PropertiesEditorCard({
       actions={
         <>
           <CopyButton text={value} label="Copy server.properties" />
-          <Button variant="link" iconLeft={<Download size={14} />} href={serverPropertiesUrl(serverId, "?download=1")} download>
+          <Button iconLeft={<Download size={14} />} href={serverPropertiesUrl(serverId, "?download=1")} download>
             Download
           </Button>
         </>

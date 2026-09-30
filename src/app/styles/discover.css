@@ -52,12 +52,6 @@
   min-height: 44px;
 }
 
-.discover-upload-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
 .discover-search-row {
   display: flex;
   align-items: center;
@@ -452,27 +446,6 @@
   font-size: 13px;
 }
 
-.status-toggle {
-  display: inline-flex;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  box-shadow: none;
-  border: 1px solid var(--border-hairline);
-  overflow: hidden;
-}
-
-.status-toggle button {
-  border-radius: 0;
-  background: transparent;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  padding: 8px 12px;
-}
-
-.status-toggle button:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
-.status-toggle button.active { background: var(--surface-2); color: var(--text); }
-
 .mod-upload-drop {
   display: flex;
   flex-direction: column;
@@ -502,15 +475,6 @@
   white-space: nowrap;
 }
 .mod-upload-drop .muted { font-size: 13px; }
-
-.file-token {
-  display: inline-block;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: bottom;
-  white-space: nowrap;
-}
 
 
 /* Multi-file upload */

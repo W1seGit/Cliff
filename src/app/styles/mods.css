@@ -18,43 +18,7 @@
   table-layout: fixed;
 }
 
-.mods-context-chips {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 /* Section tabs (Installed / Discover) */
-.mods-section-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--border);
-}
-
-.mods-section-tabs button {
-  flex: 1 1 auto;
-  padding: 8px 16px;
-  border-radius: var(--radius-xs);
-  background: transparent;
-  color: var(--text-secondary);
-  font-weight: 600;
-  font-size: 13px;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.mods-section-tabs button:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--surface-2);
-}
-
-.mods-section-tabs button.active {
-  background: var(--accent);
-  color: #0b0d10;
-}
 
 .mod-icon-fallback {
   display: grid;

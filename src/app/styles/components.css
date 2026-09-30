@@ -22,11 +22,6 @@
 /* Backups panel — Settings button + action pair (Download / Create snapshot).
    On desktop these sit inline; on mobile the Settings button takes its
    own full-width row and the pair shares a row below (see responsive.css). */
-.backups-action-pair {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 .filter-search {
   position: relative;
@@ -408,22 +403,6 @@
 
 .empty-state-action {
   margin-top: 4px;
-}
-
-.overview-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.overview-card-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  color: var(--text);
 }
 
 /* Snapshot settings modal */

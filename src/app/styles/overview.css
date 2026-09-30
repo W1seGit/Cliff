@@ -162,41 +162,6 @@
 .action-item em { color: var(--accent); font-size: 12px; font-style: normal; font-weight: 600; }
 
 /* Health badges */
-.health-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-secondary);
-  background: var(--surface-2);
-}
-
-.health-badge::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.health-badge.ready { color: var(--success); background: var(--success-bg); }
-.health-badge.attention { color: var(--warning); background: var(--warning-bg); }
-.health-badge.blocked { color: var(--danger); background: var(--danger-bg); }
-
-.ready-state {
-  padding: 10px 12px;
-  border-radius: var(--radius-xs);
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.ready-state strong { font-size: 13px; }
-.ready-state p { margin: 2px 0 0; color: var(--success); opacity: 0.85; font-size: 12px; }
 
 /* Overview stat cards */
 .overview-stat-cards {
@@ -285,18 +250,6 @@
   color: var(--text-tertiary);
   font-size: 12px;
   font-family: var(--font-mono);
-}
-
-.chart-card-stat {
-  font-size: 26px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  color: var(--text);
-  line-height: 1;
-}
-
-.chart-card-stat.muted {
-  color: var(--text-tertiary);
 }
 
 .chart-card-controls {
