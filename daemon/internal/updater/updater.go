@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/buildinfo"
+	"github.com/W1seGit/Cliff/daemon/internal/winproc"
 )
 
 const (
@@ -155,7 +156,9 @@ func verifyNewBinary(ctx context.Context, path string, version string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, path, "version").CombinedOutput()
+	probe := exec.CommandContext(ctx, path, "version")
+	winproc.Hide(probe)
+	out, err := probe.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("the new version could not start (%v)", err)
 	}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/store"
+	"github.com/W1seGit/Cliff/daemon/internal/winproc"
 )
 
 const (
@@ -798,6 +799,7 @@ func (m *playitAgentManager) startManagedAgent(path string) error {
 		return err
 	}
 	cmd := exec.Command(path, "--secret_path", secretPath, "-s", "start")
+	winproc.Hide(cmd)
 	cmd.Dir = filepath.Dir(path)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -898,6 +900,7 @@ func (m *playitAgentManager) appendLogLocked(line string) {
 
 func runPlayitCommand(path string, args ...string) (string, error) {
 	cmd := exec.Command(path, args...)
+	winproc.Hide(cmd)
 	cmd.Dir = filepath.Dir(path)
 	output, err := cmd.CombinedOutput()
 	return stripANSI(string(output)), err

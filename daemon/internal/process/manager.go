@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/store"
+	"github.com/W1seGit/Cliff/daemon/internal/winproc"
 )
 
 // readyTimeout is the fallback for servers that never print a "Done (" line:
@@ -458,8 +459,9 @@ func killProcessTree(proc *managedProcess) error {
 		return nil
 	}
 	if runtime.GOOS == "windows" {
-		err := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(proc.cmd.Process.Pid)).Run()
-		if err == nil {
+		kill := exec.Command("taskkill", "/T", "/F", "/PID", strconv.Itoa(proc.cmd.Process.Pid))
+		winproc.Hide(kill)
+		if err := kill.Run(); err == nil {
 			return nil
 		}
 		return proc.cmd.Process.Kill()
@@ -1164,7 +1166,9 @@ foreach ($id in $ids) {
 }
 [Console]::WriteLine((@{ CPU = $cpu; WorkingSet64 = $mem; ProcessCount = $ids.Count } | ConvertTo-Json -Compress))
 `, pid)
-	output, err := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-Command", script).Output()
+	probe := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-Command", script)
+	winproc.Hide(probe)
+	output, err := probe.Output()
 	if err != nil {
 		return rawUsage{}
 	}
@@ -1319,6 +1323,7 @@ func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
 	}
 
 	cmd := exec.Command(command, args...)
+	winproc.Hide(cmd)
 	if isScript {
 		// Scripts (and the java they call) must see the managed Java first.
 		cmd.Env = javaEnvironment(javaPath)
