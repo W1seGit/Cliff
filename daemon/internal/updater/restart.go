@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/W1seGit/Cliff/daemon/internal/winproc"
 )
 
 // Restart re-executes the daemon binary with the same arguments.
@@ -35,6 +37,7 @@ func Restart(binaryPath string, args []string) error {
 	// On Windows, spawn a new process and signal the current one to exit.
 	helperArgs := append([]string{"__restart-child", "--delay-ms", "1500", "--"}, args...)
 	cmd := exec.Command(binaryPath, helperArgs...)
+	winproc.Hide(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

@@ -23,6 +23,7 @@ import (
 
 	javamanager "github.com/W1seGit/Cliff/daemon/internal/java"
 	"github.com/W1seGit/Cliff/daemon/internal/store"
+	"github.com/W1seGit/Cliff/daemon/internal/winproc"
 )
 
 type serverCreateInput struct {
@@ -1828,6 +1829,7 @@ func (h apiHandler) runLoaderInstaller(r *http.Request, server store.Server, ins
 	progressFrom(r).start("install")
 
 	cmd := exec.CommandContext(r.Context(), javaPath, "-jar", installerName, "--installServer")
+	winproc.Hide(cmd)
 	cmd.Dir = server.Path
 	output := &tailBuffer{limit: 16 << 10}
 	cmd.Stdout = output
