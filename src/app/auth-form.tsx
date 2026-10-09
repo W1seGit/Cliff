@@ -11,6 +11,7 @@ export default function AuthForm({ needsSetup, initialError = "", onAuthenticate
   const [message, setMessage] = useState(initialError);
   const [pending, setPending] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [needsCode, setNeedsCode] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -34,9 +35,15 @@ export default function AuthForm({ needsSetup, initialError = "", onAuthenticate
         body: JSON.stringify({
           username: String(formData.get("username") ?? ""),
           password: String(formData.get("password") ?? ""),
+          ...(needsCode ? { code: String(formData.get("code") ?? "").trim() } : {}),
         }),
       });
       const data = await response.json().catch(() => ({}));
+      if (!response.ok && response.status === 401 && data.totpRequired) {
+        setNeedsCode(true);
+        setMessage(needsCode ? data.error || "That code did not work" : "");
+        return;
+      }
       if (!response.ok) throw new Error(data.error || (needsSetup ? "Setup failed" : "Login failed"));
       onAuthenticated(data.user);
     } catch (error) {
@@ -79,6 +86,18 @@ export default function AuthForm({ needsSetup, initialError = "", onAuthenticate
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
           />
+        )}
+        {needsCode && !needsSetup && (
+          <Input
+            label="Two-factor code"
+            name="code"
+            autoComplete="one-time-code"
+            autoFocus
+            required
+          />
+        )}
+        {needsCode && !needsSetup && (
+          <p>6-digit code from your authenticator app, or a recovery code</p>
         )}
         <Button variant="primary" type="submit" disabled={pending}>
           {pending ? "Working..." : needsSetup ? "Create account" : "Login"}

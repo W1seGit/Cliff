@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AuthForm from "./auth-form";
 import DashboardClient from "./dashboard-client";
 import { externalApiUrl } from "./dashboard/lib/utils";
-import type { User } from "./dashboard/lib/types";
+import type { PermissionGrants, User } from "./dashboard/lib/types";
 
 const serverTabs = new Set(["overview", "console", "mods", "mods/installed", "mods/discover", "worlds", "players", "backups", "files", "public-access", "public-access/setup", "settings"]);
 const utilityTabs = new Set(["app", "account", "import", "create"]);
@@ -12,6 +12,7 @@ const utilityTabs = new Set(["app", "account", "import", "create"]);
 type AuthState = {
   loading: boolean;
   user: User | null;
+  permissions?: PermissionGrants;
   needsSetup: boolean;
   error: string;
 };
@@ -25,7 +26,7 @@ export default function AuthGate({ initialServerId = "", initialTab = "overview"
       const response = await fetch(externalApiUrl("/api/auth/me"), { credentials: "include" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Authentication check failed");
-      return { loading: false, user: data.user ?? null, needsSetup: Boolean(data.needsSetup), error: "" };
+      return { loading: false, user: data.user ?? null, permissions: data.permissions, needsSetup: Boolean(data.needsSetup), error: "" };
     } catch (error) {
       return {
         loading: false,
@@ -71,12 +72,16 @@ export default function AuthGate({ initialServerId = "", initialTab = "overview"
       <AuthForm
         needsSetup={state.needsSetup}
         initialError={state.error}
-        onAuthenticated={(user) => setState({ loading: false, user, needsSetup: false, error: "" })}
+        onAuthenticated={(user) => {
+          // Members' permissions come from /api/auth/me, so read them again after signing in.
+          setState({ loading: true, user: null, needsSetup: false, error: "" });
+          loadAuth().then((next) => setState(next.user ? next : { loading: false, user, needsSetup: false, error: "" }));
+        }}
       />
     );
   }
 
-  return <DashboardClient key={`${routeState.serverId}:${routeState.tab}`} user={state.user} initialServerId={routeState.serverId} initialTab={routeState.tab} />;
+  return <DashboardClient key={`${routeState.serverId}:${routeState.tab}`} user={state.user} permissions={state.permissions} initialServerId={routeState.serverId} initialTab={routeState.tab} />;
 }
 
 function readRouteState(fallbackServerId: string, fallbackTab: string) {

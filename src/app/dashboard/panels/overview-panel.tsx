@@ -8,6 +8,7 @@ import { Button } from "../components/ui/button";
 import { Page } from "../components/ui/page-layout";
 import { Pill } from "../components/ui/pill";
 import { AreaChart } from "../components/ui/area-chart";
+import { TickChart } from "./overview/tick-chart";
 import { fetchServerProperties, fetchServerUsage } from "../lib/runtime-client";
 
 type WindowKey = "5m" | "15m" | "1h" | "24h";
@@ -40,6 +41,7 @@ export function OverviewPanel({
   setTab,
   onMessage,
   onAcceptEula,
+  isAdmin = true,
 }: {
   selected?: ServerRecord;
   health: ServerHealth | null;
@@ -48,6 +50,8 @@ export function OverviewPanel({
   setTab: (tab: string) => void;
   onMessage: (message: string) => void;
   onAcceptEula: () => void;
+  /** Only admins can import or create servers. */
+  isAdmin?: boolean;
 }) {
   const [windowKey, setWindowKey] = useState<WindowKey>("5m");
   const [windowUsage, setWindowUsage] = useState<RuntimeUsage | null>(null);
@@ -108,13 +112,15 @@ export function OverviewPanel({
     return (
       <section className="welcome">
         <div>
-          <h2>Set up your first server</h2>
-          <p>Import an existing folder or create a fresh Java server profile.</p>
+          <h2>{isAdmin ? "Set up your first server" : "No servers yet"}</h2>
+          <p>{isAdmin ? "Import an existing folder or create a fresh Java server profile." : "No servers have been shared with you yet. Ask an admin for access."}</p>
         </div>
-        <div className="welcome-actions">
-          <Button variant="primary" onClick={() => setTab("import")}>Import existing server</Button>
-          <Button onClick={() => setTab("create")}>Create new profile</Button>
-        </div>
+        {isAdmin && (
+          <div className="welcome-actions">
+            <Button variant="primary" onClick={() => setTab("import")}>Import existing server</Button>
+            <Button onClick={() => setTab("create")}>Create new profile</Button>
+          </div>
+        )}
       </section>
     );
   }
@@ -281,6 +287,21 @@ export function OverviewPanel({
           ].filter((s) => s.values.length > 0) : []}
         />
       </div>
+
+      <TickChart
+        server={selected}
+        usage={usage}
+        isRunning={isRunning}
+        windows={WINDOW_DEFS}
+        windowKey={windowKey}
+        onWindowChange={(key) => setWindowKey(key as WindowKey)}
+        timeStart={timeStart}
+        timeEnd={timeEnd}
+        xTicks={xTicks}
+        xFormat={formatClockTime}
+        stoppedAt={stoppedMarkerTime}
+        startedAt={startMarkerTime}
+      />
 
       {attentionChecks.length > 0 && (
         <div className="overview-section">

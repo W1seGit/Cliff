@@ -1,4 +1,4 @@
-import type { Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, LastUpdateResult, LoaderOption, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, OperationSnapshot, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RunningServer, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, UpdateApplyResult, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo, UploadResult, User, WorldsPayload } from "./types";
+import type { Account, Backup, BackupDiff, CommandPreset, FileListing, FilePayload, ImportDetection, JavaRuntimeInfo, JvmPreset, LastUpdateResult, LoaderOption, ModUpdateCheck, ModUpdateResult, PermissionGrants, MinecraftMetadata, ModFile, ModrinthProjectDetails, ModSearchResult, PlayerAccess, PlayerLookup, OperationSnapshot, PlayerSession, PlayitAgentInfo, PublicAccessRecord, RunningServer, RuntimeStatus, RuntimeUsage, ServerHealth, ServerProperties, ServerRecord, ServerType, Settings, TwoFactorSetup, UpgradeReport, UpgradeResult, Webhook, WebhookEventInfo, UpdateApplyResult, UpdateCheckResult, UpdateProgress, UpdateSafetyInfo, UploadResult, User, WorldsPayload } from "./types";
 import { api, externalApiUrl } from "./utils";
 
 type RuntimeDashboardPayload = {
@@ -73,6 +73,88 @@ export async function saveSettings(body: Record<string, unknown>) {
 
 export async function saveAccount(body: Record<string, unknown>) {
   return daemonApi<{ user: User }>("/api/auth/account", { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export async function fetchJvmPresets(maxMemoryMb: number) {
+  return daemonApi<{ presets: JvmPreset[] }>(`/api/jvm/presets?maxMemoryMb=${encodeURIComponent(String(maxMemoryMb))}`);
+}
+
+export async function fetchWebhooks() {
+  return daemonApi<{ webhooks: Webhook[]; events: WebhookEventInfo[] }>("/api/webhooks");
+}
+
+export async function createWebhook(body: Partial<Webhook>) {
+  return daemonApi<{ webhook: Webhook }>("/api/webhooks", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function updateWebhook(id: string, body: Partial<Webhook>) {
+  return daemonApi<{ webhook: Webhook }>(`/api/webhooks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export async function deleteWebhook(id: string) {
+  return daemonApi<{ ok: boolean }>(`/api/webhooks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function testWebhook(id: string) {
+  return daemonApi<{ ok: boolean }>(`/api/webhooks/${encodeURIComponent(id)}/test`, { method: "POST" });
+}
+
+export async function fetchUsers() {
+  return daemonApi<{ users: Account[]; permissions: string[] }>("/api/users");
+}
+
+export async function createUser(body: { username: string; password: string; role: string; permissions: PermissionGrants }) {
+  return daemonApi<{ user: Account }>("/api/users", { method: "POST", body: JSON.stringify(body) });
+}
+
+export async function updateUser(id: string, body: { role?: string; password?: string; permissions?: PermissionGrants }) {
+  return daemonApi<{ user: Account }>(`/api/users/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+export async function deleteUser(id: string) {
+  return daemonApi<{ ok: boolean }>(`/api/users/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function resetUserTwoFactor(id: string) {
+  return daemonApi<{ ok: boolean }>(`/api/users/${encodeURIComponent(id)}/reset-2fa`, { method: "POST" });
+}
+
+export async function startTwoFactorSetup(password: string) {
+  return daemonApi<TwoFactorSetup>("/api/auth/2fa/setup", { method: "POST", body: JSON.stringify({ password }) });
+}
+
+export async function enableTwoFactor(code: string) {
+  return daemonApi<{ ok: boolean; recoveryCodes: string[] }>("/api/auth/2fa/enable", { method: "POST", body: JSON.stringify({ code }) });
+}
+
+export async function disableTwoFactor(password: string, code: string) {
+  return daemonApi<{ ok: boolean }>("/api/auth/2fa/disable", { method: "POST", body: JSON.stringify({ password, code }) });
+}
+
+export async function checkModUpdates(serverId: string) {
+  return daemonApi<ModUpdateCheck>(`/api/servers/${serverId}/mods`, { method: "POST", body: JSON.stringify({ action: "check-updates" }) });
+}
+
+/** Updates the named files, or every outdated mod when `fileNames` is empty. */
+export async function updateServerMods(serverId: string, fileNames: string[]) {
+  return daemonApi<ModUpdateResult>(`/api/servers/${serverId}/mods`, { method: "POST", body: JSON.stringify({ action: "update-mods", fileNames }) });
+}
+
+export async function importModpack(serverId: string, form: FormData) {
+  return daemonApi<{ ok: boolean; name: string; files: string[] }>(`/api/servers/${serverId}/modpack`, { method: "POST", body: form });
+}
+
+/** A link that downloads the server's mods as a .mrpack file. */
+export function modpackExportUrl(serverId: string) {
+  return daemonPath(`/api/servers/${serverId}/mods?export=mrpack`);
+}
+
+export async function checkServerUpgrade(serverId: string, body: { minecraftVersion: string; loaderVersion?: string }) {
+  return daemonApi<UpgradeReport>(`/api/servers/${serverId}/upgrade`, { method: "POST", body: JSON.stringify({ action: "check", ...body }) });
+}
+
+export async function applyServerUpgrade(serverId: string, body: { minecraftVersion: string; loaderVersion?: string; updateMods: boolean; disableIncompatible: boolean; allowDowngrade: boolean }) {
+  return daemonApi<UpgradeResult>(`/api/servers/${serverId}/upgrade`, { method: "POST", body: JSON.stringify({ action: "apply", ...body }) });
 }
 
 export async function fetchJavaRuntimes() {

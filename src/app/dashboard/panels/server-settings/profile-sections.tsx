@@ -6,6 +6,7 @@ import { Card, Disclosure, FieldGrid, Input } from "../../components/ui";
 import { ExtraArgsPresetRow, JavaPresetRow, MemoryPresetRow } from "../../components/preset-rows";
 import { VersionSelect } from "../../components/version-select";
 import { LoaderSelect } from "../../components/loader-select";
+import { CrashRestartCard, PerformanceCard } from "./performance-cards";
 
 export type ProfileDraft = {
   name: string;
@@ -17,6 +18,10 @@ export type ProfileDraft = {
   maxMemoryMb: number;
   launchJar: string;
   extraArgs: string;
+  jvmPreset: string;
+  restartPolicy: "off" | "on-crash";
+  restartMaxAttempts: number;
+  restartWindowMinutes: number;
 };
 
 type SetProfile = (update: (current: ProfileDraft) => ProfileDraft) => void;
@@ -116,6 +121,8 @@ export function RuntimeSections({ profile, setProfile }: { profile: ProfileDraft
         <Input label="Extra args" value={profile.extraArgs} onChange={(event) => setProfile((current) => ({ ...current, extraArgs: event.target.value }))} />
         <ExtraArgsPresetRow extraArgs={profile.extraArgs} onApply={(extraArgs) => setProfile((current) => ({ ...current, extraArgs }))} />
       </Card>
+      <PerformanceCard profile={profile} setProfile={setProfile} />
+      <CrashRestartCard profile={profile} setProfile={setProfile} />
     </>
   );
 }

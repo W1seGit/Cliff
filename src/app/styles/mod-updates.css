@@ -1,0 +1,22 @@
+/* mod-updates */
+
+.mod-updates { display: grid; gap: var(--space-3); margin-bottom: var(--space-4); }
+.mod-updates-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.mod-updates-hint { margin: 0; font-size: var(--text-xs); }
+.mod-updates-result { display: grid; gap: var(--space-2); margin: var(--space-3) 0 0; padding: 0; list-style: none; font-size: var(--text-xs); }
+.mod-updates-result li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); overflow-wrap: anywhere; }
+.installed-mod-title-row + .pill, .installed-mod-cell .pill { margin-top: var(--space-1); }
+
+.modpack-tools { margin-top: var(--space-4); }
+.modpack-tools-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--space-5); }
+.modpack-tools-section { display: grid; align-content: start; gap: var(--space-3); min-width: 0; }
+.modpack-tools-section h3 { margin: 0; font-size: var(--text-sm, var(--text-xs)); }
+.modpack-tools-section p { margin: 0; }
+.modpack-drop {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-2);
+  padding: var(--space-5); text-align: center; cursor: pointer;
+  border: 1px dashed var(--border); border-radius: var(--radius-xs);
+}
+.modpack-drop:hover:not(.is-disabled), .modpack-drop.drag-active { border-color: var(--accent); }
+.modpack-drop.is-disabled { cursor: not-allowed; opacity: 0.55; }
+.modpack-tools .btn { justify-self: start; }

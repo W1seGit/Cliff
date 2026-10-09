@@ -7,6 +7,8 @@ import { fetchServerProperties, runFileAction, saveServerProperties, serverFileU
 import { useHashSection } from "../lib/use-hash-section";
 import { editableFromRaw, parsePropertiesText, sameProperties, setPropertyInText, validatePropertiesText } from "../lib/properties-text";
 import type { MinecraftMetadata, ServerProperties, ServerPropertiesEditable, ServerRecord, UnsavedChangesRegistration } from "../lib/types";
+import { restartPolicyValid } from "./server-settings/validation";
+import { UpgradeCard } from "./server-settings/upgrade-wizard";
 import { Banner, Card, Disclosure, PageHeader, SettingsLayout, SettingsSectionPanel, SkeletonRows } from "../components/ui";
 import { ImageCropModal } from "../components/ui/image-crop-modal";
 import { notifyServerIconUpdated } from "../components/server-avatar";
@@ -86,6 +88,10 @@ export function ServerSettingsPanel({
     maxMemoryMb: server.maxMemoryMb,
     launchJar: server.launchJar,
     extraArgs: server.extraArgs,
+    jvmPreset: server.jvmPreset ?? "",
+    restartPolicy: server.restartPolicy ?? "off",
+    restartMaxAttempts: server.restartMaxAttempts,
+    restartWindowMinutes: server.restartWindowMinutes,
   });
 
   useEffect(() => {
@@ -93,6 +99,7 @@ export function ServerSettingsPanel({
       setProfile({
         name: server.name, type: server.type, minecraftVersion: server.minecraftVersion, loaderVersion: server.loaderVersion,
         javaPath: server.javaPath, minMemoryMb: server.minMemoryMb, maxMemoryMb: server.maxMemoryMb, launchJar: server.launchJar, extraArgs: server.extraArgs,
+        jvmPreset: server.jvmPreset ?? "", restartPolicy: server.restartPolicy ?? "off", restartMaxAttempts: server.restartMaxAttempts, restartWindowMinutes: server.restartWindowMinutes,
       });
       setIconPreviewUrl("");
       setIconFallback(false);
@@ -118,12 +125,16 @@ export function ServerSettingsPanel({
   const profileMinecraftVersion = profile.minecraftVersion || metadata?.latest.release || "";
   const profileNeedsLoader = serverTypeNeedsLoader(profile.type);
   const profileMemoryValid = validMemoryRange(profile.minMemoryMb, profile.maxMemoryMb);
-  const canSaveProfile = Boolean(metadata && profile.name.trim() && profileMinecraftVersion && (!profileNeedsLoader || profile.loaderVersion) && profileMemoryValid && !profileBusy);
+  const restartValid = restartPolicyValid(profile.restartPolicy, profile.restartMaxAttempts, profile.restartWindowMinutes);
+  const canSaveProfile = Boolean(metadata && profile.name.trim() && profileMinecraftVersion && (!profileNeedsLoader || profile.loaderVersion) && profileMemoryValid && restartValid && !profileBusy);
   const canSaveSettings = Boolean(
     draft && draft.levelName.trim() && draft.maxPlayers >= 1 && draft.maxPlayers <= 1000 &&
     draft.serverPort >= 1 && draft.serverPort <= 65535 && draft.viewDistance >= 2 && draft.viewDistance <= 32 &&
     draft.simulationDistance >= 2 && draft.simulationDistance <= 32 && propsIssues.length === 0 && !settingsBusy,
   );
+  const runtimeExtrasDirty = profile.jvmPreset !== (server.jvmPreset ?? "") ||
+    profile.restartPolicy !== (server.restartPolicy ?? "off") ||
+    (profile.restartPolicy === "on-crash" && (profile.restartMaxAttempts !== server.restartMaxAttempts || profile.restartWindowMinutes !== server.restartWindowMinutes));
   const profileDirty = profile.name !== server.name ||
     profile.type !== server.type ||
     profile.minecraftVersion !== server.minecraftVersion ||
@@ -132,7 +143,8 @@ export function ServerSettingsPanel({
     profile.minMemoryMb !== server.minMemoryMb ||
     profile.maxMemoryMb !== server.maxMemoryMb ||
     profile.launchJar !== server.launchJar ||
-    profile.extraArgs !== server.extraArgs;
+    profile.extraArgs !== server.extraArgs ||
+    runtimeExtrasDirty;
   const iconDirty = Boolean(pendingIconFile) || iconResetPending;
   const settingsDirty = Boolean(properties && (
     eulaAccepted !== properties.eulaAccepted ||
@@ -147,7 +159,8 @@ export function ServerSettingsPanel({
     profile.type !== server.type ||
     profile.minecraftVersion !== server.minecraftVersion ||
     profile.loaderVersion !== server.loaderVersion;
-  const runtimeDirty = profile.javaPath !== server.javaPath ||
+  const runtimeDirty = runtimeExtrasDirty ||
+    profile.javaPath !== server.javaPath ||
     profile.minMemoryMb !== server.minMemoryMb ||
     profile.maxMemoryMb !== server.maxMemoryMb ||
     profile.launchJar !== server.launchJar ||
@@ -216,10 +229,16 @@ export function ServerSettingsPanel({
     }
   }
 
+  async function handleUpgraded(updated: ServerRecord) {
+    setProfile((current) => ({ ...current, minecraftVersion: updated.minecraftVersion, loaderVersion: updated.loaderVersion }));
+    await onSaved();
+  }
+
   function discardChanges() {
     setProfile({
       name: server.name, type: server.type, minecraftVersion: server.minecraftVersion, loaderVersion: server.loaderVersion,
       javaPath: server.javaPath, minMemoryMb: server.minMemoryMb, maxMemoryMb: server.maxMemoryMb, launchJar: server.launchJar, extraArgs: server.extraArgs,
+        jvmPreset: server.jvmPreset ?? "", restartPolicy: server.restartPolicy ?? "off", restartMaxAttempts: server.restartMaxAttempts, restartWindowMinutes: server.restartWindowMinutes,
     });
     if (properties) {
       setPropsText(properties.text ?? "");
@@ -356,6 +375,7 @@ export function ServerSettingsPanel({
           {profileNote}
           <ProfileGeneralCard profile={profile} setProfile={setProfile} />
           <ProfileVersionCard profile={profile} setProfile={setProfile} minecraftVersion={profileMinecraftVersion} needsLoader={profileNeedsLoader} metadata={metadata} metadataError={metadataError} />
+          <UpgradeCard server={server} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onUpgraded={handleUpgraded} />
         </SettingsSectionPanel>
         <SettingsSectionPanel idPrefix={idPrefix} id="runtime" activeId={activeSection}>
           {profileNote}

@@ -10,7 +10,8 @@ import {
 import type { LucideIcon } from "lucide-react";
 
 import { api, externalApiUrl, serverTypeSupportsContent, publicAccessStorageKey } from "../lib/utils";
-import type { RuntimeStatus, ServerRecord, User } from "../lib/types";
+import type { RuntimeStatus, ServerPermission, ServerRecord, User } from "../lib/types";
+import { permissionForTab } from "../lib/permissions";
 import { fetchPlayitAgent } from "../lib/runtime-client";
 import { ServerAvatar } from "./server-avatar";
 import { Menu, MenuItem, MenuSeparator } from "./ui/menu";
@@ -85,6 +86,8 @@ export function Sidebar({
   onDuplicate,
   onDelete,
   loading = false,
+  isAdmin = true,
+  canDo = () => true,
 }: {
   user: User;
   servers: ServerRecord[];
@@ -103,6 +106,9 @@ export function Sidebar({
   onDuplicate: (server: ServerRecord) => void;
   onDelete: (server: ServerRecord) => void;
   loading?: boolean;
+  /** Members cannot create, import, rename, clone or delete servers, or open app settings. */
+  isAdmin?: boolean;
+  canDo?: (serverId: string, perm: ServerPermission) => boolean;
 }) {
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [switcherOpen, setSwitcherOpen] = useState(false);
@@ -192,7 +198,7 @@ export function Sidebar({
     };
   }, [serverActionMenu, switcherOpen, setServerActionMenu]);
 
-  const navItems = showSelectedServer && selected ? serverNavItems : [];
+  const navItems = showSelectedServer && selected ? serverNavItems.filter((item) => canDo(selected.id, permissionForTab(item.id))) : [];
   const modsActive = tab === "mods" || tab === "mods/installed" || tab === "mods/discover";
   const modsExpanded = modsOpen ?? modsActive;
 
@@ -395,14 +401,16 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar-footer">
-        <button
-          className={`sidebar-nav-item ${tab === "app" ? "active" : ""}`}
-          onClick={() => handleUtilityPick("app")}
-          title={collapsed ? "App settings" : undefined}
-        >
-          <span className="sidebar-nav-icon"><Settings size={17} /></span>
-          <span className="sidebar-nav-label">App settings</span>
-        </button>
+        {isAdmin && (
+          <button
+            className={`sidebar-nav-item ${tab === "app" ? "active" : ""}`}
+            onClick={() => handleUtilityPick("app")}
+            title={collapsed ? "App settings" : undefined}
+          >
+            <span className="sidebar-nav-icon"><Settings size={17} /></span>
+            <span className="sidebar-nav-label">App settings</span>
+          </button>
+        )}
         <Menu
           side="top"
           align="start"
@@ -455,7 +463,7 @@ export function Sidebar({
                     </span>
                   </span>
                 </button>
-                <button
+                {isAdmin && <button
                   className="server-menu-button"
                   aria-label={`Actions for ${server.name}`}
                   aria-expanded={serverActionMenu === server.id}
@@ -463,18 +471,20 @@ export function Sidebar({
                   onClick={(event) => { event.stopPropagation(); openServerMenu(server.id, event.currentTarget); }}
                 >
                   <MoreHorizontal size={14} />
-                </button>
+                </button>}
               </div>
             );
           })}
           {filteredServers.length === 0 && (
-            <div className="switcher-empty muted">{sidebarServers.length === 0 ? "No servers yet." : "No servers match your search."}</div>
+            <div className="switcher-empty muted">{sidebarServers.length === 0 ? (isAdmin ? "No servers yet." : "No servers shared with you yet. Ask an admin for access.") : "No servers match your search."}</div>
           )}
         </div>
-        <div className="server-switcher-footer">
-          <button role="menuitem" onClick={() => handleUtilityPick("create")}><Plus size={16} />Create new server</button>
-          <button role="menuitem" onClick={() => handleUtilityPick("import")}><Upload size={16} />Import server</button>
-        </div>
+        {isAdmin && (
+          <div className="server-switcher-footer">
+            <button role="menuitem" onClick={() => handleUtilityPick("create")}><Plus size={16} />Create new server</button>
+            <button role="menuitem" onClick={() => handleUtilityPick("import")}><Upload size={16} />Import server</button>
+          </div>
+        )}
       </FloatingMenu>
     )}
 

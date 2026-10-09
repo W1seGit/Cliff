@@ -28,6 +28,9 @@ import { SelectionBar } from "../components/ui/selection-bar";
 import { Tabs } from "../components/ui/tabs";
 import { Skeleton } from "../components/ui/skeleton";
 import { UploadTab } from "./mods/upload-tab";
+import { ModUpdateAction, ModUpdateBadge, ModUpdatesBar } from "./mods/mod-updates";
+import { ModpackTools } from "./mods/modpack-tools";
+import { useModUpdates } from "./mods/use-mod-updates";
 
 type DependencyWarning = NonNullable<NonNullable<ModFile["metadata"]>["dependencyWarnings"]>[number];
 type DiscoverSource = "marketplace" | "upload";
@@ -280,6 +283,7 @@ export function ModsPanel({
   const loadingMoreRef = useRef(false);
   const resultListRef = useRef<HTMLDivElement | null>(null);
 
+  const modUpdates = useModUpdates(server.id, onRefresh);
   const busy = Boolean(busyId) || searching || loadingMore;
   const vanillaProfile = !serverTypeNeedsLoader(server.type) && !serverTypeNeedsPlugins(server.type);
   const pluginProfile = serverTypeNeedsPlugins(server.type);
@@ -861,6 +865,7 @@ export function ModsPanel({
               ]}
             />
           )}
+          {mods.length > 0 && <ModUpdatesBar updates={modUpdates} isRunning={isRunning} busy={busy} />}
           <Table wrapperClassName="mods-installed-table">
             <colgroup>
               <col style={{ width: "40px" }} />
@@ -869,7 +874,7 @@ export function ModsPanel({
               <col style={{ width: "120px" }} />
               <col style={{ width: "100px" }} />
               <col style={{ width: "90px" }} />
-              <col style={{ width: "60px" }} />
+              <col style={{ width: "100px" }} />
             </colgroup>
             <thead>
               <tr><th><Input type="checkbox" aria-label="Select all installed content" checked={allFilteredSelected} onChange={(event) => setSelectedInstalled(event.target.checked ? filteredContent.map((item) => item.id) : [])} /></th><SortableTh label="Type" sortKey="type" activeSort={installedSortKey} sortDir={installedSortDir} onSort={handleInstalledSort} /><SortableTh label="File" sortKey="file" activeSort={installedSortKey} sortDir={installedSortDir} onSort={handleInstalledSort} /><th>Scope</th><SortableTh label="Status" sortKey="status" activeSort={installedSortKey} sortDir={installedSortDir} onSort={handleInstalledSort} /><SortableTh label="Size" sortKey="size" activeSort={installedSortKey} sortDir={installedSortDir} onSort={handleInstalledSort} /><th><span className="table-count">{filteredContent.length} of {installedContent.length}</span></th></tr>
@@ -924,6 +929,7 @@ export function ModsPanel({
                               </Button>
                             ) : null}
                           </span>
+                          {item.type === "mod" && <ModUpdateBadge info={modUpdates.byFile?.get(item.fileName)} />}
                           {item.metadata && <small>{`${item.metadata.source}${item.metadata.versionNumber ? ` / ${item.metadata.versionNumber}` : ""}`}</small>}
                         </span>
                       </div>
@@ -931,7 +937,7 @@ export function ModsPanel({
                     <td>{item.scope}</td>
                     <td><Pill variant={item.enabled ? "success" : "default"}>{item.enabled ? "enabled" : "disabled"}</Pill></td>
                     <td>{formatBytes(item.size)}</td>
-                    <td></td>
+                    <td>{item.type === "mod" && <ModUpdateAction info={modUpdates.byFile?.get(item.fileName)} updates={modUpdates} isRunning={isRunning} busy={busy} />}</td>
                   </tr>,
                 ];
                 if (isExpanded && item.type === "modpack" && item.children?.length) {
@@ -966,6 +972,9 @@ export function ModsPanel({
               )}
               </tbody>
             </Table>
+          {!pluginProfile && (
+            <ModpackTools serverId={server.id} isRunning={isRunning} disabled={busy} onImported={async () => { await Promise.all([onRefresh(), loadWorlds()]); }} />
+          )}
           </div>
       )}
 

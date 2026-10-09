@@ -1,0 +1,82 @@
+/* server-upgrade: performance card and upgrade wizard */
+.jvm-flags {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.upgrade-wizard {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.upgrade-group {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.upgrade-group-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.upgrade-group-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+}
+
+.upgrade-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+
+.upgrade-progress .upgrade-spinner {
+  flex: none;
+  color: var(--accent);
+  animation: upgrade-spin 1s linear infinite;
+}
+
+@keyframes upgrade-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .upgrade-progress .upgrade-spinner { animation: none; }
+}
+
+.upgrade-list {
+  margin: 0;
+  padding-left: var(--space-5);
+  color: var(--text-secondary);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.upgrade-options {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.upgrade-wizard .table-wrap {
+  max-height: 240px;
+  overflow: auto;
+}

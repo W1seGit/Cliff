@@ -1,7 +1,13 @@
 import type { ReactNode } from "react";
 
 export type ServerType = "vanilla" | "paper" | "purpur" | "folia" | "fabric" | "forge" | "neoforge";
-export type User = { id?: string; username: string };
+export type UserRole = "admin" | "member";
+export type User = { id?: string; username: string; role?: UserRole; totpEnabled?: boolean };
+/** What a member may do, per server id. "*" applies to every server. Admins have no entry: they can do everything. */
+export type PermissionGrants = Record<string, string[]>;
+export type ServerPermission = "view" | "console" | "power" | "files" | "mods" | "players" | "worlds" | "backups" | "settings";
+export type Account = User & { id: string; role: UserRole; totpEnabled: boolean; permissions: PermissionGrants };
+export type TwoFactorSetup = { secret: string; uri: string };
 export type AccessInfo = {
   lanAddresses: string[];
   devUrls: string[];
@@ -102,8 +108,56 @@ export type ServerRecord = {
   scheduledSnapshotsEnabled: boolean;
   snapshotIntervalMinutes: number;
   lastScheduledSnapshotAt: string;
+  /** "" for no extra tuning, or a preset id from /api/jvm/presets such as "aikar". */
+  jvmPreset: string;
+  restartPolicy: "off" | "on-crash";
+  restartMaxAttempts: number;
+  restartWindowMinutes: number;
   createdAt: string;
   updatedAt: string;
+};
+export type JvmPreset = { id: string; name: string; description: string; flags: string[] };
+export type Webhook = {
+  id: string;
+  name: string;
+  url: string;
+  kind: "discord" | "generic";
+  events: string[];
+  enabled: boolean;
+  createdAt: string;
+};
+export type WebhookEventInfo = { id: string; label: string };
+export type ModUpdateStatus = "current" | "update" | "incompatible" | "unknown";
+export type ModUpdateInfo = {
+  fileName: string;
+  enabled: boolean;
+  status: ModUpdateStatus;
+  title: string;
+  iconUrl?: string;
+  projectId?: string;
+  currentVersion?: string;
+  latestVersionId?: string;
+  latestVersionNumber?: string;
+  latestFileName?: string;
+};
+export type ModUpdateCheck = { mods: ModUpdateInfo[]; counts: Partial<Record<ModUpdateStatus, number>> };
+export type ModUpdateResult = { ok: boolean; updated: string[]; failed: string[] };
+export type UpgradeReport = {
+  currentVersion: string;
+  targetVersion: string;
+  targetLoader?: string;
+  downgrade: boolean;
+  javaMajor: number;
+  warnings: string[];
+  mods: ModUpdateInfo[];
+  counts: Partial<Record<ModUpdateStatus, number>>;
+};
+export type UpgradeResult = {
+  ok: boolean;
+  server: ServerRecord;
+  snapshotId: string;
+  mods: { updated: string[]; disabled: string[]; failed: string[] };
+  warnings: string[];
 };
 export type ImportDetection = {
   token?: string;
@@ -129,12 +183,22 @@ export type PlayerSample = {
   at: string;
   count: number;
 };
+export type TickSample = {
+  at: string;
+  /** Ticks per second, capped at 20. */
+  tps: number | null;
+  /** Average milliseconds per tick. */
+  mspt: number | null;
+};
 export type RuntimeUsage = {
   cpuPercent: number | null;
   memoryBytes: number | null;
   memoryLimitBytes: number | null;
   samples: RuntimeUsageSample[];
   playerSamples?: PlayerSample[];
+  tickSamples?: TickSample[];
+  /** The newest tick reading, when the server version can report one. */
+  tick?: TickSample | null;
   lastSampleAt?: string;
 };
 export type RuntimeStatus = {

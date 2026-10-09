@@ -28,6 +28,7 @@ export function ServerHeader({
   onRefresh,
   onMessage,
   onOpenSidebar,
+  canPower = true,
 }: {
   selected: ServerRecord;
   isRunning: boolean;
@@ -40,6 +41,8 @@ export function ServerHeader({
   onRefresh: () => void;
   onMessage: (message: string) => void;
   onOpenSidebar: () => void;
+  /** Start, stop and restart need the "power" permission. */
+  canPower?: boolean;
 }) {
   // What is in flight right now, from either a click or the server's own lifecycle.
   const pending = busyAction || (lifecycle === "starting" ? "start" : lifecycle === "stopping" ? "stop" : "");
@@ -91,7 +94,7 @@ export function ServerHeader({
         </div>
       </div>
       <div className="server-header-actions">
-        {controlsLocked ? (
+        {!canPower && !controlsLocked ? null : controlsLocked ? (
           <button className="icon-button server-header-pending" disabled aria-busy="true" aria-label={pendingLabels[pending] ?? "Working"}>
             <Loader2 size={16} className="spin" />
             <span className="server-header-action-label">{pendingLabels[pending] ?? "Working..."}</span>
@@ -121,9 +124,11 @@ export function ServerHeader({
             </button>
           }
         >
-          <MenuItem danger icon={<Zap size={15} />} disabled={forceDisabled} onSelect={() => onAction("stop", { force: true }, "force")}>
-            Force stop
-          </MenuItem>
+          {canPower && (
+            <MenuItem danger icon={<Zap size={15} />} disabled={forceDisabled} onSelect={() => onAction("stop", { force: true }, "force")}>
+              Force stop
+            </MenuItem>
+          )}
           <MenuItem icon={<RefreshCw size={15} />} disabled={refreshBusy} onSelect={onRefresh}>
             {refreshBusy ? "Refreshing..." : "Refresh"}
           </MenuItem>

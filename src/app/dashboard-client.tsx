@@ -6,8 +6,9 @@ import toast, { Toaster } from "react-hot-toast";
 import { AlertCircle, CheckCircle2, Info, LayoutDashboard, Plus, Settings as SettingsIcon, TriangleAlert, Upload, UserRound } from "lucide-react";
 import { ApiError, serverTypeSupportsContent } from "./dashboard/lib/utils";
 import { createServerProfile, daemonRuntimeEnabled, deleteServerProfile, fetchMinecraftMetadata, fetchRuntimeDashboard, fetchRuntimeStatus, fetchServerBackups, fetchServerHealth, fetchServerLogs, fetchServerMods, fetchSettings, restartRuntimeServer, startRuntimeServer, stopRuntimeServer, subscribeRuntime, updateServerProfile, checkForUpdates, fetchLastUpdateResult } from "./dashboard/lib/runtime-client";
-import type { ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult, LastUpdateResult } from "./dashboard/lib/types";
+import type { PermissionGrants, ServerPermission, ServerRecord, RuntimeStatus, ServerHealth, Settings, ModFile, User, Backup, ConfirmRequest, UnsavedChangesRegistration, UpdateCheckResult, LastUpdateResult } from "./dashboard/lib/types";
 import type { MinecraftMetadata } from "./dashboard/lib/types";
+import { can, canOpenTab, isAdmin as userIsAdmin } from "./dashboard/lib/permissions";
 import { ConfirmDialog } from "./dashboard/components/confirm-dialog";
 import { PageBand } from "./dashboard/components/page-band";
 import { CloneServerDialog } from "./dashboard/components/clone-server-dialog";
@@ -34,6 +35,8 @@ const AppSettingsPanel = dynamic(() => import("./dashboard/panels/app-settings-p
 const ImportPanel = dynamic(() => import("./dashboard/panels/import-panel").then((mod) => mod.ImportPanel), { loading: () => <DashboardSkeleton /> });
 const CreatePanel = dynamic(() => import("./dashboard/panels/create-panel").then((mod) => mod.CreatePanel), { loading: () => <DashboardSkeleton /> });
 
+/** The account page does not read app settings, and members cannot load them. */
+const noSettings: Settings = { serverRoot: "", curseForgeApiKey: "" };
 const emptyRuntime: RuntimeStatus = { runningServerId: null, lifecycle: "stopped", pid: null, startedAt: null, uptimeSeconds: 0, command: "", launchTarget: "" };
 const serverNavItems = ["overview", "console", "mods", "worlds", "players", "backups", "files", "public-access", "settings"] as const;
 const modsSubTabs = new Set(["mods/installed", "mods/discover"]);
@@ -103,8 +106,10 @@ function runtimeForServer(runtime: RuntimeStatus, serverId?: string): RuntimeSta
   return runtime.servers?.[serverId] ?? (runtime.runningServerId === serverId ? runtime : emptyRuntime);
 }
 
-export default function DashboardClient({ user, initialServerId = "", initialTab = "overview" }: { user: User; initialServerId?: string; initialTab?: string }) {
+export default function DashboardClient({ user, permissions, initialServerId = "", initialTab = "overview" }: { user: User; permissions?: PermissionGrants; initialServerId?: string; initialTab?: string }) {
   const [account, setAccount] = useState(user);
+  const isAdmin = userIsAdmin(user);
+  const canDo = useCallback((serverId: string, perm: ServerPermission) => can(user, permissions, serverId, perm), [user, permissions]);
   const [servers, setServers] = useState<ServerRecord[]>([]);
   const [runtime, setRuntime] = useState<RuntimeStatus>(emptyRuntime);
   const [selectedId, setSelectedIdState] = useState(initialServerId);
@@ -315,6 +320,10 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     const nextServerId = requestedServerId || selectedId || selected?.id || "";
     const targetServer = servers.find((server) => server.id === nextServerId) ?? selected;
     let resolvedTab = nextTab;
+    if (!canOpenTab(user, permissions, nextServerId, resolvedTab)) {
+      setMessage("You do not have access to that page.", "warning");
+      resolvedTab = "overview";
+    }
     if (isModsTab(resolvedTab) && targetServer && !serverTypeSupportsContent(targetServer.type)) {
       setMessage("Mods and plugins are disabled for this server type.");
       resolvedTab = "overview";
@@ -326,7 +335,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       setRawTab(resolvedTab);
       pushAppRoute(targetRoute);
     }, "another page");
-  }, [requestGuardedNavigation, selected, selectedId, servers, setMessage, setRawTab]);
+  }, [permissions, requestGuardedNavigation, selected, selectedId, servers, setMessage, setRawTab, user]);
 
   const selectServer = useCallback((id: string, nextTab = utilityTabs.has(tab) ? "overview" : tab) => {
     const targetRoute = routeFor(nextTab, id);
@@ -347,7 +356,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     const requestedServerId = selectedId && includeHealth ? selectedId : "";
     const [serverData, settingsData, metadataResult] = await Promise.all([
       fetchRuntimeDashboard(includeHealth, requestedServerId),
-      includeSettings ? fetchSettings(includeSettingsStorage) : Promise.resolve(null),
+      includeSettings && isAdmin ? fetchSettings(includeSettingsStorage) : Promise.resolve(null),
       metadataRequest,
     ]);
     setServers(serverData.servers);
@@ -471,7 +480,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     setQuickBusyAction(busyLabel);
     userStopRef.current = path === "stop";
     // Show the console right away for start/restart so the boot output is visible.
-    if (path === "start" || path === "restart") setTab("console", actionServerId);
+    if ((path === "start" || path === "restart") && canDo(actionServerId, "console")) setTab("console", actionServerId);
     const refreshInBackground = () => {
       void loadDashboard({ includeSettings: false, includeSettingsStorage: false });
       void refreshSelected(actionServerId, { clear: false, includeMods: false, includeBackups: false });
@@ -598,15 +607,17 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
 
   // After an update, say how it ended (updated, or rolled back to the old version).
   useEffect(() => {
+    if (!isAdmin) return;
     let alive = true;
     fetchLastUpdateResult()
       .then((result) => { if (alive && result) setLastUpdate(result); })
       .catch(() => undefined);
     return () => { alive = false; };
-  }, []);
+  }, [isAdmin]);
 
   // Auto-check for updates on mount and periodically.
   useEffect(() => {
+    if (!isAdmin) return;
     let alive = true;
     const doCheck = () => {
       checkForUpdates()
@@ -628,7 +639,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
       window.clearTimeout(checkTimer);
       window.clearInterval(interval);
     };
-  }, [updateDismissed]);
+  }, [isAdmin, updateDismissed]);
   useEffect(() => {
     const updateVisibility = () => setDocumentVisible(!document.hidden);
     updateVisibility();
@@ -661,10 +672,20 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.id, tab]);
+  // A member who opens a page they may not use (a deep link, an old bookmark) lands on Overview.
+  const tabAllowed = canOpenTab(user, permissions, selectedServerId, tab);
   useEffect(() => {
-    if (tab !== "app" || settings?.storage) return;
+    if (initialLoading || tabAllowed) return;
+    const timer = window.setTimeout(() => {
+      setRawTab("overview");
+      window.history.replaceState(null, "", routeFor("overview", selectedServerId));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [initialLoading, tabAllowed, selectedServerId, setRawTab]);
+  useEffect(() => {
+    if (tab !== "app" || settings?.storage || !isAdmin) return;
     fetchSettings(true).then(setSettings).catch((error) => setMessage(error.message));
-  }, [setMessage, settings, tab]);
+  }, [isAdmin, setMessage, settings, tab]);
   useEffect(() => {
     if (tab !== "mods") return;
     const timer = window.setTimeout(() => setTab("mods/installed", selectedId), 0);
@@ -783,6 +804,8 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
         onDuplicate={duplicateSidebarServer}
         onDelete={deleteSidebarServer}
         loading={initialLoading}
+        isAdmin={isAdmin}
+        canDo={canDo}
       />
       {!sidebarCollapsed && <Button plain className="sidebar-backdrop" aria-label="Close sidebar" onClick={() => setSidebarCollapsed(true)} />}
       <section className="workspace" ref={workspaceRef}>
@@ -799,6 +822,7 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
             onRefresh={refreshAll}
             onMessage={setMessage}
             onOpenSidebar={() => setSidebarCollapsed(false)}
+            canPower={canDo(selected.id, "power")}
           />
         ) : (
           <PageBand icon={bandIcon} title={pageTitle} subtitle={pageSubtitle} onOpenSidebar={() => setSidebarCollapsed(false)} />
@@ -813,28 +837,28 @@ export default function DashboardClient({ user, initialServerId = "", initialTab
           )}
 
           {initialLoading && <DashboardSkeleton />}
-          {!initialLoading && tab === "overview" && <OverviewPanel selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
-          {!initialLoading && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} />}
+          {!initialLoading && tab === "overview" && <OverviewPanel isAdmin={isAdmin} selected={selected} health={health} isRunning={isRunning} runtime={selectedDisplayRuntime} setTab={setTab} onMessage={setMessage} onAcceptEula={() => setEulaModalOpen(true)} />}
+          {!initialLoading && tabAllowed && tab === "console" && selected && <ConsolePanel selected={selected} isRunning={isRunning} anotherServerRunning={anotherServerRunning} runningServer={runningServer} runtime={selectedDisplayRuntime} logs={logs} onCommand={liveServerId === selected.id ? liveCommandSender : null} onMessage={setMessage} onRefresh={() => refreshSelected(selected.id, { clear: false, includeMods: false, includeBackups: false })} />}
           {!initialLoading && tab === "console" && !selected && <EmptyPanel title="No server selected" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
+          {!initialLoading && tabAllowed && isModsTab(tab) && selected && selectedModsSupported && <ModsPanel key={selected.id} server={selected} mods={mods} metadata={metadata} metadataError={metadataError} isRunning={isRunning} view={tab === "mods/discover" ? "discover" : "installed"} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} onNavigateDiscover={() => setTab("mods/discover", selected.id)} />}
           {!initialLoading && isModsTab(tab) && !selected && <EmptyPanel title="No mods to show" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && tab === "players" && selected && <PlayersPanel server={selected} onMessage={setMessage} />}
+          {!initialLoading && tabAllowed && tab === "players" && selected && <PlayersPanel server={selected} onMessage={setMessage} />}
           {!initialLoading && tab === "players" && !selected && <EmptyPanel title="No player lists" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && tab === "worlds" && selected && <WorldsPanel server={selected} isRunning={isRunning} onMessage={setMessage} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tabAllowed && tab === "worlds" && selected && <WorldsPanel server={selected} isRunning={isRunning} onMessage={setMessage} onConfirm={setConfirmRequest} />}
           {!initialLoading && tab === "worlds" && !selected && <EmptyPanel title="No worlds to show" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && tab === "backups" && selected && <BackupsPanel server={selected} backups={backups} isRunning={isRunning} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tabAllowed && tab === "backups" && selected && <BackupsPanel server={selected} backups={backups} isRunning={isRunning} onRefresh={() => refreshSelected()} onMessage={setMessage} onConfirm={setConfirmRequest} />}
           {!initialLoading && tab === "backups" && !selected && <EmptyPanel title="No backups yet" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && tab === "files" && selected && <FilesPanel server={selected} onConfirm={setConfirmRequest} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tabAllowed && tab === "files" && selected && <FilesPanel server={selected} onConfirm={setConfirmRequest} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
           {!initialLoading && tab === "files" && !selected && <EmptyPanel title="No files yet" action="Import server" onAction={() => setTab("import")} />}
           {!initialLoading && tab === "public-access" && selected && <PublicAccessPanel key={selected.id} server={selected} onConfigure={() => setTab("public-access/setup", selected.id)} onMessage={setMessage} />}
-          {!initialLoading && tab === "public-access/setup" && selected && <PublicAccessPanel key={`${selected.id}:setup`} mode="setup" server={selected} onBack={() => setTab("public-access", selected.id)} onMessage={setMessage} />}
+          {!initialLoading && tabAllowed && tab === "public-access/setup" && selected && <PublicAccessPanel key={`${selected.id}:setup`} mode="setup" server={selected} onBack={() => setTab("public-access", selected.id)} onMessage={setMessage} />}
           {!initialLoading && tab === "public-access" && !selected && <EmptyPanel title="No public access setup" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tabAllowed && tab === "settings" && selected && <ServerSettingsPanel server={selected} metadata={metadata} metadataError={metadataError} isRunning={isRunning} onSaved={refresh} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
           {!initialLoading && tab === "settings" && !selected && <EmptyPanel title="No server settings" action="Import server" onAction={() => setTab("import")} />}
-          {!initialLoading && (tab === "app" || tab === "account") && settings && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${settings.serverRoot}:${settings.curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
-          {!initialLoading && (tab === "app" || tab === "account") && !settings && <DashboardSkeleton />}
-          {!initialLoading && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onSwitchMode={() => setTab("create")} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
-          {!initialLoading && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onSwitchMode={() => setTab("import")} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tabAllowed && (tab === "app" || tab === "account") && (settings || tab === "account") && <AppSettingsPanel key={`${account.id ?? account.username}:${account.username}:${(settings ?? noSettings).serverRoot}:${(settings ?? noSettings).curseForgeApiKey}:${tab}`} mode={tab === "account" ? "account" : "settings"} user={account} settings={settings ?? noSettings} metadata={metadata} metadataError={metadataError} metadataBusy={metadataBusy} updateCheck={updateCheck} onRefreshVersions={refreshVersionMetadata} onAccountSaved={setAccount} onSaved={() => refresh({ includeSettings: true, includeSettingsStorage: true })} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} onConfirm={setConfirmRequest} />}
+          {!initialLoading && tabAllowed && tab === "app" && !settings && <DashboardSkeleton />}
+          {!initialLoading && tabAllowed && tab === "import" && <ImportPanel metadata={metadata} metadataError={metadataError} onSwitchMode={() => setTab("create")} onImported={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
+          {!initialLoading && tabAllowed && tab === "create" && <CreatePanel metadata={metadata} metadataError={metadataError} onSwitchMode={() => setTab("import")} onCreated={async (serverId?: string) => { await refresh(); registerUnsavedChange(null); if (serverId) selectServer(serverId, "overview"); else setTab("overview"); }} onMessage={setMessage} onUnsavedChange={registerUnsavedChange} />}
         </div>
       </section>
       {unsavedChange?.showSaveBar && (

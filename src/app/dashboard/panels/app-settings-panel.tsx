@@ -1,6 +1,6 @@
 "use client";
 
-import { HardDrive, ScrollText, Package, Coffee, Download, Power } from "lucide-react";
+import { HardDrive, ScrollText, Package, Coffee, Download, Power, Bell, Users } from "lucide-react";
 import { browserOrigin, externalApiBase } from "../lib/utils";
 import { useHashSection } from "../lib/use-hash-section";
 import type { ConfirmRequest, MinecraftMetadata, Settings, UnsavedChangesRegistration, UpdateCheckResult, User } from "../lib/types";
@@ -11,10 +11,12 @@ import { JavaTab } from "./app-settings/java-tab";
 import { LogsTab } from "./app-settings/logs-tab";
 import { StorageTab } from "./app-settings/storage-tab";
 import { UpdatesTab } from "./app-settings/updates-tab";
+import { NotificationsTab } from "./app-settings/notifications-tab";
+import { UsersTab } from "./app-settings/users-tab";
 import { ServiceTab } from "./app-settings/service-tab";
 import { useDaemonControl, useDaemonLogs, useJavaRuntimes, useTypeVersionCounts, useUpdates } from "./app-settings/hooks";
 
-const sections = ["general", "java", "network", "logs", "updates", "service"] as const;
+const sections = ["general", "java", "network", "logs", "updates", "service", "notifications", "users"] as const;
 type SettingsSection = (typeof sections)[number];
 
 const navItems = [
@@ -24,6 +26,10 @@ const navItems = [
   { id: "logs", label: "Logs", icon: <ScrollText size={16} aria-hidden="true" /> },
   { id: "updates", label: "Updates", icon: <Download size={16} aria-hidden="true" /> },
   { id: "service", label: "Service", icon: <Power size={16} aria-hidden="true" /> },
+];
+const adminNavItems = [
+  { id: "notifications", label: "Notifications", icon: <Bell size={16} aria-hidden="true" /> },
+  { id: "users", label: "Users", icon: <Users size={16} aria-hidden="true" /> },
 ];
 
 type AppSettingsPanelProps = {
@@ -49,7 +55,7 @@ export function AppSettingsPanel(props: AppSettingsPanelProps) {
   return <AppSettings {...props} />;
 }
 
-function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCheck, onRefreshVersions, onMessage, onConfirm }: AppSettingsPanelProps) {
+function AppSettings({ user, settings, metadata, metadataError, metadataBusy, updateCheck, onRefreshVersions, onMessage, onConfirm }: AppSettingsPanelProps) {
   const [section, selectSection] = useHashSection<SettingsSection>(sections, "general");
   const java = useJavaRuntimes(true, onMessage);
   const versions = useTypeVersionCounts(true);
@@ -65,9 +71,10 @@ function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCh
     return port || (window.location.protocol === "https:" ? "443" : "80");
   })();
 
+  const isAdmin = user.role !== "member";
   const idPrefix = "app-settings";
   return (
-    <SettingsLayout ariaLabel="App settings sections" items={navItems} activeId={section} onChange={selectSection} idPrefix={idPrefix}>
+    <SettingsLayout ariaLabel="App settings sections" items={isAdmin ? [...navItems, ...adminNavItems] : navItems} activeId={isAdmin || (section !== "users" && section !== "notifications") ? section : "general"} onChange={selectSection} idPrefix={idPrefix}>
       <SettingsSectionPanel idPrefix={idPrefix} id="general" activeId={section}>
         <GeneralTab
           metadata={metadata}
@@ -132,6 +139,16 @@ function AppSettings({ settings, metadata, metadataError, metadataBusy, updateCh
       <SettingsSectionPanel idPrefix={idPrefix} id="service" activeId={section}>
         <ServiceTab busy={daemon.busy} stopped={daemon.stopped} onRestart={daemon.restart} onStop={daemon.stop} />
       </SettingsSectionPanel>
+      {isAdmin && (
+        <>
+          <SettingsSectionPanel idPrefix={idPrefix} id="notifications" activeId={section}>
+            <NotificationsTab onMessage={onMessage} onConfirm={onConfirm} />
+          </SettingsSectionPanel>
+          <SettingsSectionPanel idPrefix={idPrefix} id="users" activeId={section}>
+            <UsersTab currentUser={user} onMessage={onMessage} onConfirm={onConfirm} />
+          </SettingsSectionPanel>
+        </>
+      )}
     </SettingsLayout>
   );
 }

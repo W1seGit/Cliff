@@ -31,4 +31,8 @@
 @import "./styles/not-found.css";
 @import "./styles/auth.css";
 @import "./styles/data-table.css";
+@import "./styles/server-upgrade.css";
+@import "./styles/mod-updates.css";
+@import "./styles/accounts.css";
+@import "./styles/tick-chart.css";
 @import "./styles/responsive.css";

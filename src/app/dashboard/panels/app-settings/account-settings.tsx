@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { saveAccount as saveAccountProfile } from "../../lib/runtime-client";
 import type { UnsavedChangesRegistration, User } from "../../lib/types";
 import { Card, Input, PasswordInput } from "../../components/ui";
+import { TwoFactorCard } from "./two-factor-card";
 
 const MIN_USERNAME = 3;
 const MIN_PASSWORD = 10;
@@ -117,6 +118,7 @@ export function AccountSettings({
           error={newPasswordError}
         />
       </Card>
+      <TwoFactorCard user={user} onMessage={onMessage} />
     </section>
   );
 }
