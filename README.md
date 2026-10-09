@@ -4,7 +4,7 @@
 
 ### 🚀 The BEST way to host Minecraft servers on your VPS or home lab.
 
-A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. No cloud. No subscription. No external dependencies. Just you, your hardware, and a dashboard that actually feels good to use.
+A self-hosted web dashboard for managing Minecraft Java servers. One small binary, no Docker, no database, no cloud, no subscription. Just you, your hardware, and a dashboard that actually feels good to use.
 
 [![CI Build](https://img.shields.io/github/actions/workflow/status/W1seGit/Cliff/build.yml?branch=main&style=for-the-badge&logo=github&logoColor=white)](https://github.com/W1seGit/Cliff/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/W1seGit/Cliff?include_prereleases&style=for-the-badge&color=orange)](https://github.com/W1seGit/Cliff/releases)
@@ -42,14 +42,19 @@ A self-hosted, blazing-fast web dashboard for managing Minecraft Java servers. N
 
 - **Server management** — import, create, clone, start/stop Vanilla, Paper, Purpur, Folia, Fabric, Forge, and NeoForge servers
 - **Live console** — WebSocket streaming with command input, presets, and log download
-- **Mod & plugin management** — install, search, and bulk manage mods/plugins via Modrinth
+- **Mod & plugin management** — install, search, and bulk manage mods/plugins via Modrinth, check for and apply updates (with a safety snapshot first), and import or export `.mrpack` modpacks
 - **Worlds & datapacks** — switch worlds, import, rename, delete with snapshot protection
 - **Player access** — ops, whitelist, bans with Mojang UUID lookup and live player heads
+- **Version upgrades** — move a server to a new Minecraft version in one guided step: a mod compatibility report, a safety snapshot, and your world and settings left alone
+- **Crash recovery** — optional automatic restart after a crash, with growing delays and a limit so a broken server is not restarted forever
+- **Performance** — Aikar's JVM flags as a one-click preset, plus TPS and MSPT graphs (Minecraft 1.20.3+ and Paper-family servers)
+- **Notifications** — Discord or generic webhooks for start, stop, crash, backup and player events
+- **Accounts** — extra users with per-server permissions (console only, files only, and so on) and optional two-factor sign-in
 - **Backups** — automatic snapshots before risky actions, manual snapshots, restore, and retention cleanup
 - **File browser** — upload, download, edit configs/JSON/YAML/TOML
 - **Responsive UI** — dark theme that works on desktop and mobile
 - **Public access** — optional playit.gg integration
-- **Zero dependencies** — no Docker, no Node runtime in production, no external database. Single ~13 MB binary.
+- **Zero dependencies** — no Docker, no Node runtime in production, no external database. A single ~12 MB binary.
 
 ---
 
@@ -202,16 +207,15 @@ Cliff ships as a single self-contained binary with embedded static web assets. N
 | Component | Size |
 |-----------|------|
 | Daemon binary (Go, stripped) | ~12 MB |
-| Static web assets (dashboard) | ~1.4 MB |
-| **Total packaged** | **~13 MB** |
+| Static web assets (dashboard) | ~1.8 MB |
+| **Total packaged** | **~14 MB** |
 
 ### Runtime usage (idle)
 
 | Metric | Value |
 |--------|-------|
-| RAM | ~13 MB |
-| CPU | < 1% |
-| Threads | ~19 |
+| RAM | ~23 MB working set (Windows, no servers running) |
+| Threads | ~16 |
 
 ---
 
@@ -219,12 +223,12 @@ Cliff ships as a single self-contained binary with embedded static web assets. N
 
 | Extension | Files | Lines |
 | --- | ---: | ---: |
-| `.go` | 35 | 14,014 |
-| `.tsx` | 61 | 9,547 |
-| `.css` | 30 | 7,456 |
-| `.ts` | 6 | 949 |
-| `.js` | 26 | 248 |
-| **Total** | **158** | **32,214** |
+| `.go` | 145 | 29,451 |
+| `.tsx` | 106 | 14,412 |
+| `.css` | 36 | 7,972 |
+| `.ts` | 14 | 2,119 |
+| `.js` | 1 | 7 |
+| **Total** | **302** | **53,961** |
 
 ---
 
