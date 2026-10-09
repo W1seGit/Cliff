@@ -1,10 +1,7 @@
 package httpserver
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/json"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,12 +15,7 @@ import (
 func TestWorldArchiveTargetValidatesWorldAndBuildsNames(t *testing.T) {
 	serverDir := t.TempDir()
 	worldDir := filepath.Join(serverDir, "world")
-	if err := os.MkdirAll(worldDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(worldDir, "level.dat"), []byte("level"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(worldDir, "level.dat"), "level")
 
 	worldPath, fileName, rootName, err := worldArchiveTarget(store.Server{Name: "Survival Server", Path: serverDir}, "world")
 	if err != nil {
@@ -42,9 +34,7 @@ func TestWorldArchiveTargetValidatesWorldAndBuildsNames(t *testing.T) {
 
 func TestWorldArchiveTargetRejectsNonWorldFolder(t *testing.T) {
 	serverDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(serverDir, "not-world"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, filepath.Join(serverDir, "not-world"))
 
 	if _, _, _, err := worldArchiveTarget(store.Server{Name: "Server", Path: serverDir}, "not-world"); err == nil {
 		t.Fatal("expected non-world folder to be rejected")
@@ -53,14 +43,8 @@ func TestWorldArchiveTargetRejectsNonWorldFolder(t *testing.T) {
 
 func TestDatapackDownloadTargetValidatesAndStripsDisabledSuffix(t *testing.T) {
 	serverDir := t.TempDir()
-	datapackDir := filepath.Join(serverDir, "world", "datapacks")
-	if err := os.MkdirAll(datapackDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	datapackPath := filepath.Join(datapackDir, "example.zip.disabled")
-	if err := os.WriteFile(datapackPath, []byte("zip"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	datapackPath := filepath.Join(serverDir, "world", "datapacks", "example.zip.disabled")
+	touch(t, datapackPath, "zip")
 
 	target, fileName, err := datapackDownloadTarget(store.Server{Path: serverDir}, "world", "example.zip.disabled")
 	if err != nil {
@@ -76,24 +60,7 @@ func TestDatapackDownloadTargetValidatesAndStripsDisabledSuffix(t *testing.T) {
 
 func TestZipReaderFromMultipartUsesSeekableUploadWithoutBuffering(t *testing.T) {
 	zipPath := filepath.Join(t.TempDir(), "server.zip")
-	file, err := os.Create(zipPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer := zip.NewWriter(file)
-	entry, err := writer.Create("server.properties")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := entry.Write([]byte("server-port=25565\n")); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatal(err)
-	}
+	writeZip(t, zipPath, map[string]string{"server.properties": "server-port=25565\n"})
 
 	upload, err := os.Open(zipPath)
 	if err != nil {
@@ -113,33 +80,13 @@ func TestZipReaderFromMultipartUsesSeekableUploadWithoutBuffering(t *testing.T) 
 func TestWorldUploadActionStreamsDatapackToDisk(t *testing.T) {
 	serverDir := t.TempDir()
 	worldDir := filepath.Join(serverDir, "world")
-	if err := os.MkdirAll(worldDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(worldDir, "level.dat"), []byte("level"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(serverDir, "server.properties"), []byte("level-name=world\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(worldDir, "level.dat"), "level")
+	touch(t, filepath.Join(serverDir, "server.properties"), "level-name=world\n")
 
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	mustWriteField(t, writer, "action", "upload-datapack")
-	mustWriteField(t, writer, "worldName", "world")
-	file, err := writer.CreateFormFile("file", "example.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write([]byte("datapack zip bytes")); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	request := httptest.NewRequest(http.MethodPost, "/api/servers/test/worlds", &body)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request := multipartPost(t, "/api/servers/test/worlds",
+		formPart{name: "action", value: "upload-datapack"},
+		formPart{name: "worldName", value: "world"},
+		formPart{name: "file", value: "datapack zip bytes", filename: "example.zip"})
 	response := httptest.NewRecorder()
 
 	apiHandler{}.worldUploadAction(response, request, store.Server{Path: serverDir})
@@ -152,7 +99,7 @@ func TestWorldUploadActionStreamsDatapackToDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != "datapack zip bytes" {
-		t.Fatalf("uploaded datapack content mismatch: %q", string(data))
+		t.Fatalf("uploaded datapack content = %q, want %q", string(data), "datapack zip bytes")
 	}
 	var payload worldsPayload
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
@@ -164,31 +111,17 @@ func TestWorldUploadActionStreamsDatapackToDisk(t *testing.T) {
 }
 
 func TestWorldUploadActionRejectsFileBeforeAction(t *testing.T) {
-	serverDir := t.TempDir()
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	file, err := writer.CreateFormFile("file", "example.zip")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write([]byte("zip")); err != nil {
-		t.Fatal(err)
-	}
-	mustWriteField(t, writer, "action", "upload-datapack")
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	request := httptest.NewRequest(http.MethodPost, "/api/servers/test/worlds", &body)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request := multipartPost(t, "/api/servers/test/worlds",
+		formPart{name: "file", value: "zip", filename: "example.zip"},
+		formPart{name: "action", value: "upload-datapack"})
 	response := httptest.NewRecorder()
 
-	apiHandler{}.worldUploadAction(response, request, store.Server{Path: serverDir})
+	apiHandler{}.worldUploadAction(response, request, store.Server{Path: t.TempDir()})
 
 	if response.Code != http.StatusBadRequest {
-		t.Fatalf("upload status = %d, body=%s", response.Code, response.Body.String())
+		t.Fatalf("upload status = %d, want %d (body=%s)", response.Code, http.StatusBadRequest, response.Body.String())
 	}
 	if !strings.Contains(response.Body.String(), "Upload action must be sent before the file") {
-		t.Fatalf("unexpected error body: %s", response.Body.String())
+		t.Fatalf("error body = %s, want it to mention the action ordering", response.Body.String())
 	}
 }

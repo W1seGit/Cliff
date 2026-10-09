@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/store"
@@ -15,6 +16,8 @@ const sessionCookieName = "mc_dash_session"
 type authPayload struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Code is the two-factor code (or a recovery code) for accounts that use one.
+	Code string `json:"code"`
 }
 
 func (h apiHandler) authMe(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +35,17 @@ func (h apiHandler) authMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"user": nil, "needsSetup": needsSetup})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"user": user, "needsSetup": needsSetup})
+	payload := map[string]any{"user": user, "needsSetup": needsSetup}
+	if user.Role != store.RoleAdmin {
+		// Members need to know what they were granted so the dashboard can hide the rest.
+		grants, err := h.store.Permissions(r.Context(), user.ID)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		payload["permissions"] = grants
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (h apiHandler) authSetup(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +92,23 @@ func (h apiHandler) authLogin(w http.ResponseWriter, r *http.Request) {
 		slog.Error("login failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "Login failed")
 		return
+	}
+	if user.TotpEnabled {
+		if strings.TrimSpace(input.Code) == "" {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "Enter the code from your authenticator app", "totpRequired": true})
+			return
+		}
+		valid, err := h.checkSecondFactor(r, user, input.Code)
+		if err != nil {
+			slog.Error("two-factor check failed", "error", err)
+			writeError(w, http.StatusInternalServerError, "Login failed")
+			return
+		}
+		if !valid {
+			h.loginLimiter.recordFailure(keys)
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "That code is not right or was already used", "totpRequired": true})
+			return
+		}
 	}
 	h.loginLimiter.recordSuccess(keys)
 	if err := h.writeSession(w, r, user); err != nil {

@@ -8,9 +8,7 @@ import (
 
 func TestCopyDirectoryRefusesToCopyIntoItself(t *testing.T) {
 	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "server.properties"), []byte("a=b\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(root, "server.properties"), "a=b\n")
 	inside := filepath.Join(root, "servers", "copy")
 	if err := copyDirectory(root, inside); err == nil {
 		t.Fatal("copying a folder into a subfolder of itself must be refused")
@@ -26,12 +24,8 @@ func TestCopyDirectoryRefusesToCopyIntoItself(t *testing.T) {
 func TestCopyDirectoryStillCopiesToASibling(t *testing.T) {
 	parent := t.TempDir()
 	source := filepath.Join(parent, "source")
-	if err := os.MkdirAll(filepath.Join(source, "world"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(source, "world", "level.dat"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, filepath.Join(source, "world"))
+	touch(t, filepath.Join(source, "world", "level.dat"), "x")
 	target := filepath.Join(parent, "servers", "copy")
 	if err := copyDirectory(source, target); err != nil {
 		t.Fatalf("a normal copy must still work: %v", err)

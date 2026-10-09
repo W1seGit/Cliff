@@ -1,9 +1,7 @@
 package httpserver
 
 import (
-	"bytes"
 	"encoding/json"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,23 +14,10 @@ import (
 
 func TestUploadFileStreamsMultipartToDisk(t *testing.T) {
 	root := t.TempDir()
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	mustWriteField(t, writer, "action", "upload")
-	mustWriteField(t, writer, "path", "")
-	file, err := writer.CreateFormFile("file", "server.properties")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write([]byte("server-port=25565\n")); err != nil {
-		t.Fatal(err)
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	request := httptest.NewRequest(http.MethodPost, "/api/servers/test/files", &body)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
+	request := multipartPost(t, "/api/servers/test/files",
+		formPart{name: "action", value: "upload"},
+		formPart{name: "path", value: ""},
+		formPart{name: "file", value: "server-port=25565\n", filename: "server.properties"})
 	response := httptest.NewRecorder()
 
 	apiHandler{}.uploadFile(response, request, store.Server{Path: root})
@@ -45,7 +30,7 @@ func TestUploadFileStreamsMultipartToDisk(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != "server-port=25565\n" {
-		t.Fatalf("uploaded content mismatch: %q", string(data))
+		t.Fatalf("uploaded content = %q, want %q", string(data), "server-port=25565\n")
 	}
 	var payload map[string]any
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
@@ -56,70 +41,29 @@ func TestUploadFileStreamsMultipartToDisk(t *testing.T) {
 	}
 }
 
-func TestUploadFileRejectsFileBeforeAction(t *testing.T) {
-	root := t.TempDir()
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	file, err := writer.CreateFormFile("file", "server.properties")
-	if err != nil {
-		t.Fatal(err)
+func TestUploadFileRejectsFileSentBeforeItsFields(t *testing.T) {
+	file := formPart{name: "file", value: "server-port=25565\n", filename: "server.properties"}
+	action := formPart{name: "action", value: "upload"}
+	path := formPart{name: "path", value: ""}
+	tests := []struct {
+		name    string
+		parts   []formPart
+		wantErr string
+	}{
+		{"file before action", []formPart{file, action}, "Upload action must be sent before the file"},
+		{"file before path", []formPart{action, file, path}, "Upload path must be sent before the file"},
 	}
-	if _, err := file.Write([]byte("server-port=25565\n")); err != nil {
-		t.Fatal(err)
-	}
-	mustWriteField(t, writer, "action", "upload")
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			apiHandler{}.uploadFile(response, multipartPost(t, "/api/servers/test/files", tc.parts...), store.Server{Path: t.TempDir()})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/servers/test/files", &body)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-	response := httptest.NewRecorder()
-
-	apiHandler{}.uploadFile(response, request, store.Server{Path: root})
-
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("upload status = %d, body=%s", response.Code, response.Body.String())
-	}
-	if !strings.Contains(response.Body.String(), "Upload action must be sent before the file") {
-		t.Fatalf("unexpected error body: %s", response.Body.String())
-	}
-}
-
-func TestUploadFileRejectsFileBeforePath(t *testing.T) {
-	root := t.TempDir()
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	mustWriteField(t, writer, "action", "upload")
-	file, err := writer.CreateFormFile("file", "server.properties")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := file.Write([]byte("server-port=25565\n")); err != nil {
-		t.Fatal(err)
-	}
-	mustWriteField(t, writer, "path", "")
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	request := httptest.NewRequest(http.MethodPost, "/api/servers/test/files", &body)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-	response := httptest.NewRecorder()
-
-	apiHandler{}.uploadFile(response, request, store.Server{Path: root})
-
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("upload status = %d, body=%s", response.Code, response.Body.String())
-	}
-	if !strings.Contains(response.Body.String(), "Upload path must be sent before the file") {
-		t.Fatalf("unexpected error body: %s", response.Body.String())
-	}
-}
-
-func mustWriteField(t *testing.T, writer *multipart.Writer, name string, value string) {
-	t.Helper()
-	if err := writer.WriteField(name, value); err != nil {
-		t.Fatal(err)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("upload status = %d, want %d (body=%s)", response.Code, http.StatusBadRequest, response.Body.String())
+			}
+			if !strings.Contains(response.Body.String(), tc.wantErr) {
+				t.Fatalf("error body = %s, want it to contain %q", response.Body.String(), tc.wantErr)
+			}
+		})
 	}
 }

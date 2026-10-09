@@ -1,47 +1,15 @@
 package httpserver
 
 import (
-	"archive/zip"
+	"slices"
 	"context"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
 	"github.com/W1seGit/Cliff/daemon/internal/store"
 )
-
-func makeZip(t *testing.T, entries map[string]string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "archive")
-	file, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer := zip.NewWriter(file)
-	names := make([]string, 0, len(entries))
-	for name := range entries {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		entry, err := writer.Create(name)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := entry.Write([]byte(entries[name])); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := file.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
 
 func TestClassifyArchive(t *testing.T) {
 	cases := []struct {
@@ -74,7 +42,7 @@ func TestClassifyArchive(t *testing.T) {
 			if info.Kind != tc.kind {
 				t.Fatalf("kind = %s, want %s", info.Kind, tc.kind)
 			}
-			if tc.loader != "" && !contains(info.Loaders, tc.loader) {
+			if tc.loader != "" && !slices.Contains(info.Loaders, tc.loader) {
 				t.Fatalf("loaders = %v, want %s", info.Loaders, tc.loader)
 			}
 		})
@@ -96,9 +64,7 @@ func TestClassifyArchiveIgnoresNestedJarsInsideAMod(t *testing.T) {
 
 func TestClassifyArchiveRejectsNonArchives(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "fake.jar")
-	if err := os.WriteFile(path, []byte("not a zip"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, path, "not a zip")
 	if _, err := classifyArchive(path, "fake.jar"); err == nil {
 		t.Fatal("expected an error for a file that is not an archive")
 	}
@@ -134,9 +100,7 @@ func TestServerAcceptsModAndPlugin(t *testing.T) {
 func newUploadSession(t *testing.T, serverType string) (*uploadSession, string) {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "server.properties"), []byte("level-name=survival\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(dir, "server.properties"), "level-name=survival\n")
 	server := store.Server{ID: "srv", Path: dir, Type: serverType}
 	return &uploadSession{ctx: context.Background(), server: server}, dir
 }
@@ -222,13 +186,4 @@ func TestPlaceRefusesWorldsResourcePacksAndUnknownFiles(t *testing.T) {
 	if results := session.place(makeZip(t, map[string]string{"a": "b"}), "notes.txt", ""); results[0].Status != "skipped" {
 		t.Fatalf("non jar/zip files must be skipped: %+v", results)
 	}
-}
-
-func contains(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
 }

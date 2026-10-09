@@ -229,78 +229,21 @@ func TestApplyStopsWhenThePreparationStepFails(t *testing.T) {
 	in.unchanged(t)
 }
 
-func TestSafetyInfoAndClear(t *testing.T) {
-	in := newInstallation(t)
-	writeFile(t, in.binary+previousSuffix, strings.Repeat("x", 1000))
-	writeFile(t, filepath.Join(in.web+previousSuffix, "index.html"), strings.Repeat("y", 500))
-	backups := PreUpdateBackupDir(in.data)
-	writeFile(t, filepath.Join(backups, "a.sqlite"), strings.Repeat("d", 200))
-	writeFile(t, filepath.Join(backups, "b.sqlite"), strings.Repeat("d", 300))
-
-	manager := NewManager(in.binary, in.web, in.data)
-	info := manager.SafetyInfo()
-	if !info.CanRollback || info.PreviousVersionBytes != 1500 || info.BackupCount != 2 || info.BackupBytes != 500 || info.TotalBytes != 2000 {
-		t.Fatalf("unexpected safety info: %#v", info)
-	}
-
-	freed, err := manager.ClearSafetyCopies()
-	if err != nil || freed != 2000 {
-		t.Fatalf("expected 2000 bytes freed, got %d (err=%v)", freed, err)
-	}
-	after := manager.SafetyInfo()
-	if after.CanRollback || after.TotalBytes != 0 || after.BackupCount != 0 {
-		t.Fatalf("everything should be gone, got %#v", after)
-	}
-	if readFile(t, in.binary) != "old binary" || readFile(t, filepath.Join(in.data, "keep.txt")) != "user data" {
-		t.Fatal("cleanup must not touch the installed version or user data")
-	}
-}
-
-func TestClearSafetyCopiesRefusesDuringAnUpdate(t *testing.T) {
-	in := newInstallation(t)
-	writeFile(t, in.binary+previousSuffix, "prev")
-	manager := NewManager(in.binary, in.web, in.data)
-	manager.mu.Lock()
-	manager.applying = true
-	manager.mu.Unlock()
-	if _, err := manager.ClearSafetyCopies(); err == nil {
-		t.Fatal("cleanup must not run while an update is applying")
-	}
-	if !fileExists(in.binary + previousSuffix) {
-		t.Fatal("nothing should have been deleted")
-	}
-}
-
 func TestUpdateBaseOverrideOnlyAcceptsLoopback(t *testing.T) {
-	for value, want := range map[string]string{
-		"http://127.0.0.1:9000":  "http://127.0.0.1:9000/",
-		"http://localhost:9000/": "http://localhost:9000/",
-		"https://127.0.0.1:9000": "",
-		"http://evil.example":    "",
-		"http://10.0.0.5:9000":   "",
-		"":                       "",
-	} {
-		t.Setenv("CLIFF_UPDATE_BASE_URL", value)
-		if got := updateBaseOverride(); got != want {
-			t.Fatalf("override %q = %q, want %q", value, got, want)
-		}
+	tests := []struct{ name, value, want string }{
+		{"loopback IP", "http://127.0.0.1:9000", "http://127.0.0.1:9000/"},
+		{"localhost with trailing slash", "http://localhost:9000/", "http://localhost:9000/"},
+		{"https is refused", "https://127.0.0.1:9000", ""},
+		{"public host is refused", "http://evil.example", ""},
+		{"private LAN address is refused", "http://10.0.0.5:9000", ""},
+		{"unset", "", ""},
 	}
-}
-
-func TestUpdateResultRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	if ReadUpdateResult(dir) != nil {
-		t.Fatal("no result should exist yet")
-	}
-	if err := WriteUpdateResult(dir, UpdateResult{Status: "rolled-back", From: "1.0.0", To: "1.1.0", Message: "went back"}); err != nil {
-		t.Fatal(err)
-	}
-	result := ReadUpdateResult(dir)
-	if result == nil || result.Status != "rolled-back" || result.To != "1.1.0" || result.At == "" {
-		t.Fatalf("unexpected result: %#v", result)
-	}
-	ClearUpdateResult(dir)
-	if ReadUpdateResult(dir) != nil {
-		t.Fatal("dismissing must clear the result")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("CLIFF_UPDATE_BASE_URL", tc.value)
+			if got := updateBaseOverride(); got != tc.want {
+				t.Fatalf("override %q = %q, want %q", tc.value, got, tc.want)
+			}
+		})
 	}
 }

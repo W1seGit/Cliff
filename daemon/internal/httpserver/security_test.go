@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/W1seGit/Cliff/daemon/internal/config"
-	"github.com/W1seGit/Cliff/daemon/internal/store"
 )
 
 func TestOriginAllowed(t *testing.T) {
@@ -144,11 +143,7 @@ func TestLoginLimiterSuccessKeepsIPBudget(t *testing.T) {
 func newAuthTestHandler(t *testing.T) http.Handler {
 	t.Helper()
 	dir := t.TempDir()
-	db, err := store.Open(dir+"/test.sqlite", dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
+	db := openTestStoreAt(t, dir, dir)
 	if _, err := db.CreateUser(context.Background(), "admin", "correct-horse-battery"); err != nil {
 		t.Fatal(err)
 	}

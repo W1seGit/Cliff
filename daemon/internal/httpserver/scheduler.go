@@ -37,7 +37,9 @@ func (h apiHandler) runScheduledSnapshots(ctx context.Context, now time.Time) {
 		if h.process.IsRunning(server.ID) {
 			continue
 		}
-		if _, err := h.createBackup(ctx, server, "scheduled snapshot"); err != nil {
+		_, err := h.createBackup(ctx, server, "scheduled snapshot")
+		h.notifyBackup(server, err)
+		if err != nil {
 			slog.Warn("scheduled snapshot failed", "server", server.ID, "error", err)
 			continue
 		}

@@ -131,6 +131,7 @@ func (h apiHandler) backupAction(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "backups": backups})
 	default:
 		backupID, err := h.createBackup(r.Context(), server, input.Reason)
+		h.notifyBackup(server, err)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err.Error())
 			return

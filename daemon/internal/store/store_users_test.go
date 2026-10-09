@@ -33,12 +33,7 @@ func TestPasswordHashBackwardCompatible(t *testing.T) {
 }
 
 func TestAuthenticateErrors(t *testing.T) {
-	dir := t.TempDir()
-	db, err := Open(dir+"/test.sqlite", dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openTestStore(t)
 	if _, err := db.CreateUser(context.Background(), "admin", "correct-horse-battery"); err != nil {
 		t.Fatal(err)
 	}

@@ -1,9 +1,7 @@
 package httpserver
 
 import (
-	"bytes"
 	"encoding/json"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -30,44 +28,34 @@ func TestRequireEULAReadsTheFile(t *testing.T) {
 		{"upper case value", "#By changing the setting below\nEULA=TRUE\n", true, true},
 	}
 	for _, tc := range cases {
-		path := filepath.Join(dir, "eula.txt")
-		_ = os.Remove(path)
-		if tc.write {
-			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(dir, "eula.txt")
+			_ = os.Remove(path)
+			if tc.write {
+				touch(t, path, tc.content)
+			}
+			recorder := httptest.NewRecorder()
+			if got := requireEULA(recorder, server); got != tc.allowed {
+				t.Fatalf("requireEULA = %v, want %v", got, tc.allowed)
+			}
+			if tc.allowed {
+				if recorder.Body.Len() != 0 {
+					t.Fatalf("nothing should be written when the EULA is accepted, got %q", recorder.Body.String())
+				}
+				return
+			}
+			if recorder.Code != http.StatusConflict {
+				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusConflict)
+			}
+			var body map[string]string
+			if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 				t.Fatal(err)
 			}
-		}
-		recorder := httptest.NewRecorder()
-		if got := requireEULA(recorder, server); got != tc.allowed {
-			t.Fatalf("%s: requireEULA = %v, want %v", tc.name, got, tc.allowed)
-		}
-		if tc.allowed {
-			if recorder.Body.Len() != 0 {
-				t.Fatalf("%s: nothing should be written when the EULA is accepted", tc.name)
+			if body["code"] != "eula_required" || body["error"] == "" {
+				t.Fatalf("the dashboard needs the eula_required code and a message, got %v", body)
 			}
-			continue
-		}
-		if recorder.Code != http.StatusConflict {
-			t.Fatalf("%s: expected 409, got %d", tc.name, recorder.Code)
-		}
-		var body map[string]string
-		if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-			t.Fatal(err)
-		}
-		if body["code"] != "eula_required" || body["error"] == "" {
-			t.Fatalf("%s: the dashboard needs the eula_required code and a message, got %v", tc.name, body)
-		}
+		})
 	}
-}
-
-// captureLogs sends slog output to a buffer at debug level for one test.
-func captureLogs(t *testing.T) *bytes.Buffer {
-	t.Helper()
-	var buffer bytes.Buffer
-	previous := slog.Default()
-	slog.SetDefault(slog.New(slog.NewTextHandler(&buffer, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	t.Cleanup(func() { slog.SetDefault(previous) })
-	return &buffer
 }
 
 func logged(t *testing.T, method string, path string, status int, body string) string {

@@ -13,16 +13,6 @@ import (
 	"github.com/W1seGit/Cliff/daemon/internal/store"
 )
 
-func touch(t *testing.T, path string, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestProtectionReasonCoversWhatAServerNeeds(t *testing.T) {
 	dir := t.TempDir()
 	touch(t, filepath.Join(dir, "server.properties"), "level-name=Survival\n")
@@ -51,9 +41,7 @@ func TestRenameManagedPath(t *testing.T) {
 	root := t.TempDir()
 	touch(t, filepath.Join(root, "notes.txt"), "x")
 	touch(t, filepath.Join(root, "taken.txt"), "y")
-	if err := os.MkdirAll(filepath.Join(root, "docs"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, filepath.Join(root, "docs"))
 
 	renamed, err := renameManagedPath(root, filepath.Join(root, "notes.txt"), "readme.txt")
 	if err != nil || renamed != "readme.txt" {
@@ -85,11 +73,8 @@ func TestMoveManagedPaths(t *testing.T) {
 	touch(t, filepath.Join(root, "b.txt"), "b")
 	touch(t, filepath.Join(root, "docs", "b.txt"), "existing")
 	touch(t, filepath.Join(root, "tree", "inner", "f.txt"), "f")
-	for _, dir := range []string{"archive", "empty"} {
-		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
+	mustMkdir(t, filepath.Join(root, "archive"))
+	mustMkdir(t, filepath.Join(root, "empty"))
 
 	moved, err := moveManagedPaths(root, []string{"a.txt"}, "archive")
 	if err != nil || len(moved) != 1 || moved[0] != "archive/a.txt" {
@@ -124,18 +109,15 @@ func TestMoveManagedPaths(t *testing.T) {
 	}
 }
 
-func TestFileActionsHonourSafeMode(t *testing.T) {
+// newFilesFixture creates a store with one vanilla server whose folder holds
+// the given files (name -> content).
+func newFilesFixture(t *testing.T, files map[string]string) (apiHandler, store.Server, string) {
+	t.Helper()
 	dir := t.TempDir()
-	db, err := store.Open(filepath.Join(dir, "db.sqlite"), filepath.Join(dir, "servers"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openTestStoreAt(t, dir, filepath.Join(dir, "servers"))
 	serverDir := filepath.Join(dir, "servers", "s1")
-	touch(t, filepath.Join(serverDir, "run.bat"), "@echo off")
-	touch(t, filepath.Join(serverDir, "notes.txt"), "hello")
-	if err := os.MkdirAll(filepath.Join(serverDir, "archive"), 0o755); err != nil {
-		t.Fatal(err)
+	for name, content := range files {
+		touch(t, filepath.Join(serverDir, name), content)
 	}
 	server, err := db.CreateServer(context.Background(), store.Server{
 		Name: "S1", Path: serverDir, Type: "vanilla", MinecraftVersion: "1.21.1", JavaPath: "java",
@@ -144,7 +126,12 @@ func TestFileActionsHonourSafeMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := apiHandler{store: db}
+	return apiHandler{store: db}, server, serverDir
+}
+
+func TestFileActionsHonourSafeMode(t *testing.T) {
+	handler, server, serverDir := newFilesFixture(t, map[string]string{"run.bat": "@echo off", "notes.txt": "hello"})
+	mustMkdir(t, filepath.Join(serverDir, "archive"))
 
 	call := func(body string) (int, map[string]any) {
 		request := httptest.NewRequest(http.MethodPost, "/api/servers/"+server.ID+"/files", strings.NewReader(body))
@@ -195,26 +182,11 @@ func TestFileActionsHonourSafeMode(t *testing.T) {
 }
 
 func TestFileListingMarksProtectedEntries(t *testing.T) {
-	dir := t.TempDir()
-	db, err := store.Open(filepath.Join(dir, "db.sqlite"), filepath.Join(dir, "servers"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	serverDir := filepath.Join(dir, "servers", "s1")
-	touch(t, filepath.Join(serverDir, "run.bat"), "x")
-	touch(t, filepath.Join(serverDir, "notes.txt"), "x")
-	server, err := db.CreateServer(context.Background(), store.Server{
-		Name: "S1", Path: serverDir, Type: "vanilla", MinecraftVersion: "1.21.1", JavaPath: "java",
-		MinMemoryMB: 512, MaxMemoryMB: 1024, Port: 25565, LaunchJar: "server.jar",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	handler, server, _ := newFilesFixture(t, map[string]string{"run.bat": "x", "notes.txt": "x"})
 	request := httptest.NewRequest(http.MethodGet, "/api/servers/"+server.ID+"/files", nil)
 	request.SetPathValue("id", server.ID)
 	recorder := httptest.NewRecorder()
-	apiHandler{store: db}.files(recorder, request)
+	handler.files(recorder, request)
 	var listing fileListing
 	if err := json.Unmarshal(recorder.Body.Bytes(), &listing); err != nil {
 		t.Fatal(err)

@@ -8,7 +8,7 @@ import (
 
 func TestClassifyMemory(t *testing.T) {
 	const limit = 256 << 20
-	cases := []struct {
+	tests := []struct {
 		inUse uint64
 		want  memoryLevel
 	}{
@@ -18,46 +18,44 @@ func TestClassifyMemory(t *testing.T) {
 		{255 << 20, memoryHigh},
 		{256 << 20, memoryCritical},
 	}
-	for _, c := range cases {
-		if got := classifyMemory(c.inUse, limit); got != c.want {
-			t.Errorf("%d MB: got %v want %v", c.inUse>>20, got, c.want)
+	for _, tc := range tests {
+		if got := classifyMemory(tc.inUse, limit); got != tc.want {
+			t.Errorf("classifyMemory(%d MB of %d MB) = %v, want %v", tc.inUse>>20, limit>>20, got, tc.want)
 		}
 	}
-	if classifyMemory(1<<40, -1) != memoryNormal {
-		t.Error("no limit means never high")
+	if got := classifyMemory(1<<40, -1); got != memoryNormal {
+		t.Errorf("with no limit, classifyMemory = %v, want %v (never high)", got, memoryNormal)
 	}
 }
 
 func TestMemoryLimitBytes(t *testing.T) {
-	t.Setenv("GOMEMLIMIT", "")
-	t.Setenv("CLIFF_MEMORY_LIMIT_MB", "")
-	if got := memoryLimitBytes(); got != defaultMemoryLimitMB<<20 {
-		t.Fatalf("default limit, got %d", got)
+	tests := []struct {
+		name  string
+		value string
+		want  int64
+	}{
+		{"unset uses the default", "", defaultMemoryLimitMB << 20},
+		{"custom megabytes", "512", 512 << 20},
+		{"zero turns the limit off", "0", -1},
+		{"junk falls back to the default", "junk", defaultMemoryLimitMB << 20},
 	}
-	t.Setenv("CLIFF_MEMORY_LIMIT_MB", "512")
-	if got := memoryLimitBytes(); got != 512<<20 {
-		t.Fatalf("custom limit, got %d", got)
-	}
-	t.Setenv("CLIFF_MEMORY_LIMIT_MB", "0")
-	if got := memoryLimitBytes(); got != -1 {
-		t.Fatalf("0 turns the limit off, got %d", got)
-	}
-	t.Setenv("CLIFF_MEMORY_LIMIT_MB", "junk")
-	if got := memoryLimitBytes(); got != defaultMemoryLimitMB<<20 {
-		t.Fatalf("junk falls back to the default, got %d", got)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("GOMEMLIMIT", "")
+			t.Setenv("CLIFF_MEMORY_LIMIT_MB", tc.value)
+			if got := memoryLimitBytes(); got != tc.want {
+				t.Fatalf("CLIFF_MEMORY_LIMIT_MB=%q: memoryLimitBytes() = %d, want %d", tc.value, got, tc.want)
+			}
+		})
 	}
 }
 
 func TestReportPreviousCrashesKeepsNewestAndDropsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	for _, n := range []string{"crash-1.log", "crash-2.log", "crash-3.log", "crash-4.log", "crash-5.log", "crash-6.log", "crash-7.log"} {
-		if err := os.WriteFile(filepath.Join(dir, n), []byte("goroutine 1"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		touch(t, filepath.Join(dir, n), "goroutine 1")
 	}
-	if err := os.WriteFile(filepath.Join(dir, "crash-0empty.log"), nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(dir, "crash-0empty.log"), "")
 	reportPreviousCrashes(dir)
 	left, _ := filepath.Glob(filepath.Join(dir, "crash-*.log"))
 	if len(left) != crashReportsKept {

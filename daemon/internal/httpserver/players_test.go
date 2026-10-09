@@ -13,18 +13,14 @@ import (
 func TestReadPlayerSessionsScansOnlyRecentBoundedLogs(t *testing.T) {
 	serverDir := t.TempDir()
 	logsDir := filepath.Join(serverDir, "logs")
-	if err := os.MkdirAll(logsDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, logsDir)
 
 	baseTime := time.Date(2026, 6, 20, 12, 0, 0, 0, time.UTC)
 	for index := 0; index < maxPlayerSessionLogFiles+3; index++ {
 		name := fmt.Sprintf("2026-06-%02d-1.log", index+1)
 		playerName := fmt.Sprintf("Player%02d", index)
 		path := filepath.Join(logsDir, name)
-		if err := os.WriteFile(path, []byte(fmt.Sprintf("[12:00:00] [Server thread/INFO]: %s[/192.168.0.%d:50000] logged in with entity id 1\n", playerName, index+1)), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		touch(t, path, fmt.Sprintf("[12:00:00] [Server thread/INFO]: %s[/192.168.0.%d:50000] logged in with entity id 1\n", playerName, index+1))
 		modTime := baseTime.Add(time.Duration(index) * time.Hour)
 		if err := os.Chtimes(path, modTime, modTime); err != nil {
 			t.Fatal(err)

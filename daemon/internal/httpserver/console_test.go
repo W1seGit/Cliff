@@ -36,13 +36,21 @@ func TestConsoleOutgoingQueueIsBounded(t *testing.T) {
 }
 
 func TestConsoleLogStreamingCanBeDisabled(t *testing.T) {
-	if !consoleIncludesLogs(httptest.NewRequest("GET", "/api/servers/test/console", nil)) {
-		t.Fatal("console logs should be included by default for compatibility")
+	tests := []struct {
+		name  string
+		query string
+		want  bool
+	}{
+		{"default, for compatibility", "", true},
+		{"logs=0", "?logs=0", false},
+		{"logs=1", "?logs=1", true},
 	}
-	if consoleIncludesLogs(httptest.NewRequest("GET", "/api/servers/test/console?logs=0", nil)) {
-		t.Fatal("console logs should be disabled when logs=0 is requested")
-	}
-	if !consoleIncludesLogs(httptest.NewRequest("GET", "/api/servers/test/console?logs=1", nil)) {
-		t.Fatal("console logs should be included when logs=1 is requested")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			request := httptest.NewRequest("GET", "/api/servers/test/console"+tc.query, nil)
+			if got := consoleIncludesLogs(request); got != tc.want {
+				t.Fatalf("consoleIncludesLogs(%q) = %v, want %v", tc.query, got, tc.want)
+			}
+		})
 	}
 }

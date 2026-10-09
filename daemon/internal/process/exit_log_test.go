@@ -3,6 +3,7 @@ package process
 import (
 	"bytes"
 	"log/slog"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -22,12 +23,14 @@ func TestLastLogLinesJoinsTheEnd(t *testing.T) {
 	}
 }
 
-func exitedProcess(t *testing.T, code string) *managedProcess {
+// exitedProcess returns a managedProcess whose command has already exited
+// cleanly. It runs the test binary itself (matching no tests), so it needs no
+// other toolchain on PATH.
+func exitedProcess(t *testing.T) *managedProcess {
 	t.Helper()
-	cmd := exec.Command("go", "version")
-	_ = code
+	cmd := exec.Command(os.Args[0], "-test.run=^$")
 	if err := cmd.Run(); err != nil {
-		t.Skip("go toolchain not available to create a finished process")
+		t.Fatalf("running the test binary to get a finished process: %v", err)
 	}
 	return &managedProcess{serverID: "srv_test", cmd: cmd, startedAt: time.Now().Add(-3 * time.Second)}
 }
@@ -44,7 +47,7 @@ func captureLogs(t *testing.T) *bytes.Buffer {
 func TestLogExitDistinguishesRoutineFromTrouble(t *testing.T) {
 	manager := NewManager(t.TempDir())
 
-	stopped := exitedProcess(t, "0")
+	stopped := exitedProcess(t)
 	stopped.stopRequested = true
 	stopped.logs = []string{"Stopping the server"}
 	out := captureLogs(t)
@@ -53,7 +56,7 @@ func TestLogExitDistinguishesRoutineFromTrouble(t *testing.T) {
 		t.Fatalf("a requested stop is routine, got %q", out.String())
 	}
 
-	failedStart := exitedProcess(t, "1")
+	failedStart := exitedProcess(t)
 	failedStart.logs = []string{"Starting Test", "You need to agree to the EULA in order to run the server."}
 	out = captureLogs(t)
 	manager.logExit(failedStart, nil)
@@ -62,7 +65,7 @@ func TestLogExitDistinguishesRoutineFromTrouble(t *testing.T) {
 		t.Fatalf("a failed start should be an error that carries the server's last output, got %q", text)
 	}
 
-	crashed := exitedProcess(t, "1")
+	crashed := exitedProcess(t)
 	crashed.readyAt = time.Now().Add(-time.Second)
 	crashed.logs = []string{"Done (3s)!", "java.lang.OutOfMemoryError"}
 	out = captureLogs(t)

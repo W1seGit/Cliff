@@ -1,52 +1,41 @@
 package httpserver
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-func TestSelectPlayitAssetPrefersCurrentPlatformBinary(t *testing.T) {
+func TestSelectPlayitAsset(t *testing.T) {
 	assets := []githubAssetRecord{
 		{Name: "playit_amd64.deb", BrowserDownloadURL: "https://example.invalid/deb"},
 		{Name: "playit-linux-amd64", BrowserDownloadURL: "https://example.invalid/linux"},
 		{Name: "playit-windows-x86_64-signed.exe", BrowserDownloadURL: "https://example.invalid/windows"},
-	}
-
-	asset, err := selectPlayitAsset(assets, "linux", "amd64")
-	if err != nil {
-		t.Fatalf("expected linux asset, got error %v", err)
-	}
-	if asset.Name != "playit-linux-amd64" {
-		t.Fatalf("expected linux binary, got %q", asset.Name)
-	}
-
-	asset, err = selectPlayitAsset(assets, "windows", "amd64")
-	if err != nil {
-		t.Fatalf("expected windows asset, got error %v", err)
-	}
-	if asset.Name != "playit-windows-x86_64-signed.exe" {
-		t.Fatalf("expected signed windows binary, got %q", asset.Name)
-	}
-}
-
-func TestSelectPlayitAssetSupportsMacOS(t *testing.T) {
-	assets := []githubAssetRecord{
 		{Name: "playit-darwin-aarch64", BrowserDownloadURL: "https://example.invalid/darwin"},
 	}
-
-	asset, err := selectPlayitAsset(assets, "darwin", "arm64")
-	if err != nil {
-		t.Fatalf("expected macOS asset, got error %v", err)
+	tests := []struct {
+		name   string
+		goos   string
+		goarch string
+		want   string // expected asset name; empty means an error is expected
+	}{
+		{"linux prefers the plain binary over the deb", "linux", "amd64", "playit-linux-amd64"},
+		{"windows prefers the signed binary", "windows", "amd64", "playit-windows-x86_64-signed.exe"},
+		{"macOS on arm64", "darwin", "arm64", "playit-darwin-aarch64"},
+		{"unsupported platform", "freebsd", "arm64", ""},
 	}
-	if asset.Name != "playit-darwin-aarch64" {
-		t.Fatalf("expected macOS binary, got %q", asset.Name)
-	}
-}
-
-func TestSelectPlayitAssetRejectsUnsupportedPlatform(t *testing.T) {
-	_, err := selectPlayitAsset(nil, "freebsd", "arm64")
-	if err == nil {
-		t.Fatal("expected unsupported platform error")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			asset, err := selectPlayitAsset(assets, tc.goos, tc.goarch)
+			if tc.want == "" {
+				if err == nil {
+					t.Fatalf("selectPlayitAsset(%s/%s) = %q, want an unsupported platform error", tc.goos, tc.goarch, asset.Name)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("selectPlayitAsset(%s/%s) returned error %v", tc.goos, tc.goarch, err)
+			}
+			if asset.Name != tc.want {
+				t.Fatalf("selectPlayitAsset(%s/%s) = %q, want %q", tc.goos, tc.goarch, asset.Name, tc.want)
+			}
+		})
 	}
 }
 
@@ -129,119 +118,5 @@ func TestParsePlayitTunnelListExtractsMinecraftAddress(t *testing.T) {
 	}
 	if tunnels[0].LocalPort != 25565 {
 		t.Fatalf("unexpected local port %d", tunnels[0].LocalPort)
-	}
-}
-
-func TestPlayitBuildManagerParsesStepMarker(t *testing.T) {
-	mgr := newPlayitBuildManager()
-	job := &playitSubprocessJob{}
-
-	// Step marker should set job.step and be logged.
-	mgr.mu.Lock()
-	handled := mgr.parseMarkersLocked(job, "[cliff:step] cloning playit-agent")
-	mgr.mu.Unlock()
-	if !handled {
-		t.Fatal("expected step marker to be handled")
-	}
-	if job.step != "cloning playit-agent" {
-		t.Fatalf("unexpected step %q", job.step)
-	}
-	if len(job.logs) != 1 {
-		t.Fatalf("expected marker logged, got %d lines", len(job.logs))
-	}
-}
-
-func TestPlayitBuildManagerParsesDoneMarker(t *testing.T) {
-	mgr := newPlayitBuildManager()
-	job := &playitSubprocessJob{}
-
-	mgr.mu.Lock()
-	handled := mgr.parseMarkersLocked(job, "[cliff:done]")
-	mgr.mu.Unlock()
-	if !handled {
-		t.Fatal("expected done marker to be handled")
-	}
-	if !job.done {
-		t.Fatal("expected job.done to be true after done marker")
-	}
-}
-
-func TestPlayitBuildManagerParsesErrorMarker(t *testing.T) {
-	mgr := newPlayitBuildManager()
-	job := &playitSubprocessJob{}
-
-	mgr.mu.Lock()
-	handled := mgr.parseMarkersLocked(job, "[cliff:error] cargo not found")
-	mgr.mu.Unlock()
-	if !handled {
-		t.Fatal("expected error marker to be handled")
-	}
-	if job.lastError != "cargo not found" {
-		t.Fatalf("unexpected lastError %q", job.lastError)
-	}
-}
-
-func TestPlayitBuildManagerParsesDepMarker(t *testing.T) {
-	mgr := newPlayitBuildManager()
-	job := &playitSubprocessJob{}
-
-	mgr.mu.Lock()
-	handled := mgr.parseMarkersLocked(job, "[cliff:dep] rust installing")
-	mgr.mu.Unlock()
-	if !handled {
-		t.Fatal("expected dep marker to be handled")
-	}
-}
-
-func TestPlayitBuildManagerNonMarkerLogged(t *testing.T) {
-	mgr := newPlayitBuildManager()
-	job := &playitSubprocessJob{}
-
-	mgr.mu.Lock()
-	handled := mgr.parseMarkersLocked(job, "    Compiling playit-agent v0.17.1")
-	mgr.mu.Unlock()
-	if handled {
-		t.Fatal("expected plain log line to not be handled as marker")
-	}
-	mgr.mu.Lock()
-	mgr.appendJobLogLocked(job, "    Compiling playit-agent v0.17.1")
-	mgr.mu.Unlock()
-	if len(job.logs) != 1 || !strings.Contains(job.logs[0], "Compiling") {
-		t.Fatalf("expected plain line in logs, got %#v", job.logs)
-	}
-}
-
-func TestDepsMissingFiltersUninstalled(t *testing.T) {
-	deps := []playitDepStatus{
-		{Name: "git", Installed: true},
-		{Name: "rust", Installed: false},
-		{Name: "xcode-clt", Installed: false},
-	}
-	missing := depsMissing(deps)
-	if len(missing) != 2 {
-		t.Fatalf("expected 2 missing deps, got %d", len(missing))
-	}
-	for _, dep := range missing {
-		if dep.Installed {
-			t.Fatalf("missing dep %q should not be installed", dep.Name)
-		}
-	}
-}
-
-func TestMergeDepsStateIncludesPlatform(t *testing.T) {
-	if !isMacOSPlayitBuildSupported() {
-		t.Skip("mergeDepsState is darwin-gated; skipping on non-darwin")
-	}
-	mgr := newPlayitBuildManager()
-	mgr.checkPlayitDeps()
-	status := mgr.mergeDepsState(playitStatus{})
-	if status.Platform == "" {
-		t.Fatal("expected platform to be set by mergeDepsState")
-	}
-	if len(status.Deps) == 0 {
-		t.Fatal("expected deps to be populated by mergeDepsState")
-	}
-	if !status.DepsChecked {
-		t.Fatal("expected depsChecked to be true after checkPlayitDeps")
 	}
 }

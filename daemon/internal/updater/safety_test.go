@@ -3,28 +3,10 @@ package updater
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
-
-func writeFile(t *testing.T, path string, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o755); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func readFile(t *testing.T, path string) string {
-	t.Helper()
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(data)
-}
 
 func TestSwapKeepsThePreviousVersionForRollback(t *testing.T) {
 	root := t.TempDir()
@@ -137,5 +119,47 @@ func TestCopyDatabaseIgnoresAMissingSource(t *testing.T) {
 	}
 	if readFile(t, filepath.Join(dir, "out", "copy.sqlite")) != "data" {
 		t.Fatal("the copy must match the original")
+	}
+}
+
+func TestSafetyInfoAndClear(t *testing.T) {
+	in := newInstallation(t)
+	writeFile(t, in.binary+previousSuffix, strings.Repeat("x", 1000))
+	writeFile(t, filepath.Join(in.web+previousSuffix, "index.html"), strings.Repeat("y", 500))
+	backups := PreUpdateBackupDir(in.data)
+	writeFile(t, filepath.Join(backups, "a.sqlite"), strings.Repeat("d", 200))
+	writeFile(t, filepath.Join(backups, "b.sqlite"), strings.Repeat("d", 300))
+
+	manager := NewManager(in.binary, in.web, in.data)
+	info := manager.SafetyInfo()
+	if !info.CanRollback || info.PreviousVersionBytes != 1500 || info.BackupCount != 2 || info.BackupBytes != 500 || info.TotalBytes != 2000 {
+		t.Fatalf("unexpected safety info: %#v", info)
+	}
+
+	freed, err := manager.ClearSafetyCopies()
+	if err != nil || freed != 2000 {
+		t.Fatalf("expected 2000 bytes freed, got %d (err=%v)", freed, err)
+	}
+	after := manager.SafetyInfo()
+	if after.CanRollback || after.TotalBytes != 0 || after.BackupCount != 0 {
+		t.Fatalf("everything should be gone, got %#v", after)
+	}
+	if readFile(t, in.binary) != "old binary" || readFile(t, filepath.Join(in.data, "keep.txt")) != "user data" {
+		t.Fatal("cleanup must not touch the installed version or user data")
+	}
+}
+
+func TestClearSafetyCopiesRefusesDuringAnUpdate(t *testing.T) {
+	in := newInstallation(t)
+	writeFile(t, in.binary+previousSuffix, "prev")
+	manager := NewManager(in.binary, in.web, in.data)
+	manager.mu.Lock()
+	manager.applying = true
+	manager.mu.Unlock()
+	if _, err := manager.ClearSafetyCopies(); err == nil {
+		t.Fatal("cleanup must not run while an update is applying")
+	}
+	if !fileExists(in.binary + previousSuffix) {
+		t.Fatal("nothing should have been deleted")
 	}
 }

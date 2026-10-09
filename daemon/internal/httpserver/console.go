@@ -7,6 +7,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/W1seGit/Cliff/daemon/internal/process"
+	"github.com/W1seGit/Cliff/daemon/internal/store"
 )
 
 // consoleUpgrader only accepts browser handshakes from the daemon's own origin
@@ -39,7 +40,8 @@ const (
 )
 
 func (h apiHandler) console(w http.ResponseWriter, r *http.Request) {
-	if _, ok, err := h.currentUser(r); err != nil {
+	user, ok, err := h.currentUser(r)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	} else if !ok {
@@ -48,8 +50,15 @@ func (h apiHandler) console(w http.ResponseWriter, r *http.Request) {
 	}
 
 	serverID := r.PathValue("id")
+	// The route only needs "view"; reading the log and sending commands need
+	// the console permission.
+	canConsole, err := h.store.Allowed(r.Context(), user, serverID, store.PermConsole)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	includeUsage := r.URL.Query().Get("usage") == "1"
-	includeLogs := consoleIncludesLogs(r)
+	includeLogs := consoleIncludesLogs(r) && canConsole
 	conn, err := h.consoleUpgrader().Upgrade(w, r, nil)
 	if err != nil {
 		return
@@ -96,6 +105,13 @@ func (h apiHandler) console(w http.ResponseWriter, r *http.Request) {
 			}
 			_ = conn.SetReadDeadline(time.Now().Add(consolePongWait))
 			if incoming.Type == "command" {
+				if !canConsole {
+					select {
+					case outgoing <- consoleMessage{Type: "error", Error: "You do not have permission to use the console"}:
+					default:
+					}
+					continue
+				}
 				if err := h.process.Command(serverID, incoming.Command); err != nil {
 					select {
 					case outgoing <- consoleMessage{Type: "error", Error: err.Error()}:

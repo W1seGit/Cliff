@@ -98,7 +98,7 @@ func TestOpenUpgradesOlderDatabases(t *testing.T) {
 			if err != nil {
 				t.Fatalf("the current version could not open an older database: %v", err)
 			}
-			defer db.Close()
+			t.Cleanup(func() { _ = db.Close() })
 			ctx := context.Background()
 
 			servers, err := db.ListServers(ctx)
@@ -152,7 +152,7 @@ func TestBackupToProducesAnOpenableCopy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	ctx := context.Background()
 	if _, err := db.CreateServer(ctx, Server{
 		Name: "Keep Me", Path: filepath.Join(dir, "s"), Type: "vanilla", MinecraftVersion: "1.21.1",
@@ -174,7 +174,7 @@ func TestBackupToProducesAnOpenableCopy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the backup must open: %v", err)
 	}
-	defer copyDB.Close()
+	t.Cleanup(func() { _ = copyDB.Close() })
 	servers, err := copyDB.ListServers(ctx)
 	if err != nil || len(servers) != 1 || servers[0].Name != "Keep Me" {
 		t.Fatalf("the backup must hold the data, got %#v (err=%v)", servers, err)

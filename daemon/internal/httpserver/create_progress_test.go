@@ -24,19 +24,25 @@ func TestCreateStepsMatchWhatEachKindDoes(t *testing.T) {
 		}
 		return strings.Join(out, ",")
 	}
-	cases := map[string]serverCreateInput{
-		"prepare,lookup,download,settings,save":       {Mode: "create", Type: "vanilla", MinecraftVersion: "1.21.1"},
-		"prepare,lookup,download,settings,save ":      {Mode: "", Type: "paper"},
-		"prepare,download,settings,java,install,save": {Mode: "create", Type: "neoforge"},
-		"prepare,lookup,download,settings,save  ":     {Mode: "create", Type: "fabric"},
-		"copy,save,properties":                        {Mode: "clone"},
-		"check,copy,detect,save":                      {Mode: "import-staged"},
-		"check,copy,detect,save ":                     {Mode: "import"},
+	cases := []struct {
+		name  string
+		input serverCreateInput
+		want  string
+	}{
+		{"vanilla create", serverCreateInput{Mode: "create", Type: "vanilla", MinecraftVersion: "1.21.1"}, "prepare,lookup,download,settings,save"},
+		{"default mode with paper", serverCreateInput{Mode: "", Type: "paper"}, "prepare,lookup,download,settings,save"},
+		{"neoforge create", serverCreateInput{Mode: "create", Type: "neoforge"}, "prepare,download,settings,java,install,save"},
+		{"fabric create", serverCreateInput{Mode: "create", Type: "fabric"}, "prepare,lookup,download,settings,save"},
+		{"clone", serverCreateInput{Mode: "clone"}, "copy,save,properties"},
+		{"staged import", serverCreateInput{Mode: "import-staged"}, "check,copy,detect,save"},
+		{"import", serverCreateInput{Mode: "import"}, "check,copy,detect,save"},
 	}
-	for want, input := range cases {
-		if got := ids(input); got != strings.TrimSpace(want) {
-			t.Errorf("%+v: steps %q, want %q", input, got, strings.TrimSpace(want))
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := ids(tc.input); got != tc.want {
+				t.Errorf("%+v: steps %q, want %q", tc.input, got, tc.want)
+			}
+		})
 	}
 	if label := createSteps(serverCreateInput{Type: "vanilla", MinecraftVersion: "1.21.1"})[1].Label; !strings.Contains(label, "1.21.1") {
 		t.Fatalf("the lookup step should name the Minecraft version, got %q", label)

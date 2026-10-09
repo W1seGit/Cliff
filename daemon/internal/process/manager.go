@@ -1,9 +1,6 @@
 package process
 
 import (
-	"bufio"
-	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -81,6 +77,8 @@ type Usage struct {
 	MemoryLimitBytes *int64         `json:"memoryLimitBytes"`
 	Samples          []UsageSample  `json:"samples"`
 	PlayerSamples    []PlayerSample `json:"playerSamples,omitempty"`
+	TickSamples      []TickSample   `json:"tickSamples,omitempty"`
+	Tick             *TickSample    `json:"tick,omitempty"`
 	LastSampleAt     string         `json:"lastSampleAt,omitempty"`
 }
 
@@ -98,11 +96,14 @@ type Manager struct {
 	usageHistory map[string]*serverUsageHistory
 	subscribers  map[chan Event]subscriber
 	dataDir      string
+
+	lifecycleHandler func(LifecycleEvent)
 }
 
 type serverUsageHistory struct {
 	usage        []UsageSample
 	players      []PlayerSample
+	ticks        []TickSample
 	lastSampleAt time.Time
 	memoryLimit  int64
 }
@@ -114,6 +115,7 @@ type subscriber struct {
 
 type managedProcess struct {
 	serverID         string
+	server           store.Server
 	cmd              *exec.Cmd
 	stdin            io.WriteCloser
 	lifecycle        Lifecycle
@@ -129,6 +131,9 @@ type managedProcess struct {
 	lastUsage        *Usage
 	playerCount      int
 	playerSamples    []PlayerSample
+	lastTick         *TickSample
+	outputReaders    []*os.File
+	probeUntil       time.Time
 	stopRequested    bool
 	readyAt          time.Time
 	ready            chan struct{}
@@ -252,24 +257,38 @@ func (m *Manager) Start(server store.Server) (Status, error) {
 	}
 	cmd.Dir = server.Path
 
-	stdout, err := cmd.StdoutPipe()
+	// Output goes through pipes made here rather than StdoutPipe/StderrPipe:
+	// cmd.Wait closes those, which can cut off the last lines a crashing
+	// server printed before the scanners have read them.
+	stdout, stdoutWriter, err := os.Pipe()
 	if err != nil {
 		m.mu.Unlock()
 		return Status{}, err
 	}
-	stderr, err := cmd.StderrPipe()
+	stderr, stderrWriter, err := os.Pipe()
 	if err != nil {
+		_ = stdout.Close()
+		_ = stdoutWriter.Close()
 		m.mu.Unlock()
 		return Status{}, err
+	}
+	cmd.Stdout = stdoutWriter
+	cmd.Stderr = stderrWriter
+	closeOutput := func() {
+		for _, file := range []*os.File{stdout, stdoutWriter, stderr, stderrWriter} {
+			_ = file.Close()
+		}
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		closeOutput()
 		m.mu.Unlock()
 		return Status{}, err
 	}
 
 	proc := &managedProcess{
 		serverID:         server.ID,
+		server:           server,
 		cmd:              cmd,
 		stdin:            stdin,
 		lifecycle:        LifecycleStarting,
@@ -291,6 +310,7 @@ func (m *Manager) Start(server store.Server) (Status, error) {
 	slog.Info("starting server", "server", server.ID, "name", server.Name, "type", server.Type,
 		"version", server.MinecraftVersion, "java", server.JavaPath, "dir", server.Path, "command", commandText)
 	if err := cmd.Start(); err != nil {
+		closeOutput()
 		m.mu.Lock()
 		delete(m.running, server.ID)
 		m.mu.Unlock()
@@ -298,14 +318,20 @@ func (m *Manager) Start(server store.Server) (Status, error) {
 		return Status{}, err
 	}
 
+	// The child has its own copies of the write ends now.
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	proc.outputReaders = []*os.File{stdout, stderr}
 	proc.outputDone.Add(2)
 	go m.scanOutput(proc, stdout)
 	go m.scanOutput(proc, stderr)
 	go m.wait(proc)
 	go m.sampleLoop(proc)
 	go m.readyWatchdog(proc)
+	go m.tickLoop(proc)
 
 	_ = args
+	m.emitLifecycle(LifecycleEvent{Type: EventStarted, Server: server})
 	status, err := m.waitForStartup(proc, startupGrace)
 	if err != nil {
 		return status, err
@@ -509,949 +535,4 @@ func (m *Manager) SubscribeFor(serverID string, includeLogs bool) (<-chan Event,
 		close(ch)
 		m.mu.Unlock()
 	}
-}
-
-func (m *Manager) scanOutput(proc *managedProcess, reader io.Reader) {
-	defer proc.outputDone.Done()
-	scanner := bufio.NewScanner(reader)
-	buffer := make([]byte, 0, 64*1024)
-	scanner.Buffer(buffer, 1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
-		m.pushLog(proc, line)
-		if strings.Contains(line, "Done (") {
-			m.markRunning(proc)
-		}
-		m.parseLogLine(proc, line)
-	}
-}
-
-func (m *Manager) sampleLoop(proc *managedProcess) {
-	ticker := time.NewTicker(sampleInterval)
-	defer ticker.Stop()
-	saveTicker := time.NewTicker(30 * time.Second)
-	defer saveTicker.Stop()
-	for {
-		select {
-		case <-proc.exited:
-			m.saveUsageHistory(proc.serverID)
-			return
-		case <-ticker.C:
-			pid := 0
-			if proc.cmd != nil && proc.cmd.Process != nil {
-				pid = proc.cmd.Process.Pid
-			}
-			m.collectUsage(proc, pid)
-		case <-saveTicker.C:
-			m.saveUsageHistory(proc.serverID)
-		}
-	}
-}
-
-// Patterns for parsing Minecraft server log lines.
-// Player join:  "[HH:MM:SS] [Server thread/INFO]: PlayerName joined the game"
-// Player leave: "[HH:MM:SS] [Server thread/INFO]: PlayerName left the game"
-// Note: "logged in with" and "lost connection" are NOT used because they
-// fire alongside "joined"/"left" for the same event, causing double counting.
-var (
-	playerJoinRe  = regexp.MustCompile(`([A-Za-z0-9_]{3,16}) joined the game`)
-	playerLeaveRe = regexp.MustCompile(`([A-Za-z0-9_]{3,16}) left the game`)
-)
-
-func (m *Manager) parseLogLine(proc *managedProcess, line string) {
-	// Player join detection
-	if playerJoinRe.MatchString(line) {
-		m.mu.Lock()
-		if m.running[proc.serverID] == proc {
-			proc.playerCount++
-		}
-		m.mu.Unlock()
-		return
-	}
-	// Player leave detection
-	if playerLeaveRe.MatchString(line) {
-		m.mu.Lock()
-		if m.running[proc.serverID] == proc && proc.playerCount > 0 {
-			proc.playerCount--
-		}
-		m.mu.Unlock()
-		return
-	}
-}
-
-func (m *Manager) wait(proc *managedProcess) {
-	err := proc.cmd.Wait()
-	waitForOutputScanners(proc, 2*time.Second)
-	message := "Server exited"
-	if err != nil {
-		message = "Server exited: " + err.Error()
-	}
-	m.pushLog(proc, message)
-	m.logExit(proc, err)
-
-	m.mu.Lock()
-	if m.running[proc.serverID] == proc {
-		m.rememberLocked(proc.serverID, proc.logs)
-		delete(m.running, proc.serverID)
-	}
-	m.mu.Unlock()
-	proc.exitOnce.Do(func() { close(proc.exited) })
-	m.publish(Event{Type: "status", ServerID: proc.serverID, Status: m.StatusLight()})
-}
-
-// logExit records how a server process ended. An exit the user asked for is
-// routine; one during startup or after the server was running is not, so the
-// last lines of its output are kept in the daemon log for diagnosis.
-func (m *Manager) logExit(proc *managedProcess, waitErr error) {
-	exitCode := -1
-	if proc.cmd.ProcessState != nil {
-		exitCode = proc.cmd.ProcessState.ExitCode()
-	}
-	m.mu.Lock()
-	stopRequested := proc.stopRequested
-	wasReady := !proc.readyAt.IsZero()
-	tail := lastLogLines(proc.logs, 15)
-	m.mu.Unlock()
-	uptime := time.Since(proc.startedAt).Round(time.Second).String()
-
-	switch {
-	case stopRequested:
-		slog.Info("server stopped", "server", proc.serverID, "exitCode", exitCode, "uptime", uptime)
-	case !wasReady:
-		slog.Error("server exited before it finished starting", "server", proc.serverID, "exitCode", exitCode, "uptime", uptime, "error", waitErr, "lastOutput", tail)
-	default:
-		slog.Error("server stopped unexpectedly", "server", proc.serverID, "exitCode", exitCode, "uptime", uptime, "error", waitErr, "lastOutput", tail)
-	}
-}
-
-// lastLogLines joins the last n non-empty lines with " | " so one log entry
-// tells the whole story.
-func lastLogLines(lines []string, n int) string {
-	picked := make([]string, 0, n)
-	for index := len(lines) - 1; index >= 0 && len(picked) < n; index-- {
-		if line := strings.TrimSpace(lines[index]); line != "" {
-			picked = append([]string{line}, picked...)
-		}
-	}
-	return strings.Join(picked, " | ")
-}
-
-func waitForOutputScanners(proc *managedProcess, timeout time.Duration) bool {
-	done := make(chan struct{})
-	go func() {
-		proc.outputDone.Wait()
-		close(done)
-	}()
-	if timeout <= 0 {
-		select {
-		case <-done:
-			return true
-		default:
-			return false
-		}
-	}
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case <-done:
-		return true
-	case <-timer.C:
-		return false
-	}
-}
-
-func (m *Manager) markRunning(proc *managedProcess) {
-	changed := false
-	m.mu.Lock()
-	if m.running[proc.serverID] == proc && proc.lifecycle == LifecycleStarting {
-		proc.lifecycle = LifecycleRunning
-		changed = true
-	}
-	m.mu.Unlock()
-	if changed {
-		proc.readyOnce.Do(func() { close(proc.ready) })
-		m.mu.Lock()
-		proc.readyAt = time.Now()
-		m.mu.Unlock()
-		slog.Info("server is ready", "server", proc.serverID, "startup", time.Since(proc.startedAt).Round(100*time.Millisecond).String())
-	}
-	m.publish(Event{Type: "status", ServerID: proc.serverID, Status: m.StatusLight()})
-}
-
-func (m *Manager) waitForStartup(proc *managedProcess, timeout time.Duration) (Status, error) {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	select {
-	case <-proc.ready:
-		return m.StatusLight(), nil
-	case <-proc.exited:
-		return m.StatusForLight(proc.serverID), errors.New("server exited during startup. Check the console for details.")
-	case <-timer.C:
-		// Still booting. Report "starting" and let the "Done (" line, an exit,
-		// or the ready watchdog decide what happens next.
-		return m.StatusForLight(proc.serverID), nil
-	}
-}
-
-// readyWatchdog gives up waiting for the ready message after readyTimeout so a
-// server that never prints "Done (" does not stay "starting" forever.
-func (m *Manager) readyWatchdog(proc *managedProcess) {
-	timer := time.NewTimer(readyTimeout)
-	defer timer.Stop()
-	select {
-	case <-proc.ready:
-	case <-proc.exited:
-	case <-timer.C:
-		m.pushLog(proc, fmt.Sprintf("Cliff: no ready message after %s, treating the server as running", readyTimeout.Round(time.Second)))
-		slog.Warn("server never printed its ready message; treating it as running", "server", proc.serverID, "after", readyTimeout.Round(time.Second).String())
-		m.markRunning(proc)
-	}
-}
-
-func (m *Manager) pushLog(proc *managedProcess, line string) {
-	line = normalizeLogLine(line)
-	if line == "" {
-		return
-	}
-
-	m.mu.Lock()
-	if m.running[proc.serverID] != proc {
-		m.mu.Unlock()
-		return
-	}
-	proc.logs = append(proc.logs, line)
-	if len(proc.logs) > maxRetainedLogLines {
-		proc.logs = proc.logs[len(proc.logs)-maxRetainedLogLines:]
-	}
-	m.mu.Unlock()
-	m.publish(Event{Type: "log", ServerID: proc.serverID, Line: line})
-}
-
-func normalizeLogLine(line string) string {
-	line = strings.TrimRight(line, "\r\n")
-	if len(line) <= maxRetainedLogLineBytes {
-		return line
-	}
-	limit := maxRetainedLogLineBytes - len(truncatedLogSuffix)
-	if limit < 0 {
-		limit = 0
-	}
-	return line[:limit] + truncatedLogSuffix
-}
-
-func (m *Manager) rememberLocked(serverID string, logs []string) {
-	copyLogs := append([]string(nil), logs...)
-	if len(copyLogs) > maxRetainedLogLines {
-		copyLogs = copyLogs[len(copyLogs)-maxRetainedLogLines:]
-	}
-	m.history[serverID] = copyLogs
-}
-
-func (m *Manager) statusLocked(includeUsage bool) Status {
-	if len(m.running) == 0 {
-		return Status{Lifecycle: LifecycleStopped}
-	}
-	var proc *managedProcess
-	for _, candidate := range m.running {
-		if proc == nil || candidate.startedAt.After(proc.startedAt) {
-			proc = candidate
-		}
-	}
-	status := statusForProcess(proc, includeUsage)
-	status.Servers = m.statusesLocked(includeUsage)
-	return status
-}
-
-func (m *Manager) statusesLocked(includeUsage bool) map[string]Status {
-	statuses := make(map[string]Status, len(m.running))
-	for serverID, proc := range m.running {
-		statuses[serverID] = statusForProcess(proc, includeUsage)
-	}
-	return statuses
-}
-
-func (m *Manager) statusForLocked(serverID string, includeUsage bool) Status {
-	return statusForProcess(m.running[serverID], includeUsage)
-}
-
-func statusForProcess(proc *managedProcess, includeUsage bool) Status {
-	if proc == nil {
-		return Status{Lifecycle: LifecycleStopped}
-	}
-	pid := 0
-	if proc.cmd.Process != nil {
-		pid = proc.cmd.Process.Pid
-	}
-	status := Status{
-		RunningServerID: proc.serverID,
-		Lifecycle:       proc.lifecycle,
-		PID:             pid,
-		StartedAt:       proc.startedAt.Format(time.RFC3339),
-		UptimeSeconds:   int64(time.Since(proc.startedAt).Seconds()),
-		Command:         proc.command,
-		LaunchTarget:    proc.launchTarget,
-	}
-	if includeUsage {
-		status.Usage = usageFromLast(proc)
-	}
-	return status
-}
-
-func statusForServer(status Status, serverID string) Status {
-	if status.Servers != nil {
-		if serverStatus, ok := status.Servers[serverID]; ok {
-			return serverStatus
-		}
-	}
-	if status.RunningServerID == serverID {
-		return status
-	}
-	return Status{Lifecycle: LifecycleStopped}
-}
-
-func (m *Manager) collectUsage(proc *managedProcess, pid int) *Usage {
-	if pid == 0 {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		return usageFromLast(proc)
-	}
-	now := time.Now().UTC()
-	m.mu.Lock()
-	if proc.lastUsage != nil && now.Sub(proc.lastUsageReadAt) < 5*time.Second {
-		defer m.mu.Unlock()
-		return usageFromLast(proc)
-	}
-	m.mu.Unlock()
-
-	raw := readProcessUsage(pid)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.running[proc.serverID] != proc {
-		return usageFromLast(proc)
-	}
-	if proc.lastUsage != nil && now.Sub(proc.lastUsageReadAt) < 5*time.Second {
-		return usageFromLast(proc)
-	}
-	var cpuPercent *float64
-	if raw.cpuPercent != nil {
-		value := clampPercent(*raw.cpuPercent)
-		cpuPercent = &value
-	} else if raw.cpuSeconds != nil {
-		if proc.lastCPUSeconds != nil && !proc.lastSampleAt.IsZero() && now.After(proc.lastSampleAt) {
-			elapsed := now.Sub(proc.lastSampleAt).Seconds()
-			delta := *raw.cpuSeconds - *proc.lastCPUSeconds
-			if elapsed > 0 && delta >= 0 {
-				value := clampPercent((delta / elapsed / float64(runtime.NumCPU())) * 100)
-				cpuPercent = &value
-			}
-		}
-		value := *raw.cpuSeconds
-		proc.lastCPUSeconds = &value
-		proc.lastSampleAt = now
-	}
-	sample := UsageSample{
-		At:          now.Format(time.RFC3339),
-		CPUPercent:  cpuPercent,
-		MemoryBytes: raw.memoryBytes,
-	}
-	rememberUsageSample(proc, sample)
-	playerSample := PlayerSample{At: now.Format(time.RFC3339), Count: proc.playerCount}
-	rememberPlayerSample(proc, playerSample)
-	// Also store in Manager-level history (persists after server stops)
-	m.rememberHistorySample(proc.serverID, sample, playerSample, now, proc.memoryLimitBytes)
-	proc.lastUsageReadAt = now
-	proc.lastUsage = &Usage{
-		CPUPercent:       cpuPercent,
-		MemoryBytes:      raw.memoryBytes,
-		MemoryLimitBytes: &proc.memoryLimitBytes,
-		Samples:          append([]UsageSample(nil), proc.usageSamples...),
-		PlayerSamples:    append([]PlayerSample(nil), proc.playerSamples...),
-		LastSampleAt:     now.Format(time.RFC3339),
-	}
-	return usageFromLast(proc)
-}
-
-func rememberUsageSample(proc *managedProcess, sample UsageSample) {
-	proc.usageSamples = append(proc.usageSamples, sample)
-	if len(proc.usageSamples) > maxUsageSamples {
-		proc.usageSamples = proc.usageSamples[len(proc.usageSamples)-maxUsageSamples:]
-	}
-}
-
-func rememberPlayerSample(proc *managedProcess, sample PlayerSample) {
-	proc.playerSamples = append(proc.playerSamples, sample)
-	if len(proc.playerSamples) > maxPlayerSamples {
-		proc.playerSamples = proc.playerSamples[len(proc.playerSamples)-maxPlayerSamples:]
-	}
-}
-
-func (m *Manager) rememberHistorySample(serverID string, usage UsageSample, player PlayerSample, now time.Time, memLimit int64) {
-	h, ok := m.usageHistory[serverID]
-	if !ok {
-		h = &serverUsageHistory{}
-		m.usageHistory[serverID] = h
-	}
-	h.usage = append(h.usage, usage)
-	if len(h.usage) > maxHistorySamples {
-		h.usage = h.usage[len(h.usage)-maxHistorySamples:]
-	}
-	h.players = append(h.players, player)
-	if len(h.players) > maxHistoryPlayerSamples {
-		h.players = h.players[len(h.players)-maxHistoryPlayerSamples:]
-	}
-	h.lastSampleAt = now
-	h.memoryLimit = memLimit
-}
-
-// usageHistoryPath returns the file path for a server's persisted usage history.
-func (m *Manager) usageHistoryPath(serverID string) string {
-	dir := filepath.Join(m.dataDir, "usage-history")
-	_ = os.MkdirAll(dir, 0o755)
-	return filepath.Join(dir, serverID+".json")
-}
-
-type persistedUsageHistory struct {
-	Usage        []UsageSample  `json:"usage"`
-	Players      []PlayerSample `json:"players"`
-	LastSampleAt string         `json:"lastSampleAt"`
-	MemoryLimit  int64          `json:"memoryLimit"`
-}
-
-// saveUsageHistory writes a server's usage history to disk.
-func (m *Manager) saveUsageHistory(serverID string) {
-	h, ok := m.usageHistory[serverID]
-	if !ok || (len(h.usage) == 0 && len(h.players) == 0) {
-		return
-	}
-	path := m.usageHistoryPath(serverID)
-	data := persistedUsageHistory{
-		Usage:        h.usage,
-		Players:      h.players,
-		LastSampleAt: h.lastSampleAt.Format(time.RFC3339),
-		MemoryLimit:  h.memoryLimit,
-	}
-	b, err := json.Marshal(data)
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(path, b, 0o644)
-}
-
-// loadUsageHistory loads a server's usage history from disk.
-func (m *Manager) loadUsageHistory(serverID string) {
-	path := m.usageHistoryPath(serverID)
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return
-	}
-	var data persistedUsageHistory
-	if err := json.Unmarshal(b, &data); err != nil {
-		return
-	}
-	lastSampleAt, _ := time.Parse(time.RFC3339, data.LastSampleAt)
-	m.usageHistory[serverID] = &serverUsageHistory{
-		usage:        data.Usage,
-		players:      data.Players,
-		lastSampleAt: lastSampleAt,
-		memoryLimit:  data.MemoryLimit,
-	}
-}
-
-// loadAllUsageHistory loads all persisted usage history files from disk.
-func (m *Manager) loadAllUsageHistory() {
-	dir := filepath.Join(m.dataDir, "usage-history")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
-			continue
-		}
-		serverID := strings.TrimSuffix(entry.Name(), ".json")
-		m.loadUsageHistory(serverID)
-	}
-}
-
-// UsageForWindow returns usage and player samples within the given time window,
-// downsampled if necessary to keep payload size reasonable.
-// Works even when the server is stopped, using persisted history.
-func (m *Manager) UsageForWindow(serverID string, window time.Duration) *Usage {
-	m.mu.Lock()
-	h, ok := m.usageHistory[serverID]
-	proc := m.running[serverID]
-	var memLimit int64
-	if proc != nil {
-		memLimit = proc.memoryLimitBytes
-	} else if ok && h.memoryLimit > 0 {
-		memLimit = h.memoryLimit
-	}
-	if !ok && proc == nil {
-		m.mu.Unlock()
-		return &Usage{
-			Samples:       []UsageSample{},
-			PlayerSamples: []PlayerSample{},
-		}
-	}
-	if !ok {
-		m.mu.Unlock()
-		return &Usage{
-			MemoryLimitBytes: &memLimit,
-			Samples:          []UsageSample{},
-			PlayerSamples:    []PlayerSample{},
-		}
-	}
-	cutoff := time.Now().UTC().Add(-window - 30*time.Second)
-	// Filter usage history
-	var usageFiltered []UsageSample
-	for _, s := range h.usage {
-		if t, err := time.Parse(time.RFC3339, s.At); err == nil && t.After(cutoff) {
-			usageFiltered = append(usageFiltered, s)
-		}
-	}
-	// Filter player history
-	var playerFiltered []PlayerSample
-	for _, s := range h.players {
-		if t, err := time.Parse(time.RFC3339, s.At); err == nil && t.After(cutoff) {
-			playerFiltered = append(playerFiltered, s)
-		}
-	}
-	lastSampleAt := h.lastSampleAt
-	m.mu.Unlock()
-
-	// Downsample if too many samples
-	maxSamples := 300
-	if len(usageFiltered) > maxSamples {
-		usageFiltered = downsampleUsage(usageFiltered, maxSamples)
-	}
-	if len(playerFiltered) > maxSamples {
-		playerFiltered = downsamplePlayers(playerFiltered, maxSamples)
-	}
-
-	return &Usage{
-		MemoryLimitBytes: &memLimit,
-		Samples:          usageFiltered,
-		PlayerSamples:    playerFiltered,
-		LastSampleAt:     lastSampleAt.Format(time.RFC3339),
-	}
-}
-
-func downsampleUsage(samples []UsageSample, target int) []UsageSample {
-	if len(samples) <= target || target <= 0 {
-		return samples
-	}
-	step := len(samples) / target
-	result := make([]UsageSample, 0, target)
-	for i := 0; i < len(samples); i += step {
-		// Average over the bucket
-		var cpuSum, memSum float64
-		var cpuCount, memCount int
-		end := i + step
-		if end > len(samples) {
-			end = len(samples)
-		}
-		for j := i; j < end; j++ {
-			if samples[j].CPUPercent != nil {
-				cpuSum += *samples[j].CPUPercent
-				cpuCount++
-			}
-			if samples[j].MemoryBytes != nil {
-				memSum += float64(*samples[j].MemoryBytes)
-				memCount++
-			}
-		}
-		s := UsageSample{At: samples[i].At}
-		if cpuCount > 0 {
-			v := cpuSum / float64(cpuCount)
-			s.CPUPercent = &v
-		}
-		if memCount > 0 {
-			v := int64(memSum / float64(memCount))
-			s.MemoryBytes = &v
-		}
-		result = append(result, s)
-	}
-	return result
-}
-
-func downsamplePlayers(samples []PlayerSample, target int) []PlayerSample {
-	if len(samples) <= target || target <= 0 {
-		return samples
-	}
-	step := len(samples) / target
-	result := make([]PlayerSample, 0, target)
-	for i := 0; i < len(samples); i += step {
-		// Take max player count in bucket
-		maxCount := 0
-		end := i + step
-		if end > len(samples) {
-			end = len(samples)
-		}
-		for j := i; j < end; j++ {
-			if samples[j].Count > maxCount {
-				maxCount = samples[j].Count
-			}
-		}
-		result = append(result, PlayerSample{At: samples[i].At, Count: maxCount})
-	}
-	return result
-}
-
-func usageFromLast(proc *managedProcess) *Usage {
-	if proc.lastUsage != nil {
-		copyUsage := *proc.lastUsage
-		copyUsage.Samples = append([]UsageSample(nil), proc.lastUsage.Samples...)
-		copyUsage.PlayerSamples = append([]PlayerSample(nil), proc.lastUsage.PlayerSamples...)
-		return &copyUsage
-	}
-	return &Usage{
-		MemoryLimitBytes: &proc.memoryLimitBytes,
-		Samples:          append([]UsageSample(nil), proc.usageSamples...),
-		PlayerSamples:    append([]PlayerSample(nil), proc.playerSamples...),
-	}
-}
-
-type rawUsage struct {
-	cpuSeconds  *float64
-	cpuPercent  *float64
-	memoryBytes *int64
-}
-
-type processUsageRow struct {
-	pid        int
-	parentPID  int
-	rssKB      int64
-	cpuPercent float64
-}
-
-func readProcessUsage(pid int) rawUsage {
-	if runtime.GOOS == "windows" {
-		return readWindowsProcessUsage(pid)
-	}
-	return readUnixProcessUsage(pid)
-}
-
-func readWindowsProcessUsage(pid int) rawUsage {
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
-	script := fmt.Sprintf(`
-$root = %d
-$children = @{}
-Get-CimInstance Win32_Process | ForEach-Object {
-  if (-not $children.ContainsKey([int]$_.ParentProcessId)) { $children[[int]$_.ParentProcessId] = New-Object System.Collections.Generic.List[int] }
-  $children[[int]$_.ParentProcessId].Add([int]$_.ProcessId)
-}
-$ids = New-Object System.Collections.Generic.HashSet[int]
-$queue = New-Object System.Collections.Generic.Queue[int]
-[void]$ids.Add($root)
-$queue.Enqueue($root)
-while ($queue.Count -gt 0) {
-  $parent = $queue.Dequeue()
-  if ($children.ContainsKey($parent)) {
-    foreach ($child in $children[$parent]) {
-      if ($ids.Add($child)) { $queue.Enqueue($child) }
-    }
-  }
-}
-$cpu = 0.0
-$mem = 0
-foreach ($id in $ids) {
-  try {
-    $p = Get-Process -Id $id -ErrorAction Stop
-    if ($null -ne $p.CPU) { $cpu += [double]$p.CPU }
-    if ($null -ne $p.WorkingSet64) { $mem += [int64]$p.WorkingSet64 }
-  } catch {}
-}
-[Console]::WriteLine((@{ CPU = $cpu; WorkingSet64 = $mem; ProcessCount = $ids.Count } | ConvertTo-Json -Compress))
-`, pid)
-	probe := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-Command", script)
-	winproc.Hide(probe)
-	output, err := probe.Output()
-	if err != nil {
-		return rawUsage{}
-	}
-	return parseWindowsUsageJSON(output)
-}
-
-func readUnixProcessUsage(pid int) rawUsage {
-	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, "ps", "-o", "pid=,ppid=,rss=,%cpu=", "-ax").Output()
-	if err != nil {
-		return rawUsage{}
-	}
-	return collectUsageFromRows(pid, parseUnixProcessTable(output))
-}
-
-func parseWindowsUsageJSON(output []byte) rawUsage {
-	var parsed struct {
-		CPU          *float64 `json:"CPU"`
-		WorkingSet64 *int64   `json:"WorkingSet64"`
-		ProcessCount int      `json:"ProcessCount"`
-	}
-	if err := json.Unmarshal(output, &parsed); err != nil {
-		return rawUsage{}
-	}
-	return rawUsage{cpuSeconds: parsed.CPU, memoryBytes: parsed.WorkingSet64}
-}
-
-func parseUnixProcessTable(output []byte) []processUsageRow {
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	rows := make([]processUsageRow, 0, len(lines))
-	for _, line := range lines {
-		parts := strings.Fields(line)
-		if len(parts) < 4 {
-			continue
-		}
-		pid, err := strconv.Atoi(parts[0])
-		if err != nil {
-			continue
-		}
-		parentPID, _ := strconv.Atoi(parts[1])
-		rssKB, _ := strconv.ParseInt(parts[2], 10, 64)
-		cpuPercent, _ := strconv.ParseFloat(parts[3], 64)
-		rows = append(rows, processUsageRow{pid: pid, parentPID: parentPID, rssKB: rssKB, cpuPercent: cpuPercent})
-	}
-	return rows
-}
-
-func collectUsageFromRows(rootPID int, rows []processUsageRow) rawUsage {
-	ids := map[int]struct{}{rootPID: {}}
-	changed := true
-	for changed {
-		changed = false
-		for _, row := range rows {
-			if _, parentKnown := ids[row.parentPID]; parentKnown {
-				if _, known := ids[row.pid]; !known {
-					ids[row.pid] = struct{}{}
-					changed = true
-				}
-			}
-		}
-	}
-
-	var cpu float64
-	var memory int64
-	for _, row := range rows {
-		if _, ok := ids[row.pid]; !ok {
-			continue
-		}
-		cpu += row.cpuPercent
-		memory += row.rssKB * 1024
-	}
-	return rawUsage{cpuPercent: &cpu, memoryBytes: &memory}
-}
-
-func clampPercent(value float64) float64 {
-	if value < 0 {
-		return 0
-	}
-	if value > 100 {
-		return 100
-	}
-	return value
-}
-
-func (m *Manager) publish(event Event) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for ch, subscription := range m.subscribers {
-		if subscription.serverID != "" && event.ServerID != "" && event.ServerID != subscription.serverID {
-			continue
-		}
-		if event.Type == "log" && !subscription.includeLogs {
-			continue
-		}
-		select {
-		case ch <- event:
-		default:
-		}
-	}
-}
-
-func launchCommand(server store.Server) (*exec.Cmd, []string, string, error) {
-	if server.LaunchJar == "" {
-		return nil, nil, "", errors.New("no launch target configured")
-	}
-	launchPath := filepath.Join(server.Path, server.LaunchJar)
-	if _, err := os.Stat(launchPath); err != nil {
-		return nil, nil, "", fmt.Errorf("launch target not found: %w", err)
-	}
-
-	lower := strings.ToLower(server.LaunchJar)
-	if isInstallerLaunchJar(lower) {
-		if replacement := detectBetterLaunchTarget(server.Path); replacement != "" {
-			return nil, nil, "", fmt.Errorf("launch target %s is an installer jar, not a server launcher. Set the launch target to %s instead", server.LaunchJar, replacement)
-		}
-		return nil, nil, "", fmt.Errorf("launch target %s is an installer jar, not a server launcher. Run the installer first or choose the generated server launch target", server.LaunchJar)
-	}
-	var command string
-	var args []string
-	javaPath := strings.TrimSpace(server.JavaPath)
-	isScript := (runtime.GOOS == "windows" && strings.HasSuffix(lower, ".bat")) || strings.HasSuffix(lower, ".sh")
-	switch {
-	case isScript:
-		// Prefer running the script's own java line directly (managed Java, our
-		// memory settings, no trailing pause). Fall back to running the script.
-		if direct, directArgs, ok := directScriptCommand(launchPath, javaPath, server.MinMemoryMB, server.MaxMemoryMB, splitArgs(server.ExtraArgs)); ok {
-			command, args = direct, directArgs
-		} else if strings.HasSuffix(lower, ".bat") {
-			command = "cmd.exe"
-			args = []string{"/c", launchPath}
-		} else {
-			command = "sh"
-			args = []string{launchPath}
-		}
-	default:
-		command = strings.TrimSpace(server.JavaPath)
-		if command == "" || command == "auto" || strings.HasPrefix(command, "managed:") {
-			command = "java"
-		}
-		args = []string{
-			fmt.Sprintf("-Xms%dM", server.MinMemoryMB),
-			fmt.Sprintf("-Xmx%dM", server.MaxMemoryMB),
-			"-jar",
-			server.LaunchJar,
-		}
-		extraArgs := splitArgs(server.ExtraArgs)
-		args = append(args, extraArgs...)
-		if !hasNoGUIArg(extraArgs) {
-			args = append(args, "nogui")
-		}
-	}
-
-	cmd := exec.Command(command, args...)
-	winproc.Hide(cmd)
-	if isScript {
-		// Scripts (and the java they call) must see the managed Java first.
-		cmd.Env = javaEnvironment(javaPath)
-	}
-	return cmd, args, strings.Join(append([]string{command}, args...), " "), nil
-}
-
-func hasNoGUIArg(args []string) bool {
-	for _, arg := range args {
-		normalized := strings.TrimLeft(strings.ToLower(strings.TrimSpace(arg)), "-")
-		if normalized == "nogui" {
-			return true
-		}
-	}
-	return false
-}
-
-// isInstallerLaunchJar reports whether the launch jar is a mod-loader
-// installer rather than a Minecraft server jar. Installer jars don't
-// accept the nogui flag.
-func isInstallerLaunchJar(lower string) bool {
-	return strings.Contains(lower, "installer")
-}
-
-// SuggestLaunchTarget returns a usable replacement when a persisted profile
-// still points at a loader installer jar.
-func SuggestLaunchTarget(serverPath string, launchTarget string) string {
-	if !isInstallerLaunchJar(strings.ToLower(launchTarget)) {
-		return ""
-	}
-	return detectBetterLaunchTarget(serverPath)
-}
-
-func detectBetterLaunchTarget(serverPath string) string {
-	if target := detectPlatformLaunchScript(serverPath, runtime.GOOS); target != "" {
-		return target
-	}
-	entries, err := os.ReadDir(serverPath)
-	if err != nil {
-		return ""
-	}
-	jars := []string{}
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(strings.ToLower(entry.Name()), ".jar") {
-			jars = append(jars, entry.Name())
-		}
-	}
-	for _, jar := range jars {
-		if strings.EqualFold(jar, "fabric-server-launch.jar") {
-			return jar
-		}
-	}
-	for _, jar := range jars {
-		lower := strings.ToLower(jar)
-		if !isInstallerLaunchJar(lower) && strings.Contains(lower, "server") {
-			return jar
-		}
-	}
-	for _, jar := range jars {
-		if !isInstallerLaunchJar(strings.ToLower(jar)) {
-			return jar
-		}
-	}
-	return ""
-}
-
-func detectPlatformLaunchScript(serverPath string, goos string) string {
-	names := []string{"run.sh", "start.sh", "start.command", "server.sh"}
-	if goos == "windows" {
-		names = []string{"run.bat", "start.bat", "server.bat"}
-	}
-	for _, name := range names {
-		info, err := os.Stat(filepath.Join(serverPath, name))
-		if err == nil && !info.IsDir() {
-			return name
-		}
-	}
-	return ""
-}
-
-func fileExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
-}
-
-func splitArgs(input string) []string {
-	args := []string{}
-	current := strings.Builder{}
-	quote := rune(0)
-	escaping := false
-
-	for _, char := range input {
-		if escaping {
-			current.WriteRune(char)
-			escaping = false
-			continue
-		}
-		if char == '\\' {
-			escaping = true
-			continue
-		}
-		if quote != 0 {
-			if char == quote {
-				quote = 0
-			} else {
-				current.WriteRune(char)
-			}
-			continue
-		}
-		if char == '\'' || char == '"' {
-			quote = char
-			continue
-		}
-		if char == ' ' || char == '\t' || char == '\n' || char == '\r' {
-			if current.Len() > 0 {
-				args = append(args, current.String())
-				current.Reset()
-			}
-			continue
-		}
-		current.WriteRune(char)
-	}
-
-	if escaping {
-		current.WriteRune('\\')
-	}
-	if current.Len() > 0 {
-		args = append(args, current.String())
-	}
-	return args
 }

@@ -47,7 +47,7 @@ func javaEnvironment(javaPath string) []string {
 //
 // It returns ok=false for scripts it cannot safely interpret (no java line, or
 // shell variables it does not understand); callers then run the script as-is.
-func directScriptCommand(scriptPath string, javaPath string, minMemoryMB int, maxMemoryMB int, extraArgs []string) (string, []string, bool) {
+func directScriptCommand(scriptPath string, javaPath string, minMemoryMB int, maxMemoryMB int, jvmFlags []string, extraArgs []string) (string, []string, bool) {
 	info, err := os.Stat(scriptPath)
 	if err != nil || info.IsDir() || info.Size() > maxLaunchScriptBytes {
 		return "", nil, false
@@ -87,6 +87,7 @@ func directScriptCommand(scriptPath string, javaPath string, minMemoryMB int, ma
 		if !hasArgPrefix(args, "-Xmx") && maxMemoryMB > 0 {
 			jvm = append(jvm, fmt.Sprintf("-Xmx%dM", maxMemoryMB))
 		}
+		jvm = append(jvm, jvmFlags...)
 		full := append(jvm, args...)
 		full = append(full, extraArgs...)
 		if !hasNoGUIArg(full) {

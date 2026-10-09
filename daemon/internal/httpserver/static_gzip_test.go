@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,12 +13,8 @@ import (
 func TestStaticFilesAreGzippedWhenAccepted(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Repeat("body { color: red; }\n", 500)
-	if err := os.WriteFile(filepath.Join(dir, "app.css"), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("png-bytes"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(dir, "app.css"), body)
+	touch(t, filepath.Join(dir, "logo.png"), "png-bytes")
 	handler := spaFileServer(dir)
 
 	req := httptest.NewRequest(http.MethodGet, "/app.css", nil)

@@ -9,33 +9,24 @@ import (
 
 func TestScheduledSnapshotDue(t *testing.T) {
 	now := time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
-	base := store.Server{ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 60}
+	ago := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
 
-	if !scheduledSnapshotDue(base, now) {
-		t.Fatal("expected server with no previous scheduled snapshot to be due")
+	tests := []struct {
+		name   string
+		server store.Server
+		want   bool
+	}{
+		{"no previous snapshot", store.Server{ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 60}, true},
+		{"recent snapshot", store.Server{ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 60, LastScheduledSnapshotAt: ago(30 * time.Minute)}, false},
+		{"old snapshot", store.Server{ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 60, LastScheduledSnapshotAt: ago(61 * time.Minute)}, true},
+		{"scheduler disabled", store.Server{ScheduledSnapshotsEnabled: false, SnapshotIntervalMinutes: 60}, false},
+		{"zero interval", store.Server{ScheduledSnapshotsEnabled: true, SnapshotIntervalMinutes: 0}, false},
 	}
-
-	recent := base
-	recent.LastScheduledSnapshotAt = now.Add(-30 * time.Minute).Format(time.RFC3339)
-	if scheduledSnapshotDue(recent, now) {
-		t.Fatal("expected recent scheduled snapshot to not be due")
-	}
-
-	old := base
-	old.LastScheduledSnapshotAt = now.Add(-61 * time.Minute).Format(time.RFC3339)
-	if !scheduledSnapshotDue(old, now) {
-		t.Fatal("expected old scheduled snapshot to be due")
-	}
-
-	disabled := base
-	disabled.ScheduledSnapshotsEnabled = false
-	if scheduledSnapshotDue(disabled, now) {
-		t.Fatal("expected disabled scheduler to not be due")
-	}
-
-	noInterval := base
-	noInterval.SnapshotIntervalMinutes = 0
-	if scheduledSnapshotDue(noInterval, now) {
-		t.Fatal("expected zero interval to not be due")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := scheduledSnapshotDue(tc.server, now); got != tc.want {
+				t.Fatalf("scheduledSnapshotDue = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

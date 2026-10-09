@@ -62,12 +62,8 @@ func TestDirectorySizeCachePrunesExpiredEntriesAndStaysBounded(t *testing.T) {
 func TestDirectorySizeDoesNotFollowSymlinkedDirectories(t *testing.T) {
 	root := t.TempDir()
 	outside := t.TempDir()
-	if err := os.WriteFile(filepath.Join(outside, "large.bin"), []byte(strings.Repeat("x", 1024*1024)), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "local.txt"), []byte("local"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(outside, "large.bin"), strings.Repeat("x", 1024*1024))
+	touch(t, filepath.Join(root, "local.txt"), "local")
 	linkPath := filepath.Join(root, "outside-link")
 	if err := os.Symlink(outside, linkPath); err != nil {
 		t.Skipf("symlink creation is not available: %v", err)
@@ -142,33 +138,15 @@ func TestSmartBackupCreateDiffDownloadRestoreAndGC(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	dataDir := filepath.Join(t.TempDir(), "data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdir(t, dataDir)
 	serverDir := filepath.Join(root, "servers", "demo")
-	if err := os.MkdirAll(filepath.Join(serverDir, "mods"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(serverDir, "world", "region"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(serverDir, "server.properties"), []byte("motd=old\nserver-port=25565\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(serverDir, "world", "region", "r.0.0.mca"), []byte("region-a"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeTestZip(filepath.Join(serverDir, "mods", "example.jar"), map[string]string{
+	touch(t, filepath.Join(serverDir, "server.properties"), "motd=old\nserver-port=25565\n")
+	touch(t, filepath.Join(serverDir, "world", "region", "r.0.0.mca"), "region-a")
+	writeZip(t, filepath.Join(serverDir, "mods", "example.jar"), map[string]string{
 		"fabric.mod.json": `{"id":"example","name":"Example Mod","version":"1.0.0"}`,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
-	db, err := store.Open(filepath.Join(dataDir, "test.sqlite"), root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := openTestStoreAt(t, dataDir, root)
 	server, err := db.CreateServer(ctx, store.Server{
 		ID:               "srv_test",
 		Name:             "Demo",
@@ -194,14 +172,10 @@ func TestSmartBackupCreateDiffDownloadRestoreAndGC(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(serverDir, "server.properties"), []byte("motd=new\nserver-port=25565\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeTestZip(filepath.Join(serverDir, "mods", "example.jar"), map[string]string{
+	touch(t, filepath.Join(serverDir, "server.properties"), "motd=new\nserver-port=25565\n")
+	writeZip(t, filepath.Join(serverDir, "mods", "example.jar"), map[string]string{
 		"fabric.mod.json": `{"id":"example","name":"Example Mod","version":"2.0.0"}`,
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 	secondID, err := handler.createBackup(ctx, server, "changed")
 	if err != nil {
 		t.Fatal(err)
@@ -281,9 +255,7 @@ func TestSmartBackupCreateDiffDownloadRestoreAndGC(t *testing.T) {
 		t.Fatal("download zip did not include server.properties")
 	}
 
-	if err := os.WriteFile(filepath.Join(serverDir, "server.properties"), []byte("motd=broken\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, filepath.Join(serverDir, "server.properties"), "motd=broken\n")
 	restoreRequest := httptest.NewRequest(http.MethodPost, "/api/servers/srv_test/backups", nil)
 	if err := handler.restoreBackup(restoreRequest, server, secondID); err != nil {
 		t.Fatal(err)
@@ -301,27 +273,4 @@ func TestSmartBackupCreateDiffDownloadRestoreAndGC(t *testing.T) {
 	if err := handler.collectSmartBackupGarbage(ctx, server.ID); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func writeTestZip(path string, files map[string]string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	output, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer output.Close()
-	writer := zip.NewWriter(output)
-	defer writer.Close()
-	for name, content := range files {
-		entry, err := writer.Create(name)
-		if err != nil {
-			return err
-		}
-		if _, err := entry.Write([]byte(content)); err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -69,21 +69,3 @@ func TestHasExistingData(t *testing.T) {
 		t.Fatal("a folder with dashboard.sqlite holds Cliff data")
 	}
 }
-
-func TestCountServerFolders(t *testing.T) {
-	dir := t.TempDir()
-	for _, name := range []string{"alpha", "beta"} {
-		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(dir, "stray.txt"), []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := countServerFolders(dir); got != 2 {
-		t.Fatalf("only folders count as servers, got %d", got)
-	}
-	if got := countServerFolders(filepath.Join(dir, "missing")); got != 0 {
-		t.Fatalf("a missing folder has no servers, got %d", got)
-	}
-}

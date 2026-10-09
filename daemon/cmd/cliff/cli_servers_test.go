@@ -1,50 +1,11 @@
 package main
 
 import (
-	"encoding/json"
-	"net"
-	"net/http"
-	"net/http/httptest"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/W1seGit/Cliff/daemon/internal/updater"
 )
-
-// fakeDaemon answers the local-only endpoints the update relies on.
-func fakeDaemon(t *testing.T, running []serverRef, results string) (port int, dataDir string, seen *[]string) {
-	t.Helper()
-	dataDir = t.TempDir()
-	if err := writeShutdownToken(dataDir, "tok"); err != nil {
-		t.Fatal(err)
-	}
-	calls := []string{}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("X-Cliff-Token") != "tok" {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
-		calls = append(calls, r.Method+" "+r.URL.Path)
-		switch r.URL.Path {
-		case "/api/internal/running-servers":
-			_ = json.NewEncoder(w).Encode(map[string]any{"servers": running})
-		case "/api/internal/resume-servers":
-			var body struct {
-				ServerIDs []string `json:"serverIds"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			calls = append(calls, "ids="+strings.Join(body.ServerIDs, ","))
-			_, _ = w.Write([]byte(results))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	t.Cleanup(server.Close)
-	_, portText, _ := net.SplitHostPort(strings.TrimPrefix(server.URL, "http://"))
-	port, _ = strconv.Atoi(portText)
-	return port, dataDir, &calls
-}
 
 func TestFetchRunningServersAsksTheDaemon(t *testing.T) {
 	port, dataDir, _ := fakeDaemon(t, []serverRef{{ID: "srv_1", Name: "Survival World", Lifecycle: "running"}}, "")

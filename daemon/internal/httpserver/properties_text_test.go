@@ -76,9 +76,7 @@ func TestWriteServerPropertiesTextKeepsCommentsAndOrder(t *testing.T) {
 
 func TestReadPropertiesRawTrimsKeysAndLeadingValueSpace(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "server.properties")
-	if err := os.WriteFile(path, []byte("max-players = 30\nmotd=  spaced  \n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	touch(t, path, "max-players = 30\nmotd=  spaced  \n")
 	raw := readPropertiesRaw(path)
 	if raw["max-players"] != "30" {
 		t.Fatalf("max-players = %q, want 30", raw["max-players"])

@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 )
 
 const neoForgeRunBat = "@echo off\r\n" +
@@ -35,7 +34,7 @@ func TestDirectScriptCommandParsesNeoForgeRunBat(t *testing.T) {
 		javaPath = filepath.Join(t.TempDir(), "jdk", "bin", "java")
 	}
 
-	command, args, ok := directScriptCommand(script, javaPath, 2048, 4096, nil)
+	command, args, ok := directScriptCommand(script, javaPath, 2048, 4096, nil, nil)
 	if !ok {
 		t.Fatal("expected the NeoForge script to be parsed")
 	}
@@ -54,7 +53,7 @@ func TestDirectScriptCommandParsesNeoForgeRunBat(t *testing.T) {
 
 func TestDirectScriptCommandParsesUnixRunSh(t *testing.T) {
 	script := writeScript(t, "run.sh", neoForgeRunSh)
-	command, args, ok := directScriptCommand(script, "java", 1024, 2048, []string{"-Dfoo=bar"})
+	command, args, ok := directScriptCommand(script, "java", 1024, 2048, nil, []string{"-Dfoo=bar"})
 	if !ok {
 		t.Fatal("expected run.sh to be parsed")
 	}
@@ -70,7 +69,7 @@ func TestDirectScriptCommandParsesUnixRunSh(t *testing.T) {
 
 func TestDirectScriptCommandKeepsExplicitMemoryAndNoGUI(t *testing.T) {
 	script := writeScript(t, "run.sh", "java -Xmx8G -jar server.jar nogui\n")
-	_, args, ok := directScriptCommand(script, "java", 1024, 2048, nil)
+	_, args, ok := directScriptCommand(script, "java", 1024, 2048, nil, nil)
 	if !ok {
 		t.Fatal("expected script to be parsed")
 	}
@@ -85,14 +84,14 @@ func TestDirectScriptCommandKeepsExplicitMemoryAndNoGUI(t *testing.T) {
 
 func TestDirectScriptCommandRejectsUnknownVariablesAndMissingJava(t *testing.T) {
 	withVars := writeScript(t, "run.sh", "java $JAVA_ARGS -jar server.jar\n")
-	if _, _, ok := directScriptCommand(withVars, "java", 1024, 2048, nil); ok {
+	if _, _, ok := directScriptCommand(withVars, "java", 1024, 2048, nil, nil); ok {
 		t.Fatal("scripts with shell variables must fall back to being run as-is")
 	}
 	noJava := writeScript(t, "run.sh", "echo hello\n./start-thing\n")
-	if _, _, ok := directScriptCommand(noJava, "java", 1024, 2048, nil); ok {
+	if _, _, ok := directScriptCommand(noJava, "java", 1024, 2048, nil, nil); ok {
 		t.Fatal("scripts without a java line must fall back")
 	}
-	if _, _, ok := directScriptCommand(filepath.Join(t.TempDir(), "missing.sh"), "java", 1024, 2048, nil); ok {
+	if _, _, ok := directScriptCommand(filepath.Join(t.TempDir(), "missing.sh"), "java", 1024, 2048, nil, nil); ok {
 		t.Fatal("a missing script must not parse")
 	}
 }
@@ -155,59 +154,5 @@ func TestJavaEnvironmentPutsManagedJavaFirstOnPath(t *testing.T) {
 	}
 	if got := javaEnvironment("java"); len(got) != len(os.Environ()) {
 		t.Fatal("a bare java command should leave the environment unchanged")
-	}
-}
-
-func writeSilentServerScript(t *testing.T, dir string) string {
-	t.Helper()
-	launchTarget := "quiet.sh"
-	script := "#!/bin/sh\necho 'Loading libraries, please wait...'\nread line\n"
-	if runtime.GOOS == "windows" {
-		launchTarget = "quiet.bat"
-		script = "@echo off\r\necho Loading libraries, please wait...\r\nset /p cmd=\r\n"
-	}
-	if err := os.WriteFile(filepath.Join(dir, launchTarget), []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return launchTarget
-}
-
-// A server that has not printed its ready line must stay "starting"; Start
-// returning must not be taken as "the server is up".
-func TestManagerStaysStartingUntilServerIsReady(t *testing.T) {
-	dir := t.TempDir()
-	launchTarget := writeSilentServerScript(t, dir)
-
-	manager := NewManager(t.TempDir())
-	defer manager.Shutdown(2 * time.Second)
-	status, err := manager.Start(fakeServer(dir, launchTarget))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if status.Lifecycle != LifecycleStarting {
-		t.Fatalf("a server that has not reported ready must be starting, got %s", status.Lifecycle)
-	}
-	time.Sleep(300 * time.Millisecond)
-	if got := manager.StatusFor("srv_test").Lifecycle; got != LifecycleStarting {
-		t.Fatalf("lifecycle drifted to %s without a ready message", got)
-	}
-}
-
-func TestManagerReadyWatchdogEventuallyReportsRunning(t *testing.T) {
-	previous := readyTimeout
-	readyTimeout = 300 * time.Millisecond
-	defer func() { readyTimeout = previous }()
-
-	dir := t.TempDir()
-	launchTarget := writeSilentServerScript(t, dir)
-	manager := NewManager(t.TempDir())
-	defer manager.Shutdown(2 * time.Second)
-	if _, err := manager.Start(fakeServer(dir, launchTarget)); err != nil {
-		t.Fatal(err)
-	}
-	waitForLifecycle(t, manager, "srv_test", LifecycleRunning)
-	logs := strings.Join(manager.Logs("srv_test"), "\n")
-	if !strings.Contains(logs, "no ready message") {
-		t.Fatalf("the watchdog should explain why it marked the server running, logs:\n%s", logs)
 	}
 }
